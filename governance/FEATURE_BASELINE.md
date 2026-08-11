@@ -6,6 +6,9 @@ STATUS: `PRODUCT_BASELINE_DRAFT / OWNER_ACCEPTED_INVARIANTS / NO_RELEASE_APPROVA
 
 | ID | Area | Baseline |
 |---|---|---|
+| SCOPE-001 | Product | Продукт — локальный внутренний конвертер ограниченного набора бюджетных Excel-таблиц в согласованный формат для 1С, а не универсальная платформа или глобальный сервис |
+| ENG-001 | Engineering | Архитектура, safety и governance должны быть минимально достаточными; новый контроль допускается только для конкретного реального риска при отсутствии более простого решения |
+| ENG-002 | Engineering | Multi-tenant, enterprise RBAC, универсальные Rules/Plugin Engine, cryptographic proof UI, распределённая инфраструктура и тяжёлое release orchestration не входят в scope без отдельного owner decision |
 | INPUT-001 | Excel | Пользователь может выбрать входной Excel |
 | INPUT-002 | Excel | Источник определяется по структуре/schema, не по имени файла |
 | INPUT-003 | Excel | V1 использует уже подготовленный загрузочный диапазон и не реконструирует его из расчётных департаментских листов |
