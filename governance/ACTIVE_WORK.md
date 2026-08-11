@@ -1,45 +1,77 @@
 # Active Work
 
-STATUS: `DISCOVERY / COORDINATOR_HANDOFF_READY`
+STATUS: `DISCOVERY / EXCEL_LOGIC_HANDOFF_READY / USER_FLOW_NOT_ACCEPTED`
 
 ## Current phase
 
-Новый сервис находится на этапе Product Contract + User Flow.
+Новый сервис находится на этапе завершения Product Contract и owner review User Flow.
 
-Полный handoff текущего discovery:
+Актуальный handoff:
 
-`governance/handoffs/HANDOFF-COORDINATOR-20260811-001.md`
+`governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md`
+
+Предыдущий handoff `HANDOFF-COORDINATOR-20260811-001.md` остаётся историческим источником раннего discovery, но latest Excel/reference decisions находятся в новом handoff и канонических документах.
+
+## Completed discovery
+
+Исследованы и сверены:
+
+- реальный бюджетный Excel ПС и его 20 листов;
+- подготовленный диапазон расходов: 179 строк, 12 месяцев;
+- sample normalized result АЮ;
+- актуальный ERP-справочник статей и coverage 179 строк;
+- сценарии;
+- периоды;
+- показатели отчётов ОПИУ;
+- виды отчётов;
+- вложенная иерархия организаций/ЦФО/подразделений;
+- screenshot дерева `Организации` в 1С;
+- текущие Git documents, branch и Draft PR.
+
+Принятые решения перенесены в:
+
+- `docs/PRODUCT.md`;
+- `docs/USER_FLOW.md`;
+- `governance/DECISIONS.md`;
+- `governance/FEATURE_BASELINE.md`;
+- `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md`.
 
 ## Current owner gate
 
-До реализации требуется:
+До implementation требуется:
 
-- загрузить и изучить реальные справочники контекста/бизнес-реквизитов;
-- уточнить оставшиеся Product Contract вопросы по одному;
-- принять User Flow владельцем.
+1. Закрыть оставшиеся действительно необходимые Product Contract решения по одному.
+2. Явно принять User Flow владельцем.
 
-Исходный бюджетный Excel и ERP-справочник статей уже были исследованы на discovery-этапе; результаты анализа и принятые решения перенесены в handoff, `docs/PRODUCT.md`, `governance/DECISIONS.md` и `governance/FEATURE_BASELINE.md`.
+Самый следующий owner decision:
+
+`OWNER_DECISION_REPORT_TYPE`
+
+Выбрать один вид отчёта V1:
+
+- `Отчет о прибылях и убытках`, код `ОтчетОПрибыляхИУбытках`;
+- либо `ОПИУ`, код `ОПИУ`.
+
+После этого последовательно закрываются scenario identity, period identity/filter, organization mapping/status, delegation target, mapping reuse context и negative amount rule.
 
 ## Forbidden now
 
-- начинать production implementation до owner acceptance User Flow;
-- подключать ADO write;
+- начинать product implementation до owner acceptance User Flow;
+- подключать ADO live write;
 - писать в TEST/PROD 1С;
-- делать прямой SQL-write во внутренние таблицы 1С без отдельного high-risk решения;
-- переносить код/многоходовые блокировки OPIU целиком;
-- создавать релиз до owner UX smoke;
-- переоткрывать уже принятые продуктовые решения без нового evidence/owner decision.
+- делать прямой SQL-write во внутренние таблицы 1С;
+- merge Draft PR координатором;
+- копировать тяжёлые OPIU controls или раздувать локальный конвертер до platform architecture;
+- переоткрывать ACCEPTED-решения без нового evidence или явного owner decision.
 
-## Next action
+## Git work
 
-`LOAD_AND_ANALYZE_REFERENCE_DIRECTORIES`
+- Repository: `fitera2024-rgb/excel-transform-1c`.
+- Working branch: `coord/proportional-safety-local-converter`.
+- Draft PR: `#1`.
+- Main at reconciliation start: `9af5ac112d06e6e6ed8c5e1bc4261eaaa099c607`.
+- Branch head before Excel-logic handoff commit: `686f02dc8829f22093cc8cc23b8a31544aec5b7a`.
+- Merge: not performed.
+- ADO/live write: not performed.
 
-Координатор нового сервиса должен получить реальные справочники и для каждого составить карту:
-
-`справочник → ключ/код → наименование → иерархия → доказанные связи → количество записей`.
-
-После анализа задать владельцу только один следующий самый важный Product Contract вопрос.
-
-## Handoff boundary
-
-Текущий OPIU-координатор после `HANDOFF-COORDINATOR-20260811-001` возвращается к работе над OPIU. Дальнейший discovery нового сервиса ведёт отдельный координатор через этот Git-репозиторий.
+Точный итоговый head после этого docs-only handoff является текущим head Draft PR и возвращается владельцу в delivery-ответе.
