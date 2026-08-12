@@ -43,7 +43,7 @@ Detection deliberately closes its workbook after producing serializable candidat
 
 ## CI
 
-CI is pending creation of the Draft PR. The exact final PR head and CI result must be recorded in the PR/Issue marker after push; the tested code head is stated above.
+`NOT_TRIGGERED`: Draft PR `#13` correctly targets `feat/v1-excel-transform-preview`, while the existing `V1 CI` workflow accepts `pull_request` events only for `main` and push events only for `feat/v1-excel-transform-preview`. No workflow run or commit status was created for this head. The local compile/unit/integration/UI/full-regression evidence above is complete; CI workflow scope was not changed by this CR.
 
 ## Risks and limits
 
