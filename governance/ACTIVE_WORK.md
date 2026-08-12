@@ -1,105 +1,103 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / IMPLEMENTATION_QA_PASSED / READY_FOR_OWNER_UX_SMOKE / DRAFT_PR_4 / NO_LIVE_WRITE`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / REFERENCE_IMPORT_FIX_VERIFIED / OWNER_UX_SMOKE_RETRY_REQUIRED / DRAFT_PR_4 / NO_LIVE_WRITE`
 
 ## Current phase
-
-Discovery, Product Contract, Architecture Light boundaries and User Flow V1 завершены и приняты владельцем.
 
 Первая vertical slice реализована в Draft PR `#4`:
 
 `Excel → structural detection → validation → exact ERP mapping/manual correction → 12-month normalization → maximum preview → error registry → export`
 
+Во время Owner UX Smoke приложение успешно запустилось, но реальные ERP-справочники были отклонены сообщением `Не найден заголовок известной ERP-выгрузки`.
+
+Проблема исправлена без изменения бизнес-scope.
+
+## Current owner decisions
+
+Владелец явно уточнил:
+
+- единый справочник организаций/узлов ERP загружается один раз;
+- он сохраняется локально и используется для всех организаций и следующих запусков;
+- пользователь выбирает организацию или узел из одного общего списка;
+- повторная загрузка дополняет справочник и обновляет существующие записи по стабильному коду, не создавая копию на каждую организацию;
+- полный список сценариев загружается один раз;
+- сценарии сохраняются локально;
+- последующие ERP-файлы и ручные добавления дополняют/обновляют список, не удаляя ранее загруженные сценарии;
+- стабильный локальный ID существующего сценария сохраняется.
+
+Exact handoff:
+
+`governance/handoffs/HANDOFF-OWNER-UX-SMOKE-REFERENCE-CATALOGS-20260813-001.md`
+
 ## Git authority
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
-- Product PR: `#1`, merged.
+- Branch: `feat/v1-excel-transform-preview`.
+- Draft PR: `#4`, open, not merged.
 - Accepted product base: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
-- Implementation branch: `feat/v1-excel-transform-preview`.
-- PR base at QA: `b57250a4dcc6a2b0442b200070411dc66a58ae0e`.
-- Independently verified code head: `47b7c7a04309122caf26760657ec5da2ea26d533`.
-- Implementation PR: `#4`, open, Draft, not merged.
+- Previous reviewed head: `75d6d3e91da40550840879500bf8eebe07527b80`.
+- Reference-import fix code head: `7bc1e1bed0e9ea4d7641a5721e174ffe9f24c9ee`.
 - ADO/live write: not implemented and not performed.
 
-## Independent coordinator QA
+## Fix implemented
 
-Coordinator QA Issue: `#3`.
-
-Exact QA handoff:
-
-`governance/handoffs/HANDOFF-COORDINATOR-QA-V1-20260812-001.md`
-
-All four findings from the first review are closed in code and regression tests:
-
-1. documented real ERP reference structures load directly;
-2. user corrections are field-specific and ERP mapping is invalidated/recomputed safely;
-3. invalid monthly value remains visible as `Пропущено` in preview and export;
-4. reporting-unit conflict produces localized attention and does not block processing.
-
-Additional hardening verified:
-
-- trailing spaces/case are preserved for exact ERP matching; no hidden normalization;
-- saved manual mapping conflicting with an exact ERP path remains visible;
-- main preview displays the exact monthly source cell;
-- simultaneous path + ERP correction persists the mapping under the new path.
+- known ERP headers may be located on different header rows;
+- article/organization/scenario header aliases are recognized structurally;
+- the most plausible name/code column pair is selected by data evidence, not filename;
+- numeric ERP codes with zero number formats retain leading zeroes;
+- organization and ERP-article catalogs are merged globally by code;
+- repeated imports update matching codes and append new codes;
+- scenarios are upserted by canonical name + year with stable local ID;
+- UI explains one-time persistent loading and incremental supplements.
 
 ## Test and CI evidence
 
-GitHub Actions workflow: `V1 CI`, run `31598771451`.
+GitHub Actions workflow: `V1 CI`, run `31636475885`.
 
-Results for `47b7c7a04309122caf26760657ec5da2ea26d533`:
+Results for code head `7bc1e1bed0e9ea4d7641a5721e174ffe9f24c9ee`:
 
-- `python -m compileall -q src tests` — PASS;
+- compileall — PASS;
 - unit — `14 passed`;
-- integration — `15 passed`;
+- integration — `18 passed`;
 - UI smoke — `7 passed`;
-- full regression — `36 passed`, one third-party Starlette TestClient deprecation warning;
-- `No tracked business Excel` — PASS.
+- full regression — `39 passed`;
+- no tracked business Excel — PASS.
 
-No CI failure, cancellation or skipped acceptance check remains.
+The new tests cover:
 
-## Feature Baseline
-
-Coordinator result: `PRESERVED`.
-
-No `CHANGED_AUTHORIZED` or `BLOCKED_REGRESSION` was found for V1. In particular:
-
-- structural input detection and multiple-range choice preserved;
-- 12 months including zero preserved;
-- continue-with-attention and visible `Пропущено` preserved;
-- exact/no-fuzzy ERP mapping and manual fallback preserved;
-- scenarios, organizational tree, subtree delegation and local persistence preserved;
-- corrections without full rerun preserved;
-- OPIU Light export preserved;
-- ADO/write boundaries preserved.
+- split/multi-row ERP headers;
+- preservation of zero-padded codes;
+- one global persistent organization catalog;
+- incremental organization updates/additions;
+- one persistent scenario catalog;
+- incremental scenario additions with stable IDs.
 
 ## Current next action
 
-`OWNER_UX_SMOKE_PR_4`
+`OWNER_UX_SMOKE_RETRY_REFERENCE_UPLOAD`
 
-Owner verifies the business path locally:
+Owner downloads/replaces the application code from the latest PR head, restarts the local service, and retries:
 
-1. upload the three approved ERP reference exports;
-2. select reporting unit, organization branch, scenario, year/months;
-3. upload a budget Excel;
-4. inspect preview and issue registry;
-5. apply a manual correction;
-6. export OPIU Light;
-7. confirm blocked no-range/reset behavior.
+1. ERP articles;
+2. organizations;
+3. scenarios.
 
-After owner acceptance:
+Expected reference counts for the researched files:
 
-`READY_FOR_MERGE_AFTER_OWNER_SMOKE`
+- ERP articles: `271`;
+- organizations/nodes: `357`;
+- scenarios: `12`.
 
-PR #4 remains Draft and must not be merged before the owner smoke result.
+If those imports pass, continue the existing Owner UX Smoke with organization/node selection, budget preview, correction and export.
 
 ## Forbidden
 
+- merge before successful Owner UX Smoke;
 - ADO connection or live write;
 - TEST/PROD write;
 - direct SQL write into 1C;
 - real business Excel/reference files committed to Git;
 - fuzzy/typo/case auto-match;
-- hidden trimming or automatic correction of ERP article names;
-- platform/multi-tenant/enterprise expansion;
-- self-merge by an implementation agent.
+- filename-based reference detection;
+- per-organization duplicate reference catalogs;
+- platform/multi-tenant/enterprise expansion.
