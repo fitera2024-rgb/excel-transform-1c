@@ -1,45 +1,94 @@
 # Active Work
 
-STATUS: `DISCOVERY / COORDINATOR_HANDOFF_READY`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / IMPLEMENTATION_TASK_PREPARED / BLOCKED_BY_PR_1_MERGE`
 
 ## Current phase
 
-Новый сервис находится на этапе Product Contract + User Flow.
+Discovery, Product Contract and User Flow V1 завершены и приняты владельцем.
 
-Полный handoff текущего discovery:
+Актуальные handoff:
 
-`governance/handoffs/HANDOFF-COORDINATOR-20260811-001.md`
+- `governance/handoffs/HANDOFF-OWNER-DECISIONS-20260812-002.md` — финальный пакет owner decisions;
+- `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md` — evidence, карты Excel и ERP-справочников.
 
-## Current owner gate
+## Accepted V1
 
-До реализации требуется:
+Первая vertical slice:
 
-- загрузить и изучить реальные справочники контекста/бизнес-реквизитов;
-- уточнить оставшиеся Product Contract вопросы по одному;
-- принять User Flow владельцем.
+`Excel → structural detection → validation → exact ERP mapping/manual correction → 12-month normalization → maximum preview → error registry → export`
 
-Исходный бюджетный Excel и ERP-справочник статей уже были исследованы на discovery-этапе; результаты анализа и принятые решения перенесены в handoff, `docs/PRODUCT.md`, `governance/DECISIONS.md` и `governance/FEATURE_BASELINE.md`.
+Ключевые принятые решения:
 
-## Forbidden now
+- local converter, не platform;
+- prepared expense range as input;
+- 12 месяцев, включая нули;
+- cached formula values, без Excel recalculation;
+- continue with attention;
+- exact ERP mapping, no fuzzy/autofix;
+- local persistent scenarios, включая добавленные пользователем;
+- `ПЛАН_2026` = `ПЛАН 2026`, stable local scenario ID;
+- year + optional month filter;
+- manual organization branch selection per run;
+- all organization nodes visible, no guessed status/type filtering;
+- delegation on any tree node and whole subtree;
+- reusable mapping key = report type + full article path;
+- negative amounts preserved with attention;
+- nodes/records named `Удалить` are not auto-excluded;
+- User Flow accepted.
 
-- начинать production implementation до owner acceptance User Flow;
-- подключать ADO write;
-- писать в TEST/PROD 1С;
-- делать прямой SQL-write во внутренние таблицы 1С без отдельного high-risk решения;
-- переносить код/многоходовые блокировки OPIU целиком;
-- создавать релиз до owner UX smoke;
-- переоткрывать уже принятые продуктовые решения без нового evidence/owner decision.
+## Implementation task
 
-## Next action
+GitHub Issue: `#2 — [M] V1: Excel → validation → ERP mapping → preview → export`
 
-`LOAD_AND_ANALYZE_REFERENCE_DIRECTORIES`
+Exact task contract:
 
-Координатор нового сервиса должен получить реальные справочники и для каждого составить карту:
+`governance/tasks/CODEX-TASK-EXCEL-V1-20260812-001.md`
 
-`справочник → ключ/код → наименование → иерархия → доказанные связи → количество записей`.
+Risk: `M`.
 
-После анализа задать владельцу только один следующий самый важный Product Contract вопрос.
+## Start gate
 
-## Handoff boundary
+Implementation must not start until:
 
-Текущий OPIU-координатор после `HANDOFF-COORDINATOR-20260811-001` возвращается к работе над OPIU. Дальнейший discovery нового сервиса ведёт отдельный координатор через этот Git-репозиторий.
+1. Draft PR #1 is reviewed and merged;
+2. exact merged product head is pinned in the task contract/Issue #2;
+3. Codex creates `feat/v1-excel-transform-preview` from that exact commit.
+
+После выполнения start gate дополнительные Product/UX вопросы владельцу для начала V1 не требуются.
+
+## Current next action
+
+`REVIEW_AND_MERGE_PRODUCT_PR_1`
+
+После merge:
+
+1. зафиксировать merge commit;
+2. обновить Issue #2 и task contract exact base;
+3. передать Issue #2 Codex;
+4. получить Draft implementation PR;
+5. проверить diff/tests/handoff;
+6. провести Owner UX Smoke до release.
+
+## Forbidden
+
+- ADO connection;
+- live write;
+- TEST/PROD write;
+- direct SQL write в 1С;
+- старт Codex от непроверенного/непринятого base;
+- реальные business Excel/справочники в Git;
+- fuzzy/typo/case auto-match;
+- самостоятельный merge Codex;
+- platform/multi-tenant/enterprise expansion;
+- переоткрытие ACCEPTED решений без нового evidence или owner decision.
+
+## Git state
+
+- Repository: `fitera2024-rgb/excel-transform-1c`.
+- Product branch: `coord/proportional-safety-local-converter`.
+- Product PR: `#1`, open.
+- Implementation Issue: `#2`, open and blocked by PR #1 merge.
+- Product head before this Active Work update: `b4d263b2b2c4dda94621c0b88bc786e3edc77288`.
+- Current exact head: latest head of PR #1.
+- Product implementation: not started.
+- ADO/live write: not performed.

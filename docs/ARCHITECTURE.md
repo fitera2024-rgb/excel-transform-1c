@@ -1,36 +1,123 @@
 # Architecture Light
 
-STATUS: `DRAFT / NO_LIVE_WRITE`
+STATUS: `V1_BOUNDARIES_ACCEPTED / IMPLEMENTATION_ALLOWED / NO_LIVE_WRITE`
 
 ```text
-UI
- ↓
+Local UI
+  ↓
 Application / Workflow
- ↓
+  ↓
 Business Core
- ↓
+  ↓
 Adapters
- ├─ Excel
- ├─ References
- └─ ADO / 1C
- ↓
-Audit / Runs / Support
+  ├─ Excel input/output
+  ├─ ERP reference files
+  ├─ Local persistence
+  └─ ADO / 1C — later, not in V1
+  ↓
+Runs / Logs / Support
 ```
 
-## Principles
+## V1 components
 
-- Business Core не знает о кнопках UI, ADO connection objects и абсолютных filesystem paths.
-- После validation exact input фиксируется в immutable RUN-local snapshot.
-- Один business action — максимум один RUN/operation (single-flight/idempotent).
-- Input определяется по структуре/schema, а не filename.
-- UI/API получает business-safe public DTO по allowlist.
-- Downstream stage получает exact handoff, а не ищет `latest file`.
+### Local UI
 
-## Planned delivery stages
+- выбор организационного контекста, сценария, года/месяцев и Excel;
+- добавление локального сценария;
+- максимально полный preview;
+- Реестр ошибок/внимания;
+- явные пользовательские исправления;
+- экспорт результата.
 
-1. Excel → validation → transform → preview.
-2. Validation/error UX stabilization.
-3. ADO read-only / DRY RUN.
-4. TEST write with explicit owner gate, transaction and read-back verification.
-5. Deterministic packaging/release.
-6. Production gate отдельно.
+UI использует бизнес-понятия. SHA, internal paths, proof JSON, SQL IDs и технические blocker codes не являются обязательными пользовательскими элементами.
+
+### Application / Workflow
+
+Оркестрирует один пользовательский процесс:
+
+`select context → select Excel → detect source → read → validate → map → normalize → preview → correct → export`
+
+Один business action не создаёт дублирующий RUN. Перевыбор и reset не выполняют write.
+
+### Business Core
+
+Содержит детерминированные правила:
+
+- структурное обнаружение подготовленного диапазона;
+- чтение сохранённых значений формул без пересчёта Excel;
+- разворот каждой исходной строки во все 12 месяцев;
+- локализацию ошибок до минимальной единицы;
+- exact ERP mapping;
+- reusable mapping key;
+- статусы `ОК`, `Требует внимания`, `Пропущено`;
+- правила налогообложения и отрицательных сумм;
+- формирование business-safe result DTO.
+
+Business Core не зависит от UI, ADO connection objects и абсолютных filesystem paths.
+
+### Excel adapter
+
+- определяет источник по структуре/schema, не по имени листа;
+- читает formula cells по сохранённым calculated values;
+- не является Excel Calculation Engine;
+- сохраняет точные source pointers: файл, лист, строка, ячейка, поле/месяц;
+- экспортирует OPIU Light результат.
+
+### Reference adapter
+
+Читает локально загруженные справочники:
+
+- ERP-статьи;
+- организационное дерево;
+- сценарии;
+- другие принятые справочники.
+
+Не придумывает активность, тип узла или связи, которых нет в данных/контракте.
+
+### Local persistence adapter
+
+Минимально хранит:
+
+- пользовательские сценарии и стабильные local IDs;
+- ERP-код как необязательный атрибут сценария;
+- подтверждённые ручные ERP mappings по принятому reusable key;
+- делегации узлов дерева;
+- необходимые user overrides текущего результата.
+
+Это локальное хранилище одного внутреннего сервиса, не multi-tenant platform database.
+
+### Runs / Logs / Support
+
+- каждый processing run имеет RUN-ID;
+- после выбора входа используется exact RUN-local snapshot;
+- downstream получает exact handoff, а не ищет `latest file`;
+- журнал и support information не содержат паролей, токенов и connection strings.
+
+## Safety boundary V1
+
+Для preview действует `continue with attention`.
+
+Полная остановка только если:
+
+- файл невозможно открыть/он повреждён;
+- не найден ни один распознаваемый загрузочный диапазон;
+- технически невозможно получить полезный результат.
+
+V1 не содержит ADO, live write, TEST/PROD write или прямого SQL-write.
+
+## Delivery stages
+
+1. **V1:** Excel → validation → exact mapping/manual correction → 12-month normalization → preview → export.
+2. Validation/error UX stabilization and Owner UX Smoke.
+3. ADO read-only / DRY RUN — отдельный контракт.
+4. TEST write — только после отдельного owner gate.
+5. Production write — отдельный owner gate.
+
+## Implementation freedom
+
+Конкретный язык, framework и UI toolkit выбираются в implementation task по принципу самого простого поддерживаемого решения, которое:
+
+- сохраняет эти слои и тестируемость Business Core;
+- устойчиво читает реальные Excel и cached formula values;
+- поддерживает локальное постоянное хранилище;
+- не создаёт platform/enterprise architecture.
