@@ -1,0 +1,54 @@
+:root { color-scheme: light; --ink:#14213d; --muted:#5f6b7a; --line:#dfe5ec; --paper:#fff; --bg:#f4f7fb; --accent:#146c5a; --accent2:#dff5ef; --warn:#a85d00; --error:#a12727; }
+* { box-sizing:border-box; }
+body { margin:0; font:15px/1.45 system-ui, sans-serif; color:var(--ink); background:var(--bg); }
+header { display:flex; justify-content:space-between; align-items:center; padding:16px 28px; background:#10243e; color:#fff; }
+.brand { color:#fff; text-decoration:none; font-weight:800; font-size:18px; }
+.boundary { opacity:.75; }
+main { max-width:1500px; margin:auto; padding:28px; }
+.hero { display:flex; justify-content:space-between; gap:30px; align-items:center; padding:28px; border-radius:18px; background:linear-gradient(125deg,#10243e,#146c5a); color:#fff; margin-bottom:22px; }
+.hero.compact { padding:20px 28px; }
+.hero h1 { margin:4px 0 8px; font-size:clamp(26px,4vw,44px); line-height:1.08; }
+.compact h1 { font-size:28px; }
+.eyebrow { text-transform:uppercase; letter-spacing:.12em; font-size:12px; font-weight:800; opacity:.75; }
+.fixed-context { min-width:300px; padding:18px; border:1px solid #ffffff55; border-radius:14px; display:grid; gap:4px; background:#ffffff12; }
+.fixed-context small { opacity:.7; }
+.grid { display:grid; gap:18px; }
+.grid.three { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.card { background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:22px; margin-bottom:18px; box-shadow:0 8px 25px #18243b0b; }
+.card h2 { margin-top:0; }
+.primary-card { border-top:4px solid var(--accent); }
+.narrow { max-width:720px; margin:80px auto; }
+form { display:grid; gap:12px; }
+label { display:grid; gap:5px; color:var(--muted); font-weight:650; }
+input, select { width:100%; padding:10px 11px; border:1px solid #bec9d6; border-radius:8px; background:#fff; color:var(--ink); }
+select[multiple] { min-height:140px; }
+button, .button { border:0; border-radius:9px; padding:11px 16px; background:var(--accent); color:#fff; font-weight:750; cursor:pointer; text-decoration:none; text-align:center; }
+button.secondary, .button.secondary { background:#e5ebf1; color:var(--ink); }
+.process-form { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.process-form fieldset, .process-form button { grid-column:1/-1; }
+fieldset { border:1px solid var(--line); border-radius:10px; }
+.months { display:flex; flex-wrap:wrap; gap:8px; }
+.months label { display:flex; align-items:center; gap:3px; }
+.months input { width:auto; }
+.choice { grid-template-columns:auto 1fr; align-items:center; padding:12px; border:1px solid var(--line); border-radius:8px; }
+.choice input { width:auto; }
+.notice { padding:13px 16px; border-radius:10px; margin-bottom:16px; }
+.notice.success { background:var(--accent2); color:#075844; }
+.notice.error, .blocked { background:#fff3f2; color:var(--error); }
+.hint { color:var(--muted); font-size:13px; }
+.stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+.stats div { background:#fff; border:1px solid var(--line); border-radius:12px; padding:17px; display:grid; }
+.stats strong { font-size:26px; }
+.stats span { color:var(--muted); }
+.actions { display:flex; gap:10px; flex-wrap:wrap; }
+.correction-form { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.correction-form button { align-self:end; }
+.table-card { padding:0; overflow:hidden; }
+.table-card h2 { padding:20px 20px 0; }
+.table-wrap { overflow:auto; max-height:600px; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th, td { padding:10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+th { position:sticky; top:0; background:#edf2f7; z-index:1; }
+.status-attention { background:#fffaf0; }
+.pill { white-space:nowrap; font-weight:750; }
+@media (max-width:900px) { .grid.three,.process-form,.correction-form,.stats { grid-template-columns:1fr; } .hero { align-items:flex-start; flex-direction:column; } .fixed-context { min-width:0; width:100%; } main { padding:16px; } header { padding:14px 16px; } .boundary { display:none; } }

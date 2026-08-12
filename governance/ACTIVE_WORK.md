@@ -1,6 +1,6 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / IMPLEMENTATION_TASK_PREPARED / BLOCKED_BY_PR_1_MERGE`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / V1_IMPLEMENTATION_ACTIVE / NO_LIVE_WRITE`
 
 ## Current phase
 
@@ -58,16 +58,14 @@ Implementation must not start until:
 
 ## Current next action
 
-`REVIEW_AND_MERGE_PRODUCT_PR_1`
+`IMPLEMENT_ISSUE_2_AND_OPEN_DRAFT_PR`
 
-После merge:
+Product PR #1 merged. Exact implementation base:
+`836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
 
-1. зафиксировать merge commit;
-2. обновить Issue #2 и task contract exact base;
-3. передать Issue #2 Codex;
-4. получить Draft implementation PR;
-5. проверить diff/tests/handoff;
-6. провести Owner UX Smoke до release.
+Текущая реализация выполняется только в `feat/v1-excel-transform-preview`.
+После Draft implementation PR требуются coordinator QA и Owner UX Smoke;
+самостоятельный merge запрещён.
 
 ## Forbidden
 
@@ -86,9 +84,9 @@ Implementation must not start until:
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
 - Product branch: `coord/proportional-safety-local-converter`.
-- Product PR: `#1`, open.
-- Implementation Issue: `#2`, open and blocked by PR #1 merge.
+- Product PR: `#1`, merged.
+- Implementation Issue: `#2`, open and in implementation.
 - Product head before this Active Work update: `b4d263b2b2c4dda94621c0b88bc786e3edc77288`.
 - Current exact head: latest head of PR #1.
-- Product implementation: not started.
+- Product implementation: active in `feat/v1-excel-transform-preview`.
 - ADO/live write: not performed.

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero compact">
+  <div><p class="eyebrow">Preview готов</p><h1>{{ run.source_file }}</h1><p>{{ run.candidate.label }} · {{ run.context.organization_name }} · {{ run.context.scenario_name }}</p></div>
+  <div class="actions"><a class="button" href="/runs/{{ run.run_id }}/export" data-testid="export-link">Экспортировать OPIU Light</a><a class="button secondary" href="/">Новый файл</a></div>
+</section>
+
+<section class="stats" data-testid="preview-stats">
+  <div><strong>{{ records|length }}</strong><span>записей в фильтре</span></div>
+  <div><strong>{{ run.records|length }}</strong><span>в полном 12-месячном результате</span></div>
+  <div><strong>{{ unresolved|length }}</strong><span>нерешённых проблем</span></div>
+  <div><strong>{{ run.rerun_count }}</strong><span>повторных запусков после правок</span></div>
+</section>
+
+<section class="card">
+  <h2>Явное исправление</h2>
+  <p>Выберите исходную строку и только те значения, которые нужно заменить. Preview обновится без полного запуска.</p>
+  <form method="post" action="/runs/{{ run.run_id }}/correct" class="correction-form" data-testid="correction-form">
+    <label>Строка<select name="source_row">{% for row in source_rows %}<option>{{ row }}</option>{% endfor %}</select></label>
+    <label>ERP-код<select name="erp_code"><option value="">без изменения</option>{% for article in articles %}<option value="{{ article.code }}">{{ article.code }} · {{ article.name }} · {{ article.expense_type }} → {{ article.expense_group }}</option>{% endfor %}</select></label>
+    <label>Налогообложение<select name="tax"><option value="">без изменения</option><option>БЕЗ НДС</option><option>20%</option><option>22%</option></select></label>
+    <label>Департамент<select name="department"><option value="">без изменения</option>{% for value in organization_values %}<option>{{ value }}</option>{% endfor %}</select></label>
+    <label>ЦФО<select name="cfo"><option value="">без изменения</option>{% for value in organization_values %}<option>{{ value }}</option>{% endfor %}</select></label>
+    <label>Группа<select name="expense_group"><option value="">без изменения</option>{% for value in groups %}<option>{{ value }}</option>{% endfor %}</select></label>
+    <label>Статья<select name="source_article"><option value="">без изменения</option>{% for value in source_articles %}<option>{{ value }}</option>{% endfor %}</select></label>
+    <button>Применить исправление</button>
+  </form>
+</section>
+
+<section class="card table-card">
+  <h2>Максимально полный preview</h2>
+  <div class="table-wrap"><table data-testid="preview-table"><thead><tr><th>Строка</th><th>Период</th><th>Тип → группа → статья</th><th>ERP</th><th>Налог</th><th>Сумма</th><th>Статус</th><th>Комментарий</th></tr></thead><tbody>
+  {% for record in records %}<tr class="status-{{ 'attention' if record.status != 'ОК' else 'ok' }}"><td>{{ record.source_row }}</td><td>{{ record.month_name }} {{ record.year }}</td><td>{{ record.expense_type }} → {{ record.expense_group }} → {{ record.source_article }}</td><td>{{ record.erp_code }} {{ record.erp_article_name }}</td><td>{{ record.tax }}</td><td>{{ record.amount }}</td><td><span class="pill">{{ record.status }}</span></td><td>{{ record.comment }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+
+<section class="card table-card">
+  <h2>Реестр ошибок и внимания</h2>
+  <div class="table-wrap"><table data-testid="issue-table"><thead><tr><th>Источник</th><th>Поле</th><th>Контекст</th><th>Значение</th><th>Описание</th></tr></thead><tbody>
+  {% for issue in unresolved %}<tr><td>{{ issue.pointer.file_name }} · {{ issue.pointer.sheet }} · {{ issue.pointer.cell }} · строка {{ issue.pointer.row }}</td><td>{{ issue.pointer.field }}{% if issue.pointer.month %} · месяц {{ issue.pointer.month }}{% endif %}</td><td>{{ issue.reporting_unit }} · {{ issue.department }} · {{ issue.cfo }} · {{ issue.expense_type }} → {{ issue.expense_group }} → {{ issue.article }}</td><td>{{ issue.raw_value }}</td><td>{{ issue.description }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

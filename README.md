@@ -14,7 +14,7 @@ ADO и фактическая запись в 1С являются отдель�
 
 ## Current status
 
-`PRODUCT CONTRACT ACCEPTED / USER FLOW ACCEPTED / IMPLEMENTATION TASK PREPARATION / NO LIVE WRITE`
+`V1 IMPLEMENTATION / DRAFT REVIEW / NO LIVE WRITE`
 
 Владелец принял User Flow первой vertical slice. Разрешена подготовка реализации `Excel → validation → ERP mapping → user corrections → 12-month normalization → preview → export`.
 
@@ -46,3 +46,37 @@ ADO и фактическая запись в 1С являются отдель�
 OPIU используется только как visual/UX reference и источник отдельных проверенных reliability/safety patterns. Новый сервис не является fork OPIU.
 
 Первая vertical slice не пишет в 1С/БД. Live write по умолчанию запрещён и требует отдельного owner gate.
+
+## Локальный запуск V1
+
+Требуется Python 3.11+.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[test]"
+.\.venv\Scripts\python.exe -m excel_transform_1c.main
+```
+
+Откройте `http://127.0.0.1:8000`. Runtime-данные, загруженные файлы, локальная
+SQLite-база и RUN-local snapshots создаются в `runtime/` и исключены из Git.
+
+V1 ожидает три простых локальных справочника `.xlsx`:
+
+- ERP-статьи: `Код`, `Официальное наименование`, `Тип расходов`, `Группа расходов`, `Исходная статья`;
+- организации: `ID`, `Код`, `Наименование`, `Родитель ID`, `Полный путь`;
+- сценарии (необязательно): `Наименование`, `Год`, `ERP-код`, `Комментарий`.
+
+Бюджетный диапазон определяется структурно по восьми бизнес-колонкам и всем
+12 месяцам, а не по имени листа. Формулы читаются через сохранённые calculated
+values; приложение не пересчитывает Excel.
+
+## Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/unit -q
+.\.venv\Scripts\python.exe -m pytest tests/integration -q
+.\.venv\Scripts\python.exe -m pytest tests/ui -q
+```
+
+Тестовые workbook/reference данные полностью синтетические и генерируются во
+временных каталогах; реальные бизнес-Excel в репозитории отсутствуют.

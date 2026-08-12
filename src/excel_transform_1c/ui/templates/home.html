@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">V1 · локальный конвертер</p>
+    <h1>Подготовьте максимально полный OPIU Light результат</h1>
+    <p>Структурное обнаружение Excel, точное ERP-сопоставление, понятный реестр внимания и экспорт.</p>
+  </div>
+  <div class="fixed-context">
+    <span>Вид отчёта</span>
+    <strong>{{ report_type_name }}</strong>
+    <small>{{ report_type_code }}</small>
+  </div>
+</section>
+
+<section class="grid three">
+  <article class="card">
+    <h2>1. Справочники</h2>
+    <p>ERP-статьи: <strong>{{ counts.erp_articles }}</strong><br>Организации: <strong>{{ counts.organizations }}</strong><br>Сценарии: <strong>{{ counts.scenarios }}</strong></p>
+    <form method="post" action="/references" enctype="multipart/form-data" data-testid="reference-form">
+      <label>Тип справочника
+        <select name="kind">
+          <option value="erp_articles">ERP-статьи</option>
+          <option value="organizations">Организации</option>
+          <option value="scenarios">Сценарии</option>
+        </select>
+      </label>
+      <label>Синтетический файл .xlsx<input type="file" name="reference_file" accept=".xlsx" required></label>
+      <button>Загрузить / обновить</button>
+    </form>
+  </article>
+
+  <article class="card">
+    <h2>2. Новый сценарий</h2>
+    <form method="post" action="/scenarios" data-testid="scenario-form">
+      <label>Наименование<input name="name" required placeholder="ПЛАН 2027"></label>
+      <label>Год<input name="year" type="number" min="2000" max="2200" required></label>
+      <label>Комментарий<input name="comment"></label>
+      <button>Сохранить сценарий</button>
+    </form>
+    <p class="hint">Новый локальный сценарий будет помечен «Не подтверждён справочником ERP».</p>
+  </article>
+
+  <article class="card">
+    <h2>3. Область доступа</h2>
+    <form method="post" action="/delegations">
+      <label>Делегированные узлы
+        <select name="node_ids" multiple size="7">
+          {% for node in all_organizations %}
+          <option value="{{ node.node_id }}" {% if node.node_id in delegations %}selected{% endif %}>{{ node.full_path }} ({{ node.code }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="secondary">Применить поддеревья</button>
+    </form>
+  </article>
+</section>
+
+<section class="card primary-card">
+  <h2>4. Обработать бюджетный Excel</h2>
+  <form method="post" action="/uploads" enctype="multipart/form-data" class="process-form" data-testid="process-form">
+    <label>Единица отчёта<input name="reporting_unit" required placeholder="ПС"></label>
+    <label>Организационный узел
+      <select name="organization_node_id" required>
+        <option value="">Выберите вручную</option>
+        {% for node in organizations %}<option value="{{ node.node_id }}">{{ node.full_path }} ({{ node.code }})</option>{% endfor %}
+      </select>
+    </label>
+    <label>Сценарий
+      <select name="scenario_id" required>
+        <option value="">Выберите</option>
+        {% for scenario in scenarios %}<option value="{{ scenario.scenario_id }}">{{ scenario.name }} · {{ scenario.year }}{% if scenario.marker %} · {{ scenario.marker }}{% endif %}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Год<input name="year" type="number" min="2000" max="2200" placeholder="из сценария"></label>
+    <fieldset>
+      <legend>Месяцы (не выбирайте для всех 12)</legend>
+      <div class="months">{% for month in range(1, 13) %}<label><input type="checkbox" name="months" value="{{ month }}">{{ month }}</label>{% endfor %}</div>
+    </fieldset>
+    <label>Бюджетный Excel<input type="file" name="budget_file" accept=".xlsx,.xlsm" required></label>
+    <button class="primary">Построить preview</button>
+  </form>
+</section>
+{% endblock %}
