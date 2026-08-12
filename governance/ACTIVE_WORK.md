@@ -36,6 +36,16 @@ STATUS: `DISCOVERY / EXCEL_LOGIC_HANDOFF_READY / USER_FLOW_NOT_ACCEPTED`
 - `governance/FEATURE_BASELINE.md`;
 - `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md`.
 
+## Recently accepted
+
+`OWNER_DECISION_REPORT_TYPE` закрыт.
+
+Вид отчёта V1:
+
+- наименование: `Отчет о прибылях и убытках`;
+- код: `ОтчетОПрибыляхИУбытках`;
+- отдельная запись `ОПИУ` не используется как альтернативный вид отчёта V1.
+
 ## Current owner gate
 
 До implementation требуется:
@@ -45,14 +55,14 @@ STATUS: `DISCOVERY / EXCEL_LOGIC_HANDOFF_READY / USER_FLOW_NOT_ACCEPTED`
 
 Самый следующий owner decision:
 
-`OWNER_DECISION_REPORT_TYPE`
+`OWNER_DECISION_SCENARIO_IDENTITY`
 
-Выбрать один вид отчёта V1:
+Нужно определить:
 
-- `Отчет о прибылях и убытках`, код `ОтчетОПрибыляхИУбытках`;
-- либо `ОПИУ`, код `ОПИУ`.
+- считать ли `ПЛАН_2026` из ранее подтверждённого контекста и `ПЛАН 2026` из актуального ERP-экспорта одним сценарием;
+- какой однозначный идентификатор сохранять, поскольку поле `Код` в текущем справочнике сценариев не уникально.
 
-После этого последовательно закрываются scenario identity, period identity/filter, organization mapping/status, delegation target, mapping reuse context и negative amount rule.
+После этого последовательно закрываются period identity/filter, organization mapping/status, delegation target, mapping reuse context и negative amount rule.
 
 ## Forbidden now
 
@@ -70,8 +80,7 @@ STATUS: `DISCOVERY / EXCEL_LOGIC_HANDOFF_READY / USER_FLOW_NOT_ACCEPTED`
 - Working branch: `coord/proportional-safety-local-converter`.
 - Draft PR: `#1`.
 - Main at reconciliation start: `9af5ac112d06e6e6ed8c5e1bc4261eaaa099c607`.
-- Branch head before Excel-logic handoff commit: `686f02dc8829f22093cc8cc23b8a31544aec5b7a`.
+- Excel-logic handoff head: `e3fc79909162f72a3d51790f8c42c7ff18326818`.
+- Current exact head: latest head of Draft PR #1.
 - Merge: not performed.
 - ADO/live write: not performed.
-
-Точный итоговый head после этого docs-only handoff является текущим head Draft PR и возвращается владельцу в delivery-ответе.
