@@ -1,6 +1,6 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / REFERENCE_IMPORT_FIX_VERIFIED / OWNER_UX_SMOKE_RETRY_REQUIRED / DRAFT_PR_4 / NO_LIVE_WRITE`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / SCENARIO_COUNT_FIX_VERIFIED / OWNER_UX_SMOKE_RETRY_REQUIRED / DRAFT_PR_4 / NO_LIVE_WRITE`
 
 ## Current phase
 
@@ -8,26 +8,34 @@ STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / REFERENCE_IMPORT_FIX_VERIFIED /
 
 `Excel → structural detection → validation → exact ERP mapping/manual correction → 12-month normalization → maximum preview → error registry → export`
 
-Во время Owner UX Smoke приложение успешно запустилось, но реальные ERP-справочники были отклонены сообщением `Не найден заголовок известной ERP-выгрузки`.
+Owner UX Smoke подтвердил:
 
-Проблема исправлена без изменения бизнес-scope.
+- приложение запускается;
+- новые подписи persistent-catalog UX отображаются;
+- реальный справочник ERP-статей загружается полностью: `271`;
+- реальный справочник организаций/узлов загружается полностью: `357`;
+- справочник сценариев прочитан, но одна бизнес-строка была ошибочно отброшена: загружено `11` вместо `12`.
+
+Строка `Сценарий отчетности КИК` содержала слово `Сценарий` и была ошибочно принята за повторный заголовок. Это дефект парсера, а не файла.
+
+Дефект исправлен без изменения бизнес-scope.
 
 ## Current owner decisions
 
-Владелец явно уточнил:
+Владелец ранее явно уточнил:
 
 - единый справочник организаций/узлов ERP загружается один раз;
 - он сохраняется локально и используется для всех организаций и следующих запусков;
 - пользователь выбирает организацию или узел из одного общего списка;
-- повторная загрузка дополняет справочник и обновляет существующие записи по стабильному коду, не создавая копию на каждую организацию;
-- полный список сценариев загружается один раз;
-- сценарии сохраняются локально;
-- последующие ERP-файлы и ручные добавления дополняют/обновляют список, не удаляя ранее загруженные сценарии;
+- повторная загрузка дополняет справочник и обновляет существующие записи по стабильному коду;
+- полный список сценариев загружается один раз и сохраняется локально;
+- последующие ERP-файлы и ручные добавления дополняют/обновляют список;
 - стабильный локальный ID существующего сценария сохраняется.
 
-Exact handoff:
+Handoff:
 
-`governance/handoffs/HANDOFF-OWNER-UX-SMOKE-REFERENCE-CATALOGS-20260813-001.md`
+- `governance/handoffs/HANDOFF-OWNER-UX-SMOKE-REFERENCE-CATALOGS-20260813-001.md`;
+- `governance/handoffs/HANDOFF-OWNER-UX-SMOKE-SCENARIO-COUNT-20260813-002.md`.
 
 ## Git authority
 
@@ -35,60 +43,55 @@ Exact handoff:
 - Branch: `feat/v1-excel-transform-preview`.
 - Draft PR: `#4`, open, not merged.
 - Accepted product base: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
-- Previous reviewed head: `75d6d3e91da40550840879500bf8eebe07527b80`.
 - Reference-import fix code head: `7bc1e1bed0e9ea4d7641a5721e174ffe9f24c9ee`.
+- Scenario-count fix code head: `dbe59a5d5e435d0cfa7f441ba833ca8507d70b6a`.
 - ADO/live write: not implemented and not performed.
 
 ## Fix implemented
 
-- known ERP headers may be located on different header rows;
-- article/organization/scenario header aliases are recognized structurally;
-- the most plausible name/code column pair is selected by data evidence, not filename;
-- numeric ERP codes with zero number formats retain leading zeroes;
-- organization and ERP-article catalogs are merged globally by code;
-- repeated imports update matching codes and append new codes;
-- scenarios are upserted by canonical name + year with stable local ID;
-- UI explains one-time persistent loading and incremental supplements.
+Header discovery and business-row classification are now separate:
+
+- contains/fuzzy-like textual containment is allowed only to locate likely header cells;
+- a data row is treated as a header only by exact normalized header equivalence;
+- `Сценарий отчетности КИК` remains a normal scenario record;
+- repeated ERP codes remain allowed for different scenario names;
+- all twelve researched scenario rows are preserved.
 
 ## Test and CI evidence
 
-GitHub Actions workflow: `V1 CI`, run `31636475885`.
+GitHub Actions workflow: `V1 CI`, run `31641528467`.
 
-Results for code head `7bc1e1bed0e9ea4d7641a5721e174ffe9f24c9ee`:
+Results for code head `dbe59a5d5e435d0cfa7f441ba833ca8507d70b6a`:
 
 - compileall — PASS;
 - unit — `14 passed`;
-- integration — `18 passed`;
+- integration — `19 passed`;
 - UI smoke — `7 passed`;
-- full regression — `39 passed`;
+- full regression — `40 passed`;
 - no tracked business Excel — PASS.
 
-The new tests cover:
-
-- split/multi-row ERP headers;
-- preservation of zero-padded codes;
-- one global persistent organization catalog;
-- incremental organization updates/additions;
-- one persistent scenario catalog;
-- incremental scenario additions with stable IDs.
+A dedicated regression test builds a 12-row scenario export containing `Сценарий отчетности КИК` and verifies that all 12 records are returned.
 
 ## Current next action
 
-`OWNER_UX_SMOKE_RETRY_REFERENCE_UPLOAD`
+`OWNER_UX_SMOKE_RETRY_SCENARIOS_THEN_CONTINUE`
 
-Owner downloads/replaces the application code from the latest PR head, restarts the local service, and retries:
+Owner uses the latest PR head, restarts the service and reloads only the scenarios file.
 
-1. ERP articles;
-2. organizations;
-3. scenarios.
-
-Expected reference counts for the researched files:
+Expected current reference counts:
 
 - ERP articles: `271`;
 - organizations/nodes: `357`;
 - scenarios: `12`.
 
-If those imports pass, continue the existing Owner UX Smoke with organization/node selection, budget preview, correction and export.
+After the count is `12`, continue the existing Owner UX Smoke:
+
+1. choose organization/node from the persistent common tree;
+2. choose scenario and year;
+3. upload the budget workbook;
+4. inspect preview and issue registry;
+5. apply one correction;
+6. export OPIU Light.
 
 ## Forbidden
 
@@ -97,7 +100,7 @@ If those imports pass, continue the existing Owner UX Smoke with organization/no
 - TEST/PROD write;
 - direct SQL write into 1C;
 - real business Excel/reference files committed to Git;
-- fuzzy/typo/case auto-match;
+- fuzzy/typo/case auto-match for ERP mapping;
 - filename-based reference detection;
 - per-organization duplicate reference catalogs;
 - platform/multi-tenant/enterprise expansion.
