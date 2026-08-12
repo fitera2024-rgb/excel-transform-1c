@@ -38,6 +38,8 @@ def upload(client, payload: bytes, **form):
         "organization_node_id": "ps",
         "scenario_id": scenario_id,
         "year": "2026",
+        "period_selector_present": "1",
+        "all_year": "1",
         **form,
     }
     return client.post(
@@ -60,6 +62,46 @@ def run_id_from(response) -> str:
     return match.group(1)
 
 
+def test_home_uses_hierarchical_organization_selector_without_access_block(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert 'data-testid="organization-root"' in response.text
+    assert 'data-testid="organization-node"' in response.text
+    assert 'data-root-id="root"' in response.text
+    assert "После выбора верхней ветки доступны" in response.text
+    assert "Область доступа" not in response.text
+    assert "Применить поддеревья" not in response.text
+    assert 'data-testid="scenario-select"' in response.text
+    assert "ПЛАН 2026" in response.text
+    assert 'data-testid="all-year"' in response.text
+    assert 'name="all_year" value="1" type="checkbox" checked' in response.text
+
+
+def test_legacy_delegation_is_cleared_and_all_nodes_remain_available(tmp_path):
+    runtime = tmp_path / "runtime"
+    first = TestClient(create_app(runtime))
+    for kind in ("erp_articles", "organizations", "scenarios"):
+        first.post(
+            "/references",
+            data={"kind": kind},
+            files={
+                "reference_file": (
+                    f"synthetic-{kind}.xlsx",
+                    reference_bytes(kind),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+            follow_redirects=True,
+        )
+    first.app.state.workflow.store.set_delegations("local", ["ps"])
+
+    restarted = TestClient(create_app(runtime))
+    assert restarted.app.state.workflow.store.get_delegations("local") == []
+    response = restarted.get("/")
+    assert 'value="other"' in response.text
+    assert "Сосед (ORG-5)" in response.text
+
+
 def test_happy_path_to_preview_and_export(client):
     response = upload(client, workbook_bytes())
     assert response.status_code == 200
@@ -71,6 +113,25 @@ def test_happy_path_to_preview_and_export(client):
     assert exported.headers["content-type"].startswith(
         "application/vnd.openxmlformats"
     )
+
+
+def test_explicit_month_selection_filters_view_but_keeps_full_result(client):
+    response = upload(
+        client,
+        workbook_bytes(),
+        all_year="",
+        months=["1", "2"],
+    )
+    assert response.status_code == 200
+    run = client.app.state.workflow.get_run(run_id_from(response))
+    assert len(run.records) == 24
+    assert len(run.visible_records()) == 4
+
+
+def test_period_requires_all_year_or_at_least_one_month(client):
+    response = upload(client, workbook_bytes(), all_year="", months=[])
+    assert response.status_code == 200
+    assert "Выберите «Весь год» либо хотя бы один месяц" in response.text
 
 
 def test_attention_path_with_manual_erp_correction(client):
