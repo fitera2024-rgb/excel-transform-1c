@@ -1,132 +1,105 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / DRAFT_PR_4_OPEN / COORDINATOR_QA_REQUIRED / NO_LIVE_WRITE`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / IMPLEMENTATION_QA_PASSED / READY_FOR_OWNER_UX_SMOKE / DRAFT_PR_4 / NO_LIVE_WRITE`
 
 ## Current phase
 
 Discovery, Product Contract, Architecture Light boundaries and User Flow V1 завершены и приняты владельцем.
 
-Product/governance PR #1 merged.
-
-Актуальные handoff:
-
-- `governance/handoffs/HANDOFF-OWNER-DECISIONS-20260812-002.md` — финальный пакет owner decisions;
-- `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md` — evidence, карты Excel и ERP-справочников.
-
-## Accepted V1
-
-Первая vertical slice:
+Первая vertical slice реализована в Draft PR `#4`:
 
 `Excel → structural detection → validation → exact ERP mapping/manual correction → 12-month normalization → maximum preview → error registry → export`
 
-Ключевые принятые решения:
-
-- local converter, не platform;
-- prepared expense range as input;
-- 12 месяцев, включая нули;
-- cached formula values, без Excel recalculation;
-- continue with attention;
-- exact ERP mapping, no fuzzy/autofix;
-- local persistent scenarios, включая добавленные пользователем;
-- `ПЛАН_2026` = `ПЛАН 2026`, stable local scenario ID;
-- year + optional month filter;
-- manual organization branch selection per run;
-- all organization nodes visible, no guessed status/type filtering;
-- delegation on any tree node and whole subtree;
-- reusable mapping key = report type + full article path;
-- negative amounts preserved with attention;
-- nodes/records named `Удалить` are not auto-excluded;
-- User Flow accepted.
-
-## Implementation authority
-
-GitHub Issue:
-
-`#2 — [M] V1: Excel → validation → ERP mapping → preview → export`
-
-Exact task contract:
-
-`governance/tasks/CODEX-TASK-EXCEL-V1-20260812-001.md`
-
-Risk: `M`.
-
-Exact implementation base:
-
-`836b3154c4c81ebc9c0ec3f8ef895afee5d47098`
-
-Target implementation branch:
-
-`feat/v1-excel-transform-preview`
-
-## Start gate — COMPLETED
-
-- PR #1 reviewed and merged;
-- exact merged product commit pinned in Issue #2 and task contract;
-- Product Contract and User Flow accepted;
-- no additional owner Product/UX decision is required to start V1;
-- explicit Codex execution directive posted in Issue #2.
-
-Codex must create the target branch exactly from the pinned implementation base, keep its implementation PR Draft and not merge it.
-
-## Coordinator verification authority
-
-Coordinator QA Issue:
-
-`#3 — [COORD-QA] Проверить Draft PR реализации V1 по Issue #2`
-
-Exact coordinator contract:
-
-`governance/tasks/COORDINATOR-QA-V1-20260812-001.md`
-
-Trigger: появление Draft implementation PR, связанного с Issue #2.
-
-Координатор обязан независимо проверить:
-
-- exact base/head/branch;
-- полный diff и changed files;
-- tests/CI/reproducibility;
-- synthetic fixtures and absence of real business data;
-- Feature Baseline regressions;
-- отсутствие ADO/live write/direct SQL;
-- отсутствие fuzzy/autofix и platform expansion;
-- Codex handoff;
-- готовность к Owner UX Smoke.
-
-## Current next action
-
-`COORDINATOR_QA_DRAFT_PR_4`
-
-После появления Draft PR:
-
-1. активировать Issue #3;
-2. проверить exact base/head, diff, tests and handoff;
-3. проверить Feature Baseline;
-4. при проблемах запросить изменения в PR;
-5. при технической готовности вернуть владельцу Owner UX Smoke;
-6. не merge-ить implementation PR до завершения smoke.
-
-Draft implementation PR создан: `#4`.
-
-## Forbidden
-
-- ADO connection;
-- live write;
-- TEST/PROD write;
-- direct SQL write в 1С;
-- старт Codex от другого base;
-- реальные business Excel/справочники в Git;
-- fuzzy/typo/case auto-match;
-- самостоятельный merge Codex;
-- platform/multi-tenant/enterprise expansion;
-- переоткрытие ACCEPTED решений без нового evidence или owner decision.
-
-## Git state
+## Git authority
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
 - Product PR: `#1`, merged.
-- Product merge commit: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
-- Implementation Issue: `#2`, linked to Draft PR `#4`.
-- Coordinator QA Issue: `#3`, ready to verify Draft PR `#4`.
-- Implementation branch: `feat/v1-excel-transform-preview`, created from the pinned base.
-- Product implementation: committed, pushed and awaiting independent QA/Owner UX Smoke.
-- ADO/live write: not performed.
+- Accepted product base: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
+- Implementation branch: `feat/v1-excel-transform-preview`.
+- PR base at QA: `b57250a4dcc6a2b0442b200070411dc66a58ae0e`.
+- Independently verified code head: `47b7c7a04309122caf26760657ec5da2ea26d533`.
+- Implementation PR: `#4`, open, Draft, not merged.
+- ADO/live write: not implemented and not performed.
+
+## Independent coordinator QA
+
+Coordinator QA Issue: `#3`.
+
+Exact QA handoff:
+
+`governance/handoffs/HANDOFF-COORDINATOR-QA-V1-20260812-001.md`
+
+All four findings from the first review are closed in code and regression tests:
+
+1. documented real ERP reference structures load directly;
+2. user corrections are field-specific and ERP mapping is invalidated/recomputed safely;
+3. invalid monthly value remains visible as `Пропущено` in preview and export;
+4. reporting-unit conflict produces localized attention and does not block processing.
+
+Additional hardening verified:
+
+- trailing spaces/case are preserved for exact ERP matching; no hidden normalization;
+- saved manual mapping conflicting with an exact ERP path remains visible;
+- main preview displays the exact monthly source cell;
+- simultaneous path + ERP correction persists the mapping under the new path.
+
+## Test and CI evidence
+
+GitHub Actions workflow: `V1 CI`, run `31598771451`.
+
+Results for `47b7c7a04309122caf26760657ec5da2ea26d533`:
+
+- `python -m compileall -q src tests` — PASS;
+- unit — `14 passed`;
+- integration — `15 passed`;
+- UI smoke — `7 passed`;
+- full regression — `36 passed`, one third-party Starlette TestClient deprecation warning;
+- `No tracked business Excel` — PASS.
+
+No CI failure, cancellation or skipped acceptance check remains.
+
+## Feature Baseline
+
+Coordinator result: `PRESERVED`.
+
+No `CHANGED_AUTHORIZED` or `BLOCKED_REGRESSION` was found for V1. In particular:
+
+- structural input detection and multiple-range choice preserved;
+- 12 months including zero preserved;
+- continue-with-attention and visible `Пропущено` preserved;
+- exact/no-fuzzy ERP mapping and manual fallback preserved;
+- scenarios, organizational tree, subtree delegation and local persistence preserved;
+- corrections without full rerun preserved;
+- OPIU Light export preserved;
+- ADO/write boundaries preserved.
+
+## Current next action
+
+`OWNER_UX_SMOKE_PR_4`
+
+Owner verifies the business path locally:
+
+1. upload the three approved ERP reference exports;
+2. select reporting unit, organization branch, scenario, year/months;
+3. upload a budget Excel;
+4. inspect preview and issue registry;
+5. apply a manual correction;
+6. export OPIU Light;
+7. confirm blocked no-range/reset behavior.
+
+After owner acceptance:
+
+`READY_FOR_MERGE_AFTER_OWNER_SMOKE`
+
+PR #4 remains Draft and must not be merged before the owner smoke result.
+
+## Forbidden
+
+- ADO connection or live write;
+- TEST/PROD write;
+- direct SQL write into 1C;
+- real business Excel/reference files committed to Git;
+- fuzzy/typo/case auto-match;
+- hidden trimming or automatic correction of ERP article names;
+- platform/multi-tenant/enterprise expansion;
+- self-merge by an implementation agent.
