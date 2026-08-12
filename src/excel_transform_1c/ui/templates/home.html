@@ -16,18 +16,18 @@
 <section class="grid three">
   <article class="card">
     <h2>1. Справочники</h2>
-    <p>ERP-статьи: <strong>{{ counts.erp_articles }}</strong><br>Организации: <strong>{{ counts.organizations }}</strong><br>Сценарии: <strong>{{ counts.scenarios }}</strong></p>
+    <p>ERP-статьи: <strong>{{ counts.erp_articles }}</strong><br>Организации и узлы: <strong>{{ counts.organizations }}</strong><br>Сценарии: <strong>{{ counts.scenarios }}</strong></p>
     <form method="post" action="/references" enctype="multipart/form-data" data-testid="reference-form">
       <label>Тип справочника
         <select name="kind">
           <option value="erp_articles">ERP-статьи</option>
-          <option value="organizations">Организации</option>
+          <option value="organizations">Организации и узлы</option>
           <option value="scenarios">Сценарии</option>
         </select>
       </label>
       <label>Файл справочника .xlsx<input type="file" name="reference_file" accept=".xlsx" required></label>
-      <p class="hint">Поддерживаются известные ERP-выгрузки и документированный плоский interchange-формат.</p>
-      <button>Загрузить / обновить</button>
+      <p class="hint">Загрузите полный ERP-справочник один раз. Он сохраняется локально и используется для всех организаций и следующих запусков. Повторная загрузка дополняет список и обновляет записи по коду, не удаляя ранее загруженные.</p>
+      <button>Загрузить / дополнить</button>
     </form>
   </article>
 
@@ -39,7 +39,7 @@
       <label>Комментарий<input name="comment"></label>
       <button>Сохранить сценарий</button>
     </form>
-    <p class="hint">Новый локальный сценарий будет помечен «Не подтверждён справочником ERP».</p>
+    <p class="hint">Полный список сценариев загружается один раз и сохраняется локально. При необходимости новые сценарии можно догрузить файлом или добавить вручную. Новый локальный сценарий помечается «Не подтверждён справочником ERP».</p>
   </article>
 
   <article class="card">
@@ -61,15 +61,15 @@
   <h2>4. Обработать бюджетный Excel</h2>
   <form method="post" action="/uploads" enctype="multipart/form-data" class="process-form" data-testid="process-form">
     <label>Единица отчёта<input name="reporting_unit" required placeholder="ПС"></label>
-    <label>Организационный узел
+    <label>Организация / узел 1С
       <select name="organization_node_id" required>
-        <option value="">Выберите вручную</option>
+        <option value="">Выберите из общего справочника</option>
         {% for node in organizations %}<option value="{{ node.node_id }}">{{ node.full_path }} ({{ node.code }})</option>{% endfor %}
       </select>
     </label>
     <label>Сценарий
       <select name="scenario_id" required>
-        <option value="">Выберите</option>
+        <option value="">Выберите из общего списка</option>
         {% for scenario in scenarios %}<option value="{{ scenario.scenario_id }}">{{ scenario.name }}{% if scenario.year %} · {{ scenario.year }}{% else %} · год выбирается отдельно{% endif %}{% if scenario.marker %} · {{ scenario.marker }}{% endif %}</option>{% endfor %}
       </select>
     </label>
