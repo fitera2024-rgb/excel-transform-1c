@@ -1,6 +1,6 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / SCENARIO_COUNT_FIX_VERIFIED / OWNER_UX_SMOKE_RETRY_REQUIRED / DRAFT_PR_4 / NO_LIVE_WRITE`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_OWNER_REFINED / HIERARCHY_OPEN_ACCESS_ALL_YEAR_CI_PASSED / OWNER_UX_SMOKE_CONTINUE / DRAFT_PR_4 / NO_LIVE_WRITE`
 
 ## Current phase
 
@@ -8,34 +8,42 @@ STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / SCENARIO_COUNT_FIX_VERIFIED / O
 
 `Excel → structural detection → validation → exact ERP mapping/manual correction → 12-month normalization → maximum preview → error registry → export`
 
-Owner UX Smoke подтвердил:
+Owner UX Smoke уже подтвердил:
 
 - приложение запускается;
-- новые подписи persistent-catalog UX отображаются;
-- реальный справочник ERP-статей загружается полностью: `271`;
-- реальный справочник организаций/узлов загружается полностью: `357`;
-- справочник сценариев прочитан, но одна бизнес-строка была ошибочно отброшена: загружено `11` вместо `12`.
-
-Строка `Сценарий отчетности КИК` содержала слово `Сценарий` и была ошибочно принята за повторный заголовок. Это дефект парсера, а не файла.
-
-Дефект исправлен без изменения бизнес-scope.
+- persistent ERP-справочники работают;
+- ERP-статьи загружены: `271`;
+- организации/узлы загружены: `357`;
+- сценарий виден в форме;
+- дефект `Сценарий отчетности КИК` исправлен и покрыт тестом.
 
 ## Current owner decisions
 
-Владелец ранее явно уточнил:
+Во время UX Smoke владелец уточнил:
 
-- единый справочник организаций/узлов ERP загружается один раз;
-- он сохраняется локально и используется для всех организаций и следующих запусков;
-- пользователь выбирает организацию или узел из одного общего списка;
-- повторная загрузка дополняет справочник и обновляет существующие записи по стабильному коду;
-- полный список сценариев загружается один раз и сохраняется локально;
-- последующие ERP-файлы и ручные добавления дополняют/обновляют список;
-- стабильный локальный ID существующего сценария сохраняется.
+- единый справочник организаций/узлов загружается один раз и сохраняется локально;
+- полный список сценариев загружается один раз и затем дополняется;
+- отдельный блок `Область доступа` не нужен;
+- всем пользователям локального сервиса доступно всё дерево организаций;
+- делегирование/effective-access фильтрация удаляются из V1;
+- организация выбирается иерархически: верхняя ветка → сам верхний или любой нижний узел;
+- период содержит явную галочку `Весь год`, включённую по умолчанию;
+- после снятия `Весь год` пользователь обязан выбрать хотя бы один месяц.
 
-Handoff:
+Exact handoff:
 
-- `governance/handoffs/HANDOFF-OWNER-UX-SMOKE-REFERENCE-CATALOGS-20260813-001.md`;
-- `governance/handoffs/HANDOFF-OWNER-UX-SMOKE-SCENARIO-COUNT-20260813-002.md`.
+`governance/handoffs/HANDOFF-OWNER-UX-ORG-PERIOD-20260813-003.md`
+
+## Implementation
+
+- удалена карточка области доступа и endpoint делегирования из normal UI;
+- при старте очищается legacy delegation state старых Draft-версий, поэтому узлы больше не скрываются;
+- добавлен двухэтапный иерархический выбор организации;
+- выбор верхней ветки автоматически выбирает её верхний узел и открывает всё поддерево;
+- сценарий остаётся отдельным видимым селектором;
+- добавлена галочка `Весь год` и управляемый выбор месяцев;
+- добавлена server-side validation периода;
+- User Flow и Feature Baseline синхронизированы с owner decision.
 
 ## Git authority
 
@@ -43,55 +51,53 @@ Handoff:
 - Branch: `feat/v1-excel-transform-preview`.
 - Draft PR: `#4`, open, not merged.
 - Accepted product base: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
-- Reference-import fix code head: `7bc1e1bed0e9ea4d7641a5721e174ffe9f24c9ee`.
-- Scenario-count fix code head: `dbe59a5d5e435d0cfa7f441ba833ca8507d70b6a`.
+- Hierarchy/open-access/all-year code and regression head: `7e7d7ec26ecaa303f33eef7db93e6577358a7163`.
+- Complete tested package before this Active Work update: `7f606a66aa4344ce1f42681245b52165da1da8b1`.
 - ADO/live write: not implemented and not performed.
-
-## Fix implemented
-
-Header discovery and business-row classification are now separate:
-
-- contains/fuzzy-like textual containment is allowed only to locate likely header cells;
-- a data row is treated as a header only by exact normalized header equivalence;
-- `Сценарий отчетности КИК` remains a normal scenario record;
-- repeated ERP codes remain allowed for different scenario names;
-- all twelve researched scenario rows are preserved.
 
 ## Test and CI evidence
 
-GitHub Actions workflow: `V1 CI`, run `31641528467`.
-
-Results for code head `dbe59a5d5e435d0cfa7f441ba833ca8507d70b6a`:
+GitHub Actions `V1 CI`, run `31643909787`:
 
 - compileall — PASS;
 - unit — `14 passed`;
 - integration — `19 passed`;
-- UI smoke — `7 passed`;
-- full regression — `40 passed`;
-- no tracked business Excel — PASS.
+- UI smoke — `11 passed`;
+- full regression — `44 passed`;
+- no tracked `.xlsx/.xls/.xlsm` — PASS.
 
-A dedicated regression test builds a 12-row scenario export containing `Сценарий отчетности КИК` and verifies that all 12 records are returned.
+New regression coverage verifies:
+
+- hierarchy selectors are rendered with root/subtree metadata;
+- the access-rights card is absent;
+- stale legacy delegation state is cleared and all nodes remain visible;
+- the scenario selector remains visible;
+- `Весь год` is checked by default;
+- selected months filter the view without destroying the full 12-month result;
+- an empty period after removing `Весь год` is rejected clearly.
+
+## Feature Baseline result
+
+- `ORG-002`: `CHANGED_AUTHORIZED`;
+- `PERIOD-001`: `CHANGED_AUTHORIZED`;
+- `ACCESS-001..004`: `REMOVED_AUTHORIZED`;
+- `UX-004`, `UX-005`: accepted and implemented;
+- all unrelated V1 baseline IDs: `PRESERVED`.
 
 ## Current next action
 
-`OWNER_UX_SMOKE_RETRY_SCENARIOS_THEN_CONTINUE`
+`OWNER_UX_SMOKE_HIERARCHY_PERIOD_THEN_BUDGET`
 
-Owner uses the latest PR head, restarts the service and reloads only the scenarios file.
+Owner updates/restarts the latest PR head while preserving `runtime/local.db`, then checks:
 
-Expected current reference counts:
-
-- ERP articles: `271`;
-- organizations/nodes: `357`;
-- scenarios: `12`.
-
-After the count is `12`, continue the existing Owner UX Smoke:
-
-1. choose organization/node from the persistent common tree;
-2. choose scenario and year;
-3. upload the budget workbook;
-4. inspect preview and issue registry;
-5. apply one correction;
-6. export OPIU Light.
+1. counters remain `271 / 357 / 12`;
+2. the `Область доступа` card is absent;
+3. selecting a top branch exposes only that complete subtree;
+4. the top node itself or any child can be selected;
+5. the scenario is visible;
+6. `Весь год` is checked by default;
+7. after unchecking it, months become available;
+8. budget preview, one correction and export complete successfully.
 
 ## Forbidden
 
@@ -102,5 +108,5 @@ After the count is `12`, continue the existing Owner UX Smoke:
 - real business Excel/reference files committed to Git;
 - fuzzy/typo/case auto-match for ERP mapping;
 - filename-based reference detection;
-- per-organization duplicate reference catalogs;
+- reintroduction of local access-rights complexity without a new owner decision;
 - platform/multi-tenant/enterprise expansion.
