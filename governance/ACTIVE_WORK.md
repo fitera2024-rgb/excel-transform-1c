@@ -1,86 +1,94 @@
 # Active Work
 
-STATUS: `DISCOVERY / EXCEL_LOGIC_HANDOFF_READY / USER_FLOW_NOT_ACCEPTED`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / IMPLEMENTATION_TASK_PREPARED / BLOCKED_BY_PR_1_MERGE`
 
 ## Current phase
 
-Новый сервис находится на этапе завершения Product Contract и owner review User Flow.
+Discovery, Product Contract and User Flow V1 завершены и приняты владельцем.
 
-Актуальный handoff:
+Актуальные handoff:
 
-`governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md`
+- `governance/handoffs/HANDOFF-OWNER-DECISIONS-20260812-002.md` — финальный пакет owner decisions;
+- `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md` — evidence, карты Excel и ERP-справочников.
 
-Предыдущий handoff `HANDOFF-COORDINATOR-20260811-001.md` остаётся историческим источником раннего discovery, но latest Excel/reference decisions находятся в новом handoff и канонических документах.
+## Accepted V1
 
-## Completed discovery
+Первая vertical slice:
 
-Исследованы и сверены:
+`Excel → structural detection → validation → exact ERP mapping/manual correction → 12-month normalization → maximum preview → error registry → export`
 
-- реальный бюджетный Excel ПС и его 20 листов;
-- подготовленный диапазон расходов: 179 строк, 12 месяцев;
-- sample normalized result АЮ;
-- актуальный ERP-справочник статей и coverage 179 строк;
-- сценарии;
-- периоды;
-- показатели отчётов ОПИУ;
-- виды отчётов;
-- вложенная иерархия организаций/ЦФО/подразделений;
-- screenshot дерева `Организации` в 1С;
-- текущие Git documents, branch и Draft PR.
+Ключевые принятые решения:
 
-Принятые решения перенесены в:
+- local converter, не platform;
+- prepared expense range as input;
+- 12 месяцев, включая нули;
+- cached formula values, без Excel recalculation;
+- continue with attention;
+- exact ERP mapping, no fuzzy/autofix;
+- local persistent scenarios, включая добавленные пользователем;
+- `ПЛАН_2026` = `ПЛАН 2026`, stable local scenario ID;
+- year + optional month filter;
+- manual organization branch selection per run;
+- all organization nodes visible, no guessed status/type filtering;
+- delegation on any tree node and whole subtree;
+- reusable mapping key = report type + full article path;
+- negative amounts preserved with attention;
+- nodes/records named `Удалить` are not auto-excluded;
+- User Flow accepted.
 
-- `docs/PRODUCT.md`;
-- `docs/USER_FLOW.md`;
-- `governance/DECISIONS.md`;
-- `governance/FEATURE_BASELINE.md`;
-- `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md`.
+## Implementation task
 
-## Recently accepted
+GitHub Issue: `#2 — [M] V1: Excel → validation → ERP mapping → preview → export`
 
-`OWNER_DECISION_REPORT_TYPE` закрыт.
+Exact task contract:
 
-Вид отчёта V1:
+`governance/tasks/CODEX-TASK-EXCEL-V1-20260812-001.md`
 
-- наименование: `Отчет о прибылях и убытках`;
-- код: `ОтчетОПрибыляхИУбытках`;
-- отдельная запись `ОПИУ` не используется как альтернативный вид отчёта V1.
+Risk: `M`.
 
-## Current owner gate
+## Start gate
 
-До implementation требуется:
+Implementation must not start until:
 
-1. Закрыть оставшиеся действительно необходимые Product Contract решения по одному.
-2. Явно принять User Flow владельцем.
+1. Draft PR #1 is reviewed and merged;
+2. exact merged product head is pinned in the task contract/Issue #2;
+3. Codex creates `feat/v1-excel-transform-preview` from that exact commit.
 
-Самый следующий owner decision:
+После выполнения start gate дополнительные Product/UX вопросы владельцу для начала V1 не требуются.
 
-`OWNER_DECISION_SCENARIO_IDENTITY`
+## Current next action
 
-Нужно определить:
+`REVIEW_AND_MERGE_PRODUCT_PR_1`
 
-- считать ли `ПЛАН_2026` из ранее подтверждённого контекста и `ПЛАН 2026` из актуального ERP-экспорта одним сценарием;
-- какой однозначный идентификатор сохранять, поскольку поле `Код` в текущем справочнике сценариев не уникально.
+После merge:
 
-После этого последовательно закрываются period identity/filter, organization mapping/status, delegation target, mapping reuse context и negative amount rule.
+1. зафиксировать merge commit;
+2. обновить Issue #2 и task contract exact base;
+3. передать Issue #2 Codex;
+4. получить Draft implementation PR;
+5. проверить diff/tests/handoff;
+6. провести Owner UX Smoke до release.
 
-## Forbidden now
+## Forbidden
 
-- начинать product implementation до owner acceptance User Flow;
-- подключать ADO live write;
-- писать в TEST/PROD 1С;
-- делать прямой SQL-write во внутренние таблицы 1С;
-- merge Draft PR координатором;
-- копировать тяжёлые OPIU controls или раздувать локальный конвертер до platform architecture;
-- переоткрывать ACCEPTED-решения без нового evidence или явного owner decision.
+- ADO connection;
+- live write;
+- TEST/PROD write;
+- direct SQL write в 1С;
+- старт Codex от непроверенного/непринятого base;
+- реальные business Excel/справочники в Git;
+- fuzzy/typo/case auto-match;
+- самостоятельный merge Codex;
+- platform/multi-tenant/enterprise expansion;
+- переоткрытие ACCEPTED решений без нового evidence или owner decision.
 
-## Git work
+## Git state
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
-- Working branch: `coord/proportional-safety-local-converter`.
-- Draft PR: `#1`.
-- Main at reconciliation start: `9af5ac112d06e6e6ed8c5e1bc4261eaaa099c607`.
-- Excel-logic handoff head: `e3fc79909162f72a3d51790f8c42c7ff18326818`.
-- Current exact head: latest head of Draft PR #1.
-- Merge: not performed.
+- Product branch: `coord/proportional-safety-local-converter`.
+- Product PR: `#1`, open.
+- Implementation Issue: `#2`, open and blocked by PR #1 merge.
+- Product head before this Active Work update: `b4d263b2b2c4dda94621c0b88bc786e3edc77288`.
+- Current exact head: latest head of PR #1.
+- Product implementation: not started.
 - ADO/live write: not performed.
