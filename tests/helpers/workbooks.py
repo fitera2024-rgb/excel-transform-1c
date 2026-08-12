@@ -6,6 +6,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
+from msoffcrypto.format.ooxml import OOXMLFile
 
 
 HEADERS = [
@@ -67,6 +68,39 @@ def workbook_bytes(
             _append_candidate(second, False, False, False, False, False, False, reporting_unit)
     output = BytesIO()
     workbook.save(output)
+    return output.getvalue()
+
+
+def large_workbook_bytes(row_count: int = 400) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Большой synthetic диапазон"
+    sheet.append(["Синтетический fixture: вымышленные данные"])
+    sheet.append(HEADERS)
+    for index in range(row_count):
+        administrative = index % 2 == 0
+        sheet.append(
+            [
+                "ПС",
+                "Административные" if administrative else "Коммерческие",
+                f"Департамент {index % 7}",
+                "ТК",
+                f"ЦФО {index % 11}",
+                0.2 if administrative else "БЕЗ НДС",
+                "Связь" if administrative else "Маркетинг",
+                "Интернет" if administrative else "Реклама",
+                *[index * 12 + month for month in range(1, 13)],
+            ]
+        )
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
+def protected_workbook_bytes(content: bytes, password: str) -> bytes:
+    output = BytesIO()
+    OOXMLFile(BytesIO(content)).encrypt(password, output)
     return output.getvalue()
 
 

@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 from uuid import uuid4
 
 from excel_transform_1c.adapters.excel import detect_path, export_opiu_light, read_path
 from excel_transform_1c.adapters.persistence import LocalStore
+from excel_transform_1c.adapters.protected_ooxml import (
+    ProtectedWorkbookError,
+    decrypt_protected_ooxml,
+    has_ole_signature,
+)
 from excel_transform_1c.adapters.references import (
     erp_articles,
     organization_nodes,
@@ -32,11 +39,16 @@ from excel_transform_1c.core.models import (
 from excel_transform_1c.core.transform import ExactERPMapper, normalize_tax, transform_rows
 
 
+UPLOAD_CHUNK_SIZE = 1024 * 1024
+
+
 @dataclass
 class PendingUpload:
     upload_id: str
     source_name: str
-    path: Path
+    original_path: Path
+    working_path: Path
+    is_protected: bool
     candidates: list[CandidateRange]
     context: RunContext
 
@@ -122,25 +134,108 @@ class WorkflowService:
             selected_months=tuple(sorted(set(months))),
         )
 
-    def prepare_upload(self, source_name: str, content: bytes, context: RunContext) -> PendingUpload:
+    def prepare_upload(
+        self,
+        source_name: str,
+        content: bytes | BinaryIO,
+        context: RunContext,
+        password: str = "",
+        chunk_size: int = UPLOAD_CHUNK_SIZE,
+    ) -> PendingUpload:
+        """Stage a small/test input through the same bounded-copy path as HTTP uploads."""
+
+        if chunk_size <= 0:
+            raise ValueError("Размер блока загрузки должен быть положительным")
+        source = BytesIO(content) if isinstance(content, bytes) else content
+        upload_id, original_path = self._new_upload_target(source_name)
+        try:
+            with original_path.open("xb") as target:
+                while chunk := source.read(chunk_size):
+                    target.write(chunk)
+            return self._prepare_staged_upload(
+                upload_id,
+                source_name,
+                original_path,
+                context,
+                password,
+            )
+        except Exception:
+            shutil.rmtree(original_path.parent, ignore_errors=True)
+            raise
+
+    async def prepare_upload_stream(
+        self,
+        source_name: str,
+        source: Any,
+        context: RunContext,
+        password: str = "",
+        chunk_size: int = UPLOAD_CHUNK_SIZE,
+    ) -> PendingUpload:
+        """Stream an UploadFile-like source, then analyze it outside the event loop."""
+
+        if chunk_size <= 0:
+            raise ValueError("Размер блока загрузки должен быть положительным")
+        upload_id, original_path = self._new_upload_target(source_name)
+        try:
+            with original_path.open("xb") as target:
+                while chunk := await source.read(chunk_size):
+                    target.write(chunk)
+            return await asyncio.to_thread(
+                self._prepare_staged_upload,
+                upload_id,
+                source_name,
+                original_path,
+                context,
+                password,
+            )
+        except Exception:
+            shutil.rmtree(original_path.parent, ignore_errors=True)
+            raise
+
+    def _new_upload_target(self, source_name: str) -> tuple[str, Path]:
         if not source_name.lower().endswith((".xlsx", ".xlsm")):
             raise ValueError("Поддерживаются файлы .xlsx и .xlsm")
         upload_id = uuid4().hex
-        path = self.upload_dir / f"{upload_id}.xlsx"
-        path.write_bytes(content)
+        upload_path = self.upload_dir / upload_id
+        upload_path.mkdir(parents=True, exist_ok=False)
+        suffix = Path(source_name).suffix.lower()
+        return upload_id, upload_path / f"source-original{suffix}"
+
+    def _prepare_staged_upload(
+        self,
+        upload_id: str,
+        source_name: str,
+        original_path: Path,
+        context: RunContext,
+        password: str,
+    ) -> PendingUpload:
+        is_protected = has_ole_signature(original_path)
+        working_path = original_path
         try:
-            candidates = detect_path(path)
+            if is_protected:
+                working_path = original_path.parent / "source-working.xlsx"
+                decrypt_protected_ooxml(original_path, working_path, password)
+            candidates = detect_path(working_path)
+        except ProtectedWorkbookError:
+            raise
         except Exception as exc:
-            path.unlink(missing_ok=True)
             raise ValueError("Файл не открывается или повреждён") from exc
-        pending = PendingUpload(upload_id, Path(source_name).name, path, candidates, context)
+        pending = PendingUpload(
+            upload_id=upload_id,
+            source_name=Path(source_name).name,
+            original_path=original_path,
+            working_path=working_path,
+            is_protected=is_protected,
+            candidates=candidates,
+            context=context,
+        )
         self.pending[upload_id] = pending
         return pending
 
     def reset_upload(self, upload_id: str) -> None:
         pending = self.pending.pop(upload_id, None)
         if pending:
-            pending.path.unlink(missing_ok=True)
+            shutil.rmtree(pending.original_path.parent, ignore_errors=True)
 
     def process_upload(self, upload_id: str, candidate_id: str) -> ProcessedRun:
         pending = self.pending.get(upload_id)
@@ -152,7 +247,7 @@ class WorkflowService:
         )
         if not candidate:
             raise ValueError("Выберите распознанный диапазон")
-        digest = hashlib.sha256(pending.path.read_bytes()).hexdigest()
+        digest = self._sha256_path(pending.original_path)
         run_key = json.dumps(
             [digest, candidate.candidate_id, pending.context.__dict__],
             ensure_ascii=False,
@@ -165,9 +260,13 @@ class WorkflowService:
         run_id = uuid4().hex
         snapshot_dir = self.run_dir / run_id
         snapshot_dir.mkdir(parents=True, exist_ok=False)
-        snapshot = snapshot_dir / "source.xlsx"
-        shutil.copyfile(pending.path, snapshot)
-        rows = read_path(snapshot, candidate, pending.source_name)
+        original_snapshot = snapshot_dir / pending.original_path.name
+        shutil.copyfile(pending.original_path, original_snapshot)
+        processing_snapshot = original_snapshot
+        if pending.is_protected:
+            processing_snapshot = snapshot_dir / "source-working.xlsx"
+            shutil.copyfile(pending.working_path, processing_snapshot)
+        rows = read_path(processing_snapshot, candidate, pending.source_name)
         mapper = ExactERPMapper(self.erp_articles(), self.store.load_manual_mappings())
         records, issues = transform_rows(rows, pending.context, mapper)
         run = ProcessedRun(
@@ -182,6 +281,14 @@ class WorkflowService:
         self.runs[run_id] = run
         self.run_keys[run_key] = run_id
         return run
+
+    @staticmethod
+    def _sha256_path(path: Path, chunk_size: int = UPLOAD_CHUNK_SIZE) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as source:
+            while chunk := source.read(chunk_size):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def get_run(self, run_id: str) -> ProcessedRun:
         if run_id not in self.runs:

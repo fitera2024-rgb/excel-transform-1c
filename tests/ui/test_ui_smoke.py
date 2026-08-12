@@ -1,10 +1,13 @@
+import asyncio
 import re
+import threading
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 from excel_transform_1c.ui.app import create_app
-from tests.helpers.workbooks import reference_bytes, workbook_bytes
+from tests.helpers.workbooks import protected_workbook_bytes, reference_bytes, workbook_bytes
 
 
 pytestmark = pytest.mark.ui
@@ -75,6 +78,17 @@ def test_home_uses_hierarchical_organization_selector_without_access_block(clien
     assert "ПЛАН 2026" in response.text
     assert 'data-testid="all-year"' in response.text
     assert 'name="all_year" value="1" type="checkbox" checked' in response.text
+
+
+def test_budget_form_shows_processing_state_and_blocks_duplicate_submit(client):
+    response = client.get("/")
+    assert "Файл загружается и анализируется; не закрывайте страницу" in response.text
+    assert 'type="password" name="workbook_password"' in response.text
+    assert "Пароль используется только для текущей локальной обработки" in response.text
+    assert 'data-processing-form' in response.text
+    assert 'processForm.dataset.submitting === "true"' in response.text
+    assert "event.preventDefault()" in response.text
+    assert "processButton.disabled = true" in response.text
 
 
 def test_legacy_delegation_is_cleared_and_all_nodes_remain_available(tmp_path):
@@ -181,6 +195,9 @@ def test_multiple_ranges_are_not_selected_silently(client):
     response = upload(client, workbook_bytes(two_candidates=True))
     assert "Выберите подготовленный диапазон" in response.text
     assert response.text.count('name="candidate_id"') == 2
+    assert "Файл загружается и анализируется; не закрывайте страницу" in response.text
+    assert 'data-candidate-processing-form' in response.text
+    assert 'button.disabled = true' in response.text
 
 
 def test_skipped_month_is_visible_in_preview_with_cell_pointer(client):
@@ -201,3 +218,70 @@ def test_reporting_unit_conflict_is_visible_and_does_not_block(client):
     assert "24" in response.text
     assert "не совпадает с выбранной" in response.text
     assert "A3" in response.text
+
+
+def test_wrong_protected_password_is_clear_and_health_remains_available(client):
+    protected = protected_workbook_bytes(workbook_bytes(), "synthetic-correct-password")
+    response = upload(
+        client,
+        protected,
+        workbook_password="synthetic-wrong-password",
+    )
+    assert response.status_code == 200
+    assert "Пароль не подошёл" in response.text
+    assert "выберите файл повторно" in response.text
+    assert client.get("/health").json() == {"status": "ok"}
+
+
+def test_health_responds_while_budget_analysis_runs_in_worker(client, monkeypatch):
+    service = client.app.state.workflow
+    original = service._prepare_staged_upload
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_analysis(*args):
+        started.set()
+        if not release.wait(timeout=5):
+            raise RuntimeError("synthetic analysis gate timed out")
+        return original(*args)
+
+    monkeypatch.setattr(service, "_prepare_staged_upload", slow_analysis)
+    scenario_id = service.store.list_scenarios()[0].scenario_id
+
+    async def exercise():
+        transport = ASGITransport(app=client.app)
+        async with AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+            follow_redirects=True,
+        ) as async_client:
+            request = asyncio.create_task(
+                async_client.post(
+                    "/uploads",
+                    data={
+                        "reporting_unit": "ПС",
+                        "organization_node_id": "ps",
+                        "scenario_id": scenario_id,
+                        "year": "2026",
+                        "period_selector_present": "1",
+                        "all_year": "1",
+                    },
+                    files={
+                        "budget_file": (
+                            "synthetic.xlsx",
+                            workbook_bytes(),
+                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        )
+                    },
+                )
+            )
+            assert await asyncio.to_thread(started.wait, 2)
+            health = await async_client.get("/health")
+            assert health.status_code == 200
+            assert health.json() == {"status": "ok"}
+            release.set()
+            response = await request
+            assert response.status_code == 200
+            assert "/runs/" in str(response.url)
+
+    asyncio.run(exercise())
