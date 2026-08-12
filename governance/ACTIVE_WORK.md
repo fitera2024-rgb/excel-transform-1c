@@ -1,6 +1,6 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / IMPLEMENTATION_READY / EXACT_PRODUCT_BASE_PINNED`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / CODEX_DISPATCH_RECORDED / WAITING_FOR_DRAFT_PR`
 
 ## Current phase
 
@@ -63,21 +63,47 @@ Target implementation branch:
 - PR #1 reviewed and merged;
 - exact merged product commit pinned in Issue #2 and task contract;
 - Product Contract and User Flow accepted;
-- no additional owner Product/UX decision is required to start V1.
+- no additional owner Product/UX decision is required to start V1;
+- explicit Codex execution directive posted in Issue #2.
 
 Codex must create the target branch exactly from the pinned implementation base, keep its implementation PR Draft and not merge it.
 
+## Coordinator verification authority
+
+Coordinator QA Issue:
+
+`#3 — [COORD-QA] Проверить Draft PR реализации V1 по Issue #2`
+
+Exact coordinator contract:
+
+`governance/tasks/COORDINATOR-QA-V1-20260812-001.md`
+
+Trigger: появление Draft implementation PR, связанного с Issue #2.
+
+Координатор обязан независимо проверить:
+
+- exact base/head/branch;
+- полный diff и changed files;
+- tests/CI/reproducibility;
+- synthetic fixtures and absence of real business data;
+- Feature Baseline regressions;
+- отсутствие ADO/live write/direct SQL;
+- отсутствие fuzzy/autofix и platform expansion;
+- Codex handoff;
+- готовность к Owner UX Smoke.
+
 ## Current next action
 
-`START_CODEX_FROM_ISSUE_2`
+`WAIT_FOR_CODEX_DRAFT_PR`
 
-После Codex:
+После появления Draft PR:
 
-1. получить Draft implementation PR;
+1. активировать Issue #3;
 2. проверить exact base/head, diff, tests and handoff;
 3. проверить Feature Baseline;
-4. выполнить independent coordinator review;
-5. провести Owner UX Smoke до release.
+4. при проблемах запросить изменения в PR;
+5. при технической готовности вернуть владельцу Owner UX Smoke;
+6. не merge-ить implementation PR до завершения smoke.
 
 ## Forbidden
 
@@ -97,7 +123,8 @@ Codex must create the target branch exactly from the pinned implementation base,
 - Repository: `fitera2024-rgb/excel-transform-1c`.
 - Product PR: `#1`, merged.
 - Product merge commit: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
-- Implementation Issue: `#2`, ready for Codex after exact authority update.
-- Implementation branch: not created yet; Codex must create it from the pinned base.
-- Product implementation: not started.
+- Implementation Issue: `#2`, ready and explicitly dispatched to Codex.
+- Coordinator QA Issue: `#3`, waiting for implementation Draft PR.
+- Implementation branch: not observed yet; Codex must create it from the pinned base.
+- Product implementation: no Draft PR observed yet.
 - ADO/live write: not performed.
