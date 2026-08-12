@@ -98,3 +98,13 @@ def test_multiple_ranges_are_not_selected_silently(client):
     response = upload(client, workbook_bytes(two_candidates=True))
     assert "Выберите подготовленный диапазон" in response.text
     assert response.text.count('name="candidate_id"') == 2
+
+
+def test_skipped_month_and_reporting_unit_conflict_are_visible(client):
+    response = upload(client, workbook_bytes(monthly_error=True, reporting_unit="АЮ"))
+    assert response.status_code == 200
+    assert "Пропущено" in response.text
+    assert "Ошибка Excel в месячной ячейке" in response.text
+    assert "не совпадает с выбранной" in response.text
+    assert "I3" not in response.text
+    assert "M3" in response.text

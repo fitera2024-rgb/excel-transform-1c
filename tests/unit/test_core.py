@@ -6,7 +6,14 @@ from io import BytesIO
 from excel_transform_1c.adapters.persistence import LocalStore
 from excel_transform_1c.core.access import effective_organization_nodes
 from excel_transform_1c.core.detection import detect_candidate_ranges, read_source_rows
-from excel_transform_1c.core.models import ERPArticle, OrganizationNode, RunContext, STATUS_ATTENTION, STATUS_OK
+from excel_transform_1c.core.models import (
+    ERPArticle,
+    OrganizationNode,
+    RunContext,
+    STATUS_ATTENTION,
+    STATUS_OK,
+    STATUS_SKIPPED,
+)
 from excel_transform_1c.core.transform import ExactERPMapper, manual_mapping_key, normalize_tax, transform_rows
 from tests.helpers.workbooks import workbook_bytes
 
@@ -43,8 +50,14 @@ def test_two_rows_normalize_to_24_records_including_zero():
 
 def test_monthly_error_skips_only_one_month():
     records, issues = transform_rows(source_rows(monthly_error=True), context(), ExactERPMapper(articles()))
-    assert len(records) == 23
-    assert len([record for record in records if record.source_row == 3]) == 11
+    assert len(records) == 24
+    affected = [record for record in records if record.source_row == 3]
+    assert len(affected) == 12
+    skipped = [record for record in affected if record.status == STATUS_SKIPPED]
+    assert len(skipped) == 1
+    assert skipped[0].month == 5
+    assert skipped[0].amount is None
+    assert "Ошибка Excel" in skipped[0].comment
     assert [(issue.pointer.row, issue.pointer.month) for issue in issues] == [(3, 5)]
 
 
@@ -83,6 +96,24 @@ def test_exact_mapping_requires_unique_case_sensitive_full_path_and_conflict_blo
     assert mapped.code == "ERP-002" and reason is None
     missing, reason = ExactERPMapper([], saved).resolve("Административные", "Связь", "Нет в ERP")
     assert missing is None and "конфликтует" in reason
+    conflicting = {manual_mapping_key("Административные", "Связь", "Интернет"): "ERP-002"}
+    mapped, reason = ExactERPMapper(articles(), conflicting).resolve("Административные", "Связь", "Интернет")
+    assert mapped is None
+    assert "конфликтует" in reason
+
+
+def test_reporting_unit_contradiction_keeps_records_with_attention_and_pointer():
+    records, issues = transform_rows(
+        source_rows(reporting_unit="АЮ"),
+        context(),
+        ExactERPMapper(articles()),
+    )
+    assert len(records) == 24
+    assert all(record.status == STATUS_ATTENTION for record in records)
+    conflict = next(issue for issue in issues if issue.kind == "context-conflict")
+    assert conflict.pointer.field == "reporting_unit"
+    assert conflict.pointer.cell == "A3"
+    assert "не совпадает" in conflict.description
 
 
 def test_manual_mapping_key_excludes_organization_department_and_cfo():

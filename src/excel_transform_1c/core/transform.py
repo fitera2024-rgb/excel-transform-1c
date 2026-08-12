@@ -13,6 +13,7 @@ from .models import (
     RunContext,
     STATUS_ATTENTION,
     STATUS_OK,
+    STATUS_SKIPPED,
     SourcePointer,
     SourceRow,
 )
@@ -60,12 +61,14 @@ class ExactERPMapper:
     def resolve(self, expense_type: str, expense_group: str, source_article: str) -> tuple[ERPArticle | None, str | None]:
         path = (expense_type, expense_group, source_article)
         exact = self.by_path.get(path, [])
+        saved_code = self.saved_mappings.get(manual_mapping_key(*path))
         if len(exact) == 1:
+            if saved_code and saved_code != exact[0].code:
+                return None, "Сохранённое ручное соответствие конфликтует с точным ERP-путём"
             return exact[0], None
         if len(exact) > 1:
             return None, "Точный путь соответствует нескольким ERP-кодам"
 
-        saved_code = self.saved_mappings.get(manual_mapping_key(*path))
         if saved_code:
             saved = self.by_code.get(saved_code)
             if saved:
@@ -117,6 +120,15 @@ def transform_rows(
                 shared_reasons.append(reason)
                 issues.append(_issue(row, "shared-field", reason, field, value))
 
+        source_reporting_unit = shared["reporting_unit"]
+        if source_reporting_unit and source_reporting_unit != context.reporting_unit:
+            reason = (
+                f"Единица отчёта в Excel «{source_reporting_unit}» не совпадает "
+                f"с выбранной «{context.reporting_unit}»"
+            )
+            shared_reasons.append(reason)
+            issues.append(_issue(row, "context-conflict", reason, "reporting_unit", row.reporting_unit))
+
         tax, tax_reason = normalize_tax(row.tax, allowed_tax_values)
         if tax_reason:
             shared_reasons.append(tax_reason)
@@ -131,48 +143,111 @@ def transform_rows(
             shared_reasons.append("Сценарий не подтверждён справочником ERP")
 
         for month, raw_amount in enumerate(row.months, start=1):
+            pointers = {
+                field: _pointer(row, field)
+                for field in (
+                    "reporting_unit",
+                    "department",
+                    "cfo",
+                    "tax",
+                    "expense_group",
+                    "article",
+                )
+            }
+            pointers["amount"] = _pointer(row, f"month_{month}", month)
             if as_text(raw_amount) in EXCEL_ERRORS:
-                issues.append(_issue(row, "monthly-error", "Ошибка Excel в месячной ячейке", f"month_{month}", raw_amount, month))
+                reason = "Ошибка Excel в месячной ячейке"
+                issues.append(_issue(row, "monthly-error", reason, f"month_{month}", raw_amount, month))
+                records.append(
+                    _record(
+                        row,
+                        context,
+                        shared,
+                        tax,
+                        mapped,
+                        month,
+                        None,
+                        STATUS_SKIPPED,
+                        [*shared_reasons, reason],
+                        pointers,
+                    )
+                )
                 continue
             try:
                 amount = _amount(raw_amount)
             except (InvalidOperation, ValueError):
-                issues.append(_issue(row, "monthly-error", "Месячное значение не является числом", f"month_{month}", raw_amount, month))
+                reason = "Месячное значение не является числом"
+                issues.append(_issue(row, "monthly-error", reason, f"month_{month}", raw_amount, month))
+                records.append(
+                    _record(
+                        row,
+                        context,
+                        shared,
+                        tax,
+                        mapped,
+                        month,
+                        None,
+                        STATUS_SKIPPED,
+                        [*shared_reasons, reason],
+                        pointers,
+                    )
+                )
                 continue
             reasons = list(shared_reasons)
             if amount < 0:
                 reasons.append("Отрицательная сумма")
                 issues.append(_issue(row, "negative-amount", "Отрицательная сумма", f"month_{month}", raw_amount, month))
-            pointers = {
-                field: _pointer(row, field)
-                for field in ("department", "cfo", "tax", "expense_group", "article")
-            }
-            pointers["amount"] = _pointer(row, f"month_{month}", month)
             records.append(
-                PreviewRecord(
-                    record_id=uuid4().hex,
-                    source_row=row.row_number,
-                    month=month,
-                    year=context.year,
-                    reporting_unit=context.reporting_unit,
-                    organization=context.organization_name,
-                    scenario=context.scenario_name,
-                    department=shared["department"],
-                    organization_type=shared["organization_type"],
-                    cfo=shared["cfo"],
-                    expense_type=shared["expense_type"],
-                    expense_group=shared["expense_group"],
-                    source_article=shared["article"],
-                    erp_code=mapped.code if mapped else "",
-                    erp_article_name=mapped.name if mapped else "",
-                    tax=tax,
-                    amount=amount,
-                    status=STATUS_ATTENTION if reasons else STATUS_OK,
-                    reasons=reasons,
-                    pointers=pointers,
+                _record(
+                    row,
+                    context,
+                    shared,
+                    tax,
+                    mapped,
+                    month,
+                    amount,
+                    STATUS_ATTENTION if reasons else STATUS_OK,
+                    reasons,
+                    pointers,
                 )
             )
     return records, _deduplicate_shared_issues(issues)
+
+
+def _record(
+    row: SourceRow,
+    context: RunContext,
+    shared: dict[str, str],
+    tax: str,
+    mapped: ERPArticle | None,
+    month: int,
+    amount: Decimal | None,
+    status: str,
+    reasons: list[str],
+    pointers: dict[str, SourcePointer],
+) -> PreviewRecord:
+    return PreviewRecord(
+        record_id=uuid4().hex,
+        source_row=row.row_number,
+        month=month,
+        year=context.year,
+        reporting_unit=context.reporting_unit,
+        organization=context.organization_name,
+        scenario=context.scenario_name,
+        department=shared["department"],
+        organization_type=shared["organization_type"],
+        cfo=shared["cfo"],
+        expense_type=shared["expense_type"],
+        expense_group=shared["expense_group"],
+        source_article=shared["article"],
+        erp_code=mapped.code if mapped else "",
+        erp_article_name=mapped.name if mapped else "",
+        tax=tax,
+        amount=amount,
+        status=status,
+        reasons=reasons,
+        pointers=pointers,
+    )
 
 
 def _issue(

@@ -136,7 +136,7 @@ class PreviewRecord:
     erp_code: str
     erp_article_name: str
     tax: str
-    amount: Decimal
+    amount: Decimal | None
     status: str = STATUS_OK
     reasons: list[str] = field(default_factory=list)
     pointers: dict[str, SourcePointer] = field(default_factory=dict)

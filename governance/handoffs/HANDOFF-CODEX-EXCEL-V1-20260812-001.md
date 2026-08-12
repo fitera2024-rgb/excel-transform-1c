@@ -36,6 +36,19 @@ enterprise RBAC, очередей, plugin/rules framework или write adapter.
 - README/Architecture/Active Work/Task Contract — run commands, exact base and
   implementation status.
 
+## Coordinator QA changes addressed
+
+- direct structural adapters now accept the documented hierarchical ERP article,
+  organization and scenario exports; no manual conversion to a flat template is
+  required;
+- corrections resolve only the field actually changed, invalidate/recompute an
+  ERP code after a path change, save simultaneous path + ERP selection under the
+  new key, and surface saved-manual-versus-exact conflicts;
+- an unreadable monthly value now remains in the main preview/export as
+  `Пропущено` with a blank amount and exact source pointer;
+- a non-empty Excel reporting unit that contradicts the selected unit creates a
+  localized attention issue while processing continues.
+
 ## Run commands
 
 ```powershell
@@ -50,16 +63,16 @@ Open `http://127.0.0.1:8000`.
 
 ```text
 .\.venv\Scripts\python.exe -m pytest tests/unit -q
-11 passed
+12 passed
 
 .\.venv\Scripts\python.exe -m pytest tests/integration -q
-8 passed
+14 passed
 
 .\.venv\Scripts\python.exe -m pytest tests/ui -q
-5 passed, 1 third-party Starlette TestClient deprecation warning
+6 passed, 1 third-party Starlette TestClient deprecation warning
 
 .\.venv\Scripts\python.exe -m pytest -q
-24 passed, 1 third-party Starlette TestClient deprecation warning
+32 passed, 1 third-party Starlette TestClient deprecation warning
 
 .\.venv\Scripts\python.exe -m compileall -q src tests
 PASS
@@ -79,9 +92,10 @@ Served-browser smoke against `http://127.0.0.1:8000`:
 
 No workbook or reference from the business evidence was opened, copied or
 committed. Tests generate fictional `.xlsx` bytes at runtime under pytest temp
-directories. Served-browser smoke used the same generator under an ignored
-temporary runtime directory, removed after verification. `.gitignore` continues
-to reject all `.xlsx/.xls/.xlsm` files.
+directories, including structural facsimiles of all three documented ERP export
+layouts. Served-browser smoke used the same generator under an ignored temporary
+runtime directory, removed after verification. `.gitignore` continues to reject
+all `.xlsx/.xls/.xlsm` files.
 
 ## Feature Baseline
 
@@ -109,8 +123,8 @@ No `CHANGED_AUTHORIZED` or `BLOCKED_REGRESSION` result was found.
 
 ## Known limitations
 
-- V1 reference imports use documented, flat, synthetic-safe interchange schemas;
-  no undocumented real ERP workbook layout is inferred.
+- V1 reference imports support the three documented current ERP export structures
+  and a flat synthetic-safe interchange schema; undocumented layouts are not inferred.
 - openpyxl reads cached formula results but does not calculate formulas. A workbook
   saved without cached values may produce localized monthly attention/skips.
 - scenarios, references, delegations, manual mappings and overrides persist in

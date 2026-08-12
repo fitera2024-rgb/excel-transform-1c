@@ -26,6 +26,7 @@ from excel_transform_1c.core.models import (
     RunContext,
     STATUS_ATTENTION,
     STATUS_OK,
+    STATUS_SKIPPED,
 )
 from excel_transform_1c.core.transform import ExactERPMapper, normalize_tax, transform_rows
 
@@ -208,58 +209,119 @@ class WorkflowService:
         if "tax" in changes and normalize_tax(changes["tax"])[1]:
             raise ValueError("Выберите допустимое налогообложение")
 
+        original = row_records[0]
+        for field, selected in changes.items():
+            original_value = original.erp_code if field == "erp_code" else str(getattr(original, field))
+            self.store.save_override(run_id, source_row, field, original_value, selected)
+
+        path_changed = bool({"expense_group", "source_article"}.intersection(changes))
+        mapping_reason: str | None = None
+        mapped_article: ERPArticle | None = None
         for record in row_records:
-            original_key = record.mapping_key
             for field, selected in changes.items():
-                if field == "erp_code":
-                    original = record.erp_code
-                    article = by_code[selected]
-                    record.erp_code = article.code
-                    record.erp_article_name = article.name
-                else:
-                    original = str(getattr(record, field))
+                if field != "erp_code":
                     setattr(record, field, selected)
-                self.store.save_override(run_id, source_row, field, original, selected)
-            if "erp_code" in changes:
-                self.store.save_manual_mapping(original_key, changes["erp_code"])
-            self._refresh_record(record, by_code)
+
+        if "erp_code" in changes:
+            mapped_article = by_code[changes["erp_code"]]
+        elif path_changed:
+            representative = row_records[0]
+            mapper = ExactERPMapper(articles, self.store.load_manual_mappings())
+            mapped_article, mapping_reason = mapper.resolve(
+                representative.expense_type,
+                representative.expense_group,
+                representative.source_article,
+            )
+
+        if "erp_code" in changes or path_changed:
+            for record in row_records:
+                record.erp_code = mapped_article.code if mapped_article else ""
+                record.erp_article_name = mapped_article.name if mapped_article else ""
+
+        if "erp_code" in changes:
+            self.store.save_manual_mapping(row_records[0].mapping_key, changes["erp_code"])
+
+        for record in row_records:
+            self._refresh_record(record, by_code, mapping_reason)
 
         self._resolve_row_issues(run, source_row, changes)
+        if path_changed and "erp_code" not in changes and mapping_reason:
+            pointer_key = "article" if "source_article" in changes else "expense_group"
+            record = row_records[0]
+            run.issues.append(
+                Issue(
+                    issue_id=uuid4().hex,
+                    kind="erp-mapping",
+                    description=mapping_reason,
+                    pointer=record.pointers[pointer_key],
+                    reporting_unit=record.reporting_unit,
+                    department=record.department,
+                    cfo=record.cfo,
+                    expense_type=record.expense_type,
+                    expense_group=record.expense_group,
+                    article=record.source_article,
+                    raw_value=record.source_article,
+                )
+            )
         return run
 
-    def _refresh_record(self, record, by_code: dict[str, ERPArticle]) -> None:
+    def _refresh_record(
+        self,
+        record,
+        by_code: dict[str, ERPArticle],
+        mapping_reason: str | None = None,
+    ) -> None:
         removable = (
             "Точное соответствие ERP",
             "Точный путь соответствует",
             "Сохранённое соответствие",
+            "Сохранённое ручное соответствие",
             "Налогообложение",
             "Числовой 0",
+            "Выбранный ERP-код",
             "Не заполнено поле: department",
             "Не заполнено поле: cfo",
             "Не заполнено поле: expense_group",
             "Не заполнено поле: article",
         )
         record.reasons = [reason for reason in record.reasons if not reason.startswith(removable)]
-        if not record.erp_code:
+        for field in ("department", "cfo", "expense_group", "source_article"):
+            if not getattr(record, field):
+                source_field = "article" if field == "source_article" else field
+                record.reasons.append(f"Не заполнено поле: {source_field}")
+        if mapping_reason:
+            record.reasons.append(mapping_reason)
+        elif not record.erp_code:
             record.reasons.append("Точное соответствие ERP не найдено")
         elif record.erp_code not in by_code:
             record.reasons.append("Выбранный ERP-код отсутствует в текущем справочнике")
-        if normalize_tax(record.tax)[1]:
-            record.reasons.append(normalize_tax(record.tax)[1] or "")
-        record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
+        tax_reason = normalize_tax(record.tax)[1]
+        if tax_reason:
+            record.reasons.append(tax_reason)
+        if record.status != STATUS_SKIPPED:
+            record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
 
     def _resolve_row_issues(self, run: ProcessedRun, source_row: int, changes: dict[str, str]) -> None:
-        kinds_by_field = {
-            "erp_code": {"erp-mapping"},
-            "tax": {"tax"},
-            "department": {"shared-field"},
-            "cfo": {"shared-field"},
-            "expense_group": {"shared-field", "erp-mapping"},
-            "source_article": {"shared-field", "erp-mapping"},
+        pointers_by_field = {
+            "department": "department",
+            "cfo": "cfo",
+            "expense_group": "expense_group",
+            "source_article": "article",
         }
-        resolved_kinds = set().union(*(kinds_by_field[field] for field in changes)) if changes else set()
         for issue in run.issues:
-            if issue.pointer.row == source_row and issue.kind in resolved_kinds:
+            if issue.pointer.row != source_row:
+                continue
+            if "erp_code" in changes and issue.kind == "erp-mapping":
+                issue.resolved = True
+            elif {"expense_group", "source_article"}.intersection(changes) and issue.kind == "erp-mapping":
+                issue.resolved = True
+            elif "tax" in changes and issue.kind == "tax":
+                issue.resolved = True
+            elif issue.kind == "shared-field" and any(
+                issue.pointer.field == pointer
+                for field, pointer in pointers_by_field.items()
+                if field in changes
+            ):
                 issue.resolved = True
 
     def export_run(self, run_id: str) -> bytes:

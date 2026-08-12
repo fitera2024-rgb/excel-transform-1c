@@ -67,7 +67,7 @@ def export_opiu_light(records: list[PreviewRecord]) -> bytes:
                 record.erp_code,
                 record.erp_article_name,
                 record.tax,
-                float(record.amount),
+                float(record.amount) if record.amount is not None else None,
                 record.status,
                 record.comment,
                 record.source_row,
