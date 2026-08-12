@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - feat/v1-excel-transform-preview
   push:
     branches:
       - feat/v1-excel-transform-preview
