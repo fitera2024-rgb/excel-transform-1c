@@ -4,9 +4,11 @@ TASK-ID: `CODEX-TASK-EXCEL-V1-20260812-001`
 WORK-ID: `WORK-EXCEL-V1-20260812-001`  
 CR-ID: `CR-EXCEL-V1-20260812-001`  
 RISK: `M`  
-STATUS: `PREPARED / BLOCKED_BY_PRODUCT_PR_MERGE / DO_NOT_START_YET`  
-PREPARED AGAINST PRODUCT HEAD: `fd8f40e812c8378b3a2b1d5dbdbd409f831f6704`  
-BASE COMMIT FOR IMPLEMENTATION: `PIN_EXACT_MERGED_PRODUCT_HEAD_AFTER_PR_1_MERGE`  
+STATUS: `READY_FOR_CODEX / EXACT_PRODUCT_BASE_PINNED`  
+PRODUCT PR: `#1 — MERGED`  
+PRODUCT MERGE COMMIT: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`  
+BASE COMMIT FOR IMPLEMENTATION: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`  
+TASK AUTHORITY: `GitHub Issue #2 + this file on main`  
 TARGET BRANCH: `feat/v1-excel-transform-preview`
 
 ## Goal
@@ -258,8 +260,9 @@ Codex может выбрать эквивалентный более прост
 
 Codex must:
 
-- start only after PR #1 is merged and exact merged product head is pinned;
-- work only in a separate task branch;
+- create `feat/v1-excel-transform-preview` exactly from `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`;
+- read the current task authority from GitHub Issue #2 and this file on `main`;
+- work only in that separate task branch;
 - keep implementation PR Draft;
 - not merge;
 - not expand product scope;
