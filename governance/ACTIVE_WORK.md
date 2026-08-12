@@ -1,10 +1,12 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / IMPLEMENTATION_TASK_PREPARED / BLOCKED_BY_PR_1_MERGE`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / IMPLEMENTATION_READY / EXACT_PRODUCT_BASE_PINNED`
 
 ## Current phase
 
-Discovery, Product Contract and User Flow V1 завершены и приняты владельцем.
+Discovery, Product Contract, Architecture Light boundaries and User Flow V1 завершены и приняты владельцем.
+
+Product/governance PR #1 merged.
 
 Актуальные handoff:
 
@@ -36,9 +38,11 @@ Discovery, Product Contract and User Flow V1 завершены и принят�
 - nodes/records named `Удалить` are not auto-excluded;
 - User Flow accepted.
 
-## Implementation task
+## Implementation authority
 
-GitHub Issue: `#2 — [M] V1: Excel → validation → ERP mapping → preview → export`
+GitHub Issue:
+
+`#2 — [M] V1: Excel → validation → ERP mapping → preview → export`
 
 Exact task contract:
 
@@ -46,28 +50,34 @@ Exact task contract:
 
 Risk: `M`.
 
-## Start gate
+Exact implementation base:
 
-Implementation must not start until:
+`836b3154c4c81ebc9c0ec3f8ef895afee5d47098`
 
-1. Draft PR #1 is reviewed and merged;
-2. exact merged product head is pinned in the task contract/Issue #2;
-3. Codex creates `feat/v1-excel-transform-preview` from that exact commit.
+Target implementation branch:
 
-После выполнения start gate дополнительные Product/UX вопросы владельцу для начала V1 не требуются.
+`feat/v1-excel-transform-preview`
+
+## Start gate — COMPLETED
+
+- PR #1 reviewed and merged;
+- exact merged product commit pinned in Issue #2 and task contract;
+- Product Contract and User Flow accepted;
+- no additional owner Product/UX decision is required to start V1.
+
+Codex must create the target branch exactly from the pinned implementation base, keep its implementation PR Draft and not merge it.
 
 ## Current next action
 
-`REVIEW_AND_MERGE_PRODUCT_PR_1`
+`START_CODEX_FROM_ISSUE_2`
 
-После merge:
+После Codex:
 
-1. зафиксировать merge commit;
-2. обновить Issue #2 и task contract exact base;
-3. передать Issue #2 Codex;
-4. получить Draft implementation PR;
-5. проверить diff/tests/handoff;
-6. провести Owner UX Smoke до release.
+1. получить Draft implementation PR;
+2. проверить exact base/head, diff, tests and handoff;
+3. проверить Feature Baseline;
+4. выполнить independent coordinator review;
+5. провести Owner UX Smoke до release.
 
 ## Forbidden
 
@@ -75,7 +85,7 @@ Implementation must not start until:
 - live write;
 - TEST/PROD write;
 - direct SQL write в 1С;
-- старт Codex от непроверенного/непринятого base;
+- старт Codex от другого base;
 - реальные business Excel/справочники в Git;
 - fuzzy/typo/case auto-match;
 - самостоятельный merge Codex;
@@ -85,10 +95,9 @@ Implementation must not start until:
 ## Git state
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
-- Product branch: `coord/proportional-safety-local-converter`.
-- Product PR: `#1`, open.
-- Implementation Issue: `#2`, open and blocked by PR #1 merge.
-- Product head before this Active Work update: `b4d263b2b2c4dda94621c0b88bc786e3edc77288`.
-- Current exact head: latest head of PR #1.
+- Product PR: `#1`, merged.
+- Product merge commit: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
+- Implementation Issue: `#2`, ready for Codex after exact authority update.
+- Implementation branch: not created yet; Codex must create it from the pinned base.
 - Product implementation: not started.
 - ADO/live write: not performed.
