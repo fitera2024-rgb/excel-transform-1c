@@ -1,17 +1,19 @@
 # Handoff — Inline attention correction and ERP hierarchy selector
 
-- Status: `READY_FOR_COORDINATOR_QA`
+- Status: `READY_FOR_REPEAT_COORDINATOR_QA`
 - CR: `CR-INLINE-ATTENTION-ERP-TREE-20260813-001`
 - Issue: `#9`
 - Work branch: `feat/inline-attention-erp-tree`
 - Target branch: `feat/v1-excel-transform-preview`
 - Exact start head: `e54ebc6a498f42f504fe5f6cb98353b8b09e753a`
-- Exact implementation head: `ee0a2a1ad3dc6aa1ce23eb903736f58893aa5d47`
+- Initial implementation head: `ee0a2a1ad3dc6aa1ce23eb903736f58893aa5d47`
+- Coordinator QA fix head: `4ebbb8c7aaa1e937b7d0ca30538c788320cd15e6`
+- Verified GitHub Actions run: `31652298898` — `success`
 - Safety: `NO ADO / NO LIVE WRITE / NO MERGE`
 
 The final delivery head also contains this handoff file and is recorded in the
-Draft PR and Issue marker. The implementation head above is the exact tested
-code-and-tests commit.
+Draft PR and Issue marker together with its green CI run. The QA fix head above
+is the exact independently tested code-and-tests commit.
 
 ## Changed
 
@@ -30,6 +32,31 @@ code-and-tests commit.
 - Kept the existing corrections for tax, department, CFO, expense group and
   source article inside the same source-row context.
 - Added JavaScript package-data inclusion and UI regression coverage.
+
+## Coordinator QA changes requested — resolved
+
+### Empty ERP hierarchy levels
+
+- Placeholder remains the empty HTML value and can no longer collide with a
+  real empty business value.
+- The UI uses `__EMPTY__` for an exact empty catalog level and a separate encoded
+  prefix for every non-empty value.
+- Filtering decodes each selected option back to its exact catalog value before
+  comparing it, so an empty group remains `""` in business data.
+- Empty type, group, article and code levels receive readable labels:
+  `Корневой уровень`, `Без группы`, `Без статьи`, `Без кода`.
+- Regression data covers one empty group with two articles and three codes,
+  including two codes under the same article.
+
+### Read-only attention
+
+- Active editor is rendered only when the row contains `erp-mapping`, `tax`, or
+  a supported `shared-field`: department, CFO, expense group or source article.
+- `monthly-error`, `negative-amount`, `context-reporting-unit` and every other
+  unsupported reason receive a read-only action next to the exact source pointer.
+- A row with only unsupported reasons has no form and no apply button.
+- A mixed row keeps the editor and all read-only reasons in the same visible
+  attention group.
 
 ## Preserved
 
@@ -66,12 +93,14 @@ No `CROSS_STREAM_DEPENDENCY` was required.
 
 ## Validation
 
-- Targeted UI regression: `14 passed`.
-- Full local regression: `47 passed`.
+- Targeted UI regression: `16 passed`.
+- Full local regression: `49 passed`.
 - JavaScript syntax: `node --check src/excel_transform_1c/ui/static/run.js` — PASS.
 - Patch hygiene: `git diff --check` — PASS.
 - Console errors during browser smoke: none.
-- GitHub CI: pending Draft PR run at handoff creation.
+- GitHub Actions `V1 CI`, run `31652298898`: SUCCESS.
+  - `Python 3.11 tests`: SUCCESS;
+  - `No tracked business Excel`: SUCCESS.
 
 ## HTML and interactive evidence
 
@@ -89,6 +118,17 @@ Synthetic browser smoke used one source row with two simultaneous issues:
 - remaining unresolved issue: `Не заполнено поле: департамент`;
 - rerun counter remains `0`.
 
+Repeat smoke for the coordinator findings additionally confirmed:
+
+- before selection, the empty-group placeholder has value `""` and article is
+  disabled;
+- real `Без группы` has UI value `__EMPTY__`;
+- selecting it exposes two articles, and the selected article exposes two
+  distinct ERP codes;
+- a monthly-error-only row renders one attention group, zero editors, one
+  read-only block and zero apply buttons;
+- browser console errors/warnings: none.
+
 ## Feature Baseline result
 
 - `PREVIEW-003`, `UX-003`, `MAP-001..005`: `CHANGED_AUTHORIZED` by Issue #9
@@ -100,13 +140,12 @@ Synthetic browser smoke used one source row with two simultaneous issues:
 
 ## Coordinator QA focus
 
-1. Confirm one inline editor per source row when several unresolved fields are
-   present.
-2. Walk the full ERP cascade and verify duplicate names stay distinguishable by
-   branch.
-3. Confirm a single remaining code is not applied before explicit confirmation.
-4. Apply ERP correction and verify all twelve months update while another issue
-   on the row remains visible.
+1. Select `Без группы` and verify the exact empty catalog branch exposes all of
+   its articles and codes.
+2. Verify monthly-error and reporting-unit-conflict groups are read-only and
+   contain no apply button.
+3. Verify a mixed editable/read-only row keeps both the editor and every reason.
+4. Recheck unique-code explicit confirmation and all-twelve-month update.
 5. Recheck organization hierarchy, scenario, `Весь год`, preview and export.
 
-`READY_FOR_COORDINATOR_QA`
+`READY_FOR_REPEAT_COORDINATOR_QA`
