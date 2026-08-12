@@ -8,6 +8,9 @@ from msoffcrypto import exceptions
 
 
 OLE_COMPOUND_FILE_SIGNATURE = bytes.fromhex("D0CF11E0A1B11AE1")
+UNKNOWN_DECRYPTION_MESSAGE = (
+    "Не удалось расшифровать защищённый файл; выберите файл повторно"
+)
 
 
 class ProtectedWorkbookError(ValueError):
@@ -72,9 +75,12 @@ def decrypt_protected_ooxml(
         raise ProtectedWorkbookPasswordInvalid(
             "Пароль не подошёл. Проверьте пароль и выберите файл повторно"
         ) from exc
-    except Exception:
+    except ProtectedWorkbookError:
         target_path.unlink(missing_ok=True)
         raise
+    except Exception as exc:
+        target_path.unlink(missing_ok=True)
+        raise ProtectedWorkbookError(UNKNOWN_DECRYPTION_MESSAGE) from exc
     finally:
         container = getattr(office_file, "file", None)
         close = getattr(container, "close", None)

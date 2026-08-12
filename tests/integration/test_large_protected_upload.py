@@ -5,7 +5,8 @@ from zipfile import is_zipfile
 import pytest
 
 from excel_transform_1c.adapters import excel as excel_adapter
-from excel_transform_1c.application.service import WorkflowService
+from excel_transform_1c.adapters import protected_ooxml as protected_adapter
+from excel_transform_1c.application.service import UPLOAD_CHUNK_SIZE, WorkflowService
 from excel_transform_1c.core.models import CandidateRange
 from tests.helpers.workbooks import (
     large_workbook_bytes,
@@ -65,7 +66,7 @@ def test_async_upload_reads_only_bounded_chunks_and_preserves_exact_plain_source
 
 def test_large_synthetic_workbook_streams_through_detection_and_preview(tmp_path):
     service = configured_service(tmp_path)
-    payload = large_workbook_bytes(row_count=400)
+    payload = large_workbook_bytes()
     source = RecordingAsyncReader(payload)
 
     pending = asyncio.run(
@@ -73,15 +74,18 @@ def test_large_synthetic_workbook_streams_through_detection_and_preview(tmp_path
             "large-synthetic.xlsx",
             source,
             default_context(service),
-            chunk_size=2048,
         )
     )
     run = service.process_upload(pending.upload_id, pending.candidates[0].candidate_id)
 
-    assert len(source.read_sizes) > 1
+    assert 3 * UPLOAD_CHUNK_SIZE < len(payload) < 5 * UPLOAD_CHUNK_SIZE
+    assert len(source.read_sizes) >= 5
+    assert -1 not in source.read_sizes
+    assert set(source.read_sizes) == {UPLOAD_CHUNK_SIZE}
+    assert len(pending.candidates) == 1
     assert pending.candidates[0].first_data_row == 3
-    assert pending.candidates[0].last_data_row == 402
-    assert len(run.records) == 400 * 12
+    assert pending.candidates[0].last_data_row == 4
+    assert len(run.records) == 24
 
 
 def test_protected_ooxml_uses_separate_original_and_decrypted_snapshots(tmp_path):
@@ -163,6 +167,33 @@ def test_password_never_appears_in_metadata_persistence_names_or_logs(tmp_path, 
         assert SYNTHETIC_PASSWORD not in path.name
         if path.is_file():
             assert password_bytes not in path.read_bytes()
+
+
+def test_unknown_decrypt_exception_is_neutral_and_preserves_only_chained_cause(
+    tmp_path,
+    monkeypatch,
+):
+    synthetic_password = "synthetic-chained-cause-password"
+    source = tmp_path / "source.xlsx"
+    target = tmp_path / "working.xlsx"
+    source.write_bytes(b"synthetic encrypted placeholder")
+
+    def fail_with_secret(_source):
+        raise RuntimeError(f"dependency exposed {synthetic_password}")
+
+    monkeypatch.setattr(protected_adapter.msoffcrypto, "OfficeFile", fail_with_secret)
+
+    with pytest.raises(protected_adapter.ProtectedWorkbookError) as captured:
+        protected_adapter.decrypt_protected_ooxml(
+            source,
+            target,
+            synthetic_password,
+        )
+
+    assert str(captured.value) == protected_adapter.UNKNOWN_DECRYPTION_MESSAGE
+    assert synthetic_password not in str(captured.value)
+    assert synthetic_password in str(captured.value.__cause__)
+    assert not target.exists()
 
 
 def test_budget_workbook_is_read_only_and_closed_on_success(monkeypatch):

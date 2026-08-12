@@ -6,8 +6,15 @@ import pytest
 from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
+from excel_transform_1c.adapters import protected_ooxml as protected_adapter
+from excel_transform_1c.application import service as service_module
 from excel_transform_1c.ui.app import create_app
-from tests.helpers.workbooks import protected_workbook_bytes, reference_bytes, workbook_bytes
+from tests.helpers.workbooks import (
+    large_workbook_bytes,
+    protected_workbook_bytes,
+    reference_bytes,
+    workbook_bytes,
+)
 
 
 pytestmark = pytest.mark.ui
@@ -235,18 +242,19 @@ def test_wrong_protected_password_is_clear_and_health_remains_available(client):
 
 def test_health_responds_while_budget_analysis_runs_in_worker(client, monkeypatch):
     service = client.app.state.workflow
-    original = service._prepare_staged_upload
+    original_detect_path = service_module.detect_path
     started = threading.Event()
     release = threading.Event()
 
-    def slow_analysis(*args):
+    def observed_detection(path):
         started.set()
         if not release.wait(timeout=5):
             raise RuntimeError("synthetic analysis gate timed out")
-        return original(*args)
+        return original_detect_path(path)
 
-    monkeypatch.setattr(service, "_prepare_staged_upload", slow_analysis)
+    monkeypatch.setattr(service_module, "detect_path", observed_detection)
     scenario_id = service.store.list_scenarios()[0].scenario_id
+    payload = large_workbook_bytes()
 
     async def exercise():
         transport = ASGITransport(app=client.app)
@@ -269,7 +277,7 @@ def test_health_responds_while_budget_analysis_runs_in_worker(client, monkeypatc
                     files={
                         "budget_file": (
                             "synthetic.xlsx",
-                            workbook_bytes(),
+                            payload,
                             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         )
                     },
@@ -285,3 +293,37 @@ def test_health_responds_while_budget_analysis_runs_in_worker(client, monkeypatc
             assert "/runs/" in str(response.url)
 
     asyncio.run(exercise())
+
+
+def test_unknown_decrypt_error_cannot_reveal_password_in_http_or_runtime(
+    client,
+    monkeypatch,
+    caplog,
+):
+    synthetic_password = "synthetic-unknown-error-password"
+    protected = protected_workbook_bytes(workbook_bytes(), synthetic_password)
+
+    def fail_with_secret(_source):
+        raise RuntimeError(f"dependency failed with {synthetic_password}")
+
+    monkeypatch.setattr(protected_adapter.msoffcrypto, "OfficeFile", fail_with_secret)
+    response = upload(
+        client,
+        protected,
+        workbook_password=synthetic_password,
+    )
+
+    service = client.app.state.workflow
+    assert response.status_code == 200
+    assert "Не удалось расшифровать защищённый файл" in response.text
+    assert synthetic_password not in response.text
+    assert synthetic_password not in repr(dict(response.headers))
+    assert synthetic_password not in repr(service.pending)
+    assert synthetic_password not in repr(service.runs)
+    assert synthetic_password not in caplog.text
+
+    password_bytes = synthetic_password.encode()
+    for path in service.runtime_dir.rglob("*"):
+        assert synthetic_password not in path.name
+        if path.is_file():
+            assert password_bytes not in path.read_bytes()
