@@ -1,63 +1,97 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_OWNER_REFINED / HIERARCHY_OPEN_ACCESS_ALL_YEAR_CI_PASSED / OWNER_UX_SMOKE_CONTINUE / DRAFT_PR_4 / NO_LIVE_WRITE`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_OWNER_REFINED / THREE_PARALLEL_STREAMS_ACTIVE / DRAFT_PR_4 / NO_LIVE_WRITE`
 
 ## Current phase
 
-Первая vertical slice реализована в Draft PR `#4`:
+Первая vertical slice уже реализована в Draft PR `#4`:
 
 `Excel → structural detection → validation → exact ERP mapping/manual correction → 12-month normalization → maximum preview → error registry → export`
 
-Owner UX Smoke уже подтвердил:
+Owner UX Smoke подтвердил базовую работоспособность и выявил следующие улучшения перед финальным gate:
 
-- приложение запускается;
-- persistent ERP-справочники работают;
-- ERP-статьи загружены: `271`;
-- организации/узлы загружены: `357`;
-- сценарий виден в форме;
-- дефект `Сценарий отчетности КИК` исправлен и покрыт тестом.
+- исправить системный дефект разбора иерархии ERP-статей;
+- оптимизировать приём больших и защищённых Excel;
+- перенести исправление `Требует внимания` к самой проблемной строке;
+- выбирать ERP-код по иерархии, а не из плоского списка.
 
-## Current owner decisions
+## Accepted owner decisions
 
-Во время UX Smoke владелец уточнил:
+Владелец принял ускоренный план и последовательность `A + D`:
 
-- единый справочник организаций/узлов загружается один раз и сохраняется локально;
-- полный список сценариев загружается один раз и затем дополняется;
-- отдельный блок `Область доступа` не нужен;
-- всем пользователям локального сервиса доступно всё дерево организаций;
-- делегирование/effective-access фильтрация удаляются из V1;
-- организация выбирается иерархически: верхняя ветка → сам верхний или любой нижний узел;
-- период содержит явную галочку `Весь год`, включённую по умолчанию;
-- после снятия `Весь год` пользователь обязан выбрать хотя бы один месяц.
+- сначала исправить ERP parser;
+- exact full path остаётся единственным автоматическим правилом;
+- небольшой остаток разрешается явным иерархическим выбором;
+- fuzzy/typo/case/name-only autofix не включается;
+- `Удалить` / `!!!Удалить` не скрываются;
+- работа распределяется на три независимых агента;
+- этот координаторский контур остаётся единственной точкой интеграции;
+- финальный combined QA выполняется отдельно после интеграции всех трёх потоков.
 
-Exact handoff:
+Exact coordination handoff:
 
-`governance/handoffs/HANDOFF-OWNER-UX-ORG-PERIOD-20260813-003.md`
-
-## Implementation
-
-- удалена карточка области доступа и endpoint делегирования из normal UI;
-- при старте очищается legacy delegation state старых Draft-версий, поэтому узлы больше не скрываются;
-- добавлен двухэтапный иерархический выбор организации;
-- выбор верхней ветки автоматически выбирает её верхний узел и открывает всё поддерево;
-- сценарий остаётся отдельным видимым селектором;
-- добавлена галочка `Весь год` и управляемый выбор месяцев;
-- добавлена server-side validation периода;
-- User Flow и Feature Baseline синхронизированы с owner decision.
+`governance/handoffs/HANDOFF-PARALLEL-WORKSTREAMS-20260813-004.md`
 
 ## Git authority
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
-- Branch: `feat/v1-excel-transform-preview`.
-- Draft PR: `#4`, open, not merged.
+- Parent branch: `feat/v1-excel-transform-preview`.
+- Parent Draft PR: `#4`, open, not merged.
+- Last fully tested implementation head before split: `e96fb403da7b96a5707ba131cb141788fe27bde3`.
+- Coordination handoff commit before this update: `8666ea3ed800f56704b1ddb894d2bc6df3774fbf`.
 - Accepted product base: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
-- Hierarchy/open-access/all-year code and regression head: `7e7d7ec26ecaa303f33eef7db93e6577358a7163`.
-- Complete tested package before this Active Work update: `7f606a66aa4344ce1f42681245b52165da1da8b1`.
 - ADO/live write: not implemented and not performed.
 
-## Test and CI evidence
+## Parallel stream A — ERP hierarchy parser
 
-GitHub Actions `V1 CI`, run `31643909787`:
+- Issue: `#8`.
+- Risk: `L`.
+- Branch: `fix/erp-article-hierarchy-parser`.
+- Task Contract: `governance/tasks/WORK-ERP-ARTICLE-HIERARCHY-PARSER-20260813-001.md`.
+- Exact contract head: `30f709ed2319d0ee8217f92d4f7f067e9fd3dc8e`.
+- Research authority: Draft PR `#6`, exact head `14bd2c3020043a1affd0adace81a06775bed660b`.
+- Status: `READY_FOR_AGENT_START`.
+
+## Parallel stream B — Large/protected Excel intake
+
+- Issue: `#7`.
+- Risk: `M`.
+- Branch: `perf/streaming-protected-excel`.
+- Task Contract: `governance/tasks/CR-LARGE-PROTECTED-EXCEL-20260813-001.md`.
+- Exact contract head: `cdde336e9629fe49108a9819d54e4c2679525289`.
+- Status: `READY_FOR_AGENT_START`.
+
+## Parallel stream C — Inline attention and ERP hierarchy UX
+
+- Issue: `#9`.
+- Risk: `M`.
+- Branch: `feat/inline-attention-erp-tree`.
+- Task Contract: `governance/tasks/CR-INLINE-ATTENTION-ERP-TREE-20260813-001.md`.
+- Exact contract head: `e54ebc6a498f42f504fe5f6cb98353b8b09e753a`.
+- Status: `READY_FOR_AGENT_START`.
+
+## Combined QA
+
+- Issue: `#10`.
+- Status: `BLOCKED_UNTIL_THREE_STREAMS_READY`.
+- QA may not change implementation code.
+- QA starts only from the exact combined head recorded after sequential integration.
+
+## Integration order
+
+Development is parallel; integration is sequential:
+
+1. parser stream;
+2. large/protected upload stream;
+3. inline attention/ERP hierarchy UX stream;
+4. full GitHub CI;
+5. independent combined QA;
+6. Owner UX Smoke;
+7. merge only after explicit owner acceptance.
+
+## Last verified baseline before new stream code
+
+GitHub Actions `V1 CI`, run `31644007981`:
 
 - compileall — PASS;
 - unit — `14 passed`;
@@ -66,47 +100,35 @@ GitHub Actions `V1 CI`, run `31643909787`:
 - full regression — `44 passed`;
 - no tracked `.xlsx/.xls/.xlsm` — PASS.
 
-New regression coverage verifies:
+This evidence applies only to `e96fb403...`. Every new stream must provide fresh tests and CI.
 
-- hierarchy selectors are rendered with root/subtree metadata;
-- the access-rights card is absent;
-- stale legacy delegation state is cleared and all nodes remain visible;
-- the scenario selector remains visible;
-- `Весь год` is checked by default;
-- selected months filter the view without destroying the full 12-month result;
-- an empty period after removing `Весь год` is rejected clearly.
+## Cross-stream boundary
 
-## Feature Baseline result
+An agent must not silently edit another stream's primary files. Required cross-stream work is first recorded in its Issue as:
 
-- `ORG-002`: `CHANGED_AUTHORIZED`;
-- `PERIOD-001`: `CHANGED_AUTHORIZED`;
-- `ACCESS-001..004`: `REMOVED_AUTHORIZED`;
-- `UX-004`, `UX-005`: accepted and implemented;
-- all unrelated V1 baseline IDs: `PRESERVED`.
+`CROSS_STREAM_DEPENDENCY`
+
+with the exact DTO, endpoint, helper or behavior required.
 
 ## Current next action
 
-`OWNER_UX_SMOKE_HIERARCHY_PERIOD_THEN_BUDGET`
+`START_THREE_AGENT_TASKS`
 
-Owner updates/restarts the latest PR head while preserving `runtime/local.db`, then checks:
+Each agent opens a Draft PR targeting `feat/v1-excel-transform-preview`, leaves exact Git/test/handoff evidence and finishes with:
 
-1. counters remain `271 / 357 / 12`;
-2. the `Область доступа` card is absent;
-3. selecting a top branch exposes only that complete subtree;
-4. the top node itself or any child can be selected;
-5. the scenario is visible;
-6. `Весь год` is checked by default;
-7. after unchecking it, months become available;
-8. budget preview, one correction and export complete successfully.
+`READY_FOR_COORDINATOR_QA`
+
+No agent merges.
 
 ## Forbidden
 
-- merge before successful Owner UX Smoke;
+- merge while Issues `#7`, `#8`, `#9` or combined QA `#10` are incomplete;
 - ADO connection or live write;
 - TEST/PROD write;
 - direct SQL write into 1C;
-- real business Excel/reference files committed to Git;
-- fuzzy/typo/case auto-match for ERP mapping;
-- filename-based reference detection;
-- reintroduction of local access-rights complexity without a new owner decision;
+- real business Excel/reference files or password in Git;
+- fuzzy/typo/case/name-only automatic ERP assignment;
+- filename-based source detection;
+- password persistence;
+- reintroduction of local access-rights complexity;
 - platform/multi-tenant/enterprise expansion.
