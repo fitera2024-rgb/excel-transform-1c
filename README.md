@@ -14,14 +14,14 @@ ADO и фактическая запись в 1С являются отдель�
 
 ## Current status
 
-`DISCOVERY / PRODUCT CONTRACT + USER FLOW / COORDINATOR HANDOFF READY`
+`PRODUCT CONTRACT ACCEPTED / USER FLOW ACCEPTED / IMPLEMENTATION TASK PREPARATION / NO LIVE WRITE`
 
-До принятия User Flow владельцем реализация не начинается.
+Владелец принял User Flow первой vertical slice. Разрешена подготовка реализации `Excel → validation → ERP mapping → user corrections → 12-month normalization → preview → export`.
 
 ## Start here
 
-1. `governance/handoffs/HANDOFF-COORDINATOR-20260811-001.md` — полный handoff discovery и принятых решений.
-2. `docs/SERVICE_FACTORY_SKILLS_AND_PLUGINS_PLAN_RU.md` — план reusable Skills, плагинов/подключений, tooling и risk/model routing.
+1. `governance/handoffs/HANDOFF-OWNER-DECISIONS-20260812-002.md` — финальный пакет owner decisions и принятие User Flow.
+2. `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md` — карта реальных Excel, ERP-справочников и доказательств.
 3. `docs/PRODUCT.md`
 4. `docs/USER_FLOW.md`
 5. `governance/DECISIONS.md`
@@ -29,6 +29,7 @@ ADO и фактическая запись в 1С являются отдель�
 7. `governance/ACTIVE_WORK.md`
 8. `docs/ARCHITECTURE.md`
 9. `AGENTS.md` — правила для Codex
+10. `docs/SERVICE_FACTORY_SKILLS_AND_PLUGINS_PLAN_RU.md` — справочный план reusable Skills и tooling; не является разрешением раздувать scope.
 
 ## Product principle
 
