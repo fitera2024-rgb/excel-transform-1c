@@ -22,6 +22,7 @@ from excel_transform_1c.core.models import (
     ERPArticle,
     Issue,
     OrganizationNode,
+    PreviewRecord,
     ProcessedRun,
     RunContext,
     STATUS_ATTENTION,
@@ -145,7 +146,10 @@ class WorkflowService:
         pending = self.pending.get(upload_id)
         if not pending:
             raise ValueError("Загрузка не найдена; выберите файл повторно")
-        candidate = next((item for item in pending.candidates if item.candidate_id == candidate_id), None)
+        candidate = next(
+            (item for item in pending.candidates if item.candidate_id == candidate_id),
+            None,
+        )
         if not candidate:
             raise ValueError("Выберите распознанный диапазон")
         digest = hashlib.sha256(pending.path.read_bytes()).hexdigest()
@@ -189,10 +193,25 @@ class WorkflowService:
         row_records = [record for record in run.records if record.source_row == source_row]
         if not row_records:
             raise ValueError("Исходная строка не найдена")
+
         articles = self.erp_articles()
         by_code = {article.code: article for article in articles}
-        allowed_fields = {"erp_code", "tax", "department", "cfo", "expense_group", "source_article"}
-        changes = {field: value for field, value in changes.items() if field in allowed_fields and value != ""}
+        allowed_fields = {
+            "erp_code",
+            "tax",
+            "department",
+            "cfo",
+            "expense_group",
+            "source_article",
+        }
+        changes = {
+            field: value
+            for field, value in changes.items()
+            if field in allowed_fields and value != ""
+        }
+        if not changes:
+            return run
+
         if "erp_code" in changes and changes["erp_code"] not in by_code:
             raise ValueError("Выберите ERP-код из загруженного справочника")
 
@@ -200,6 +219,7 @@ class WorkflowService:
         for field in ("department", "cfo"):
             if field in changes and changes[field] not in org_values:
                 raise ValueError("Выберите организационное значение из загруженного дерева")
+
         valid_groups = {article.expense_group for article in articles}
         valid_articles = {article.source_article for article in articles}
         if "expense_group" in changes and changes["expense_group"] not in valid_groups:
@@ -209,120 +229,167 @@ class WorkflowService:
         if "tax" in changes and normalize_tax(changes["tax"])[1]:
             raise ValueError("Выберите допустимое налогообложение")
 
-        original = row_records[0]
+        first = row_records[0]
         for field, selected in changes.items():
-            original_value = original.erp_code if field == "erp_code" else str(getattr(original, field))
-            self.store.save_override(run_id, source_row, field, original_value, selected)
+            original = str(getattr(first, field))
+            self.store.save_override(run_id, source_row, field, original, selected)
 
-        path_changed = bool({"expense_group", "source_article"}.intersection(changes))
-        mapping_reason: str | None = None
-        mapped_article: ERPArticle | None = None
         for record in row_records:
             for field, selected in changes.items():
-                if field != "erp_code":
+                if field == "erp_code":
+                    article = by_code[selected]
+                    record.erp_code = article.code
+                    record.erp_article_name = article.name
+                else:
                     setattr(record, field, selected)
 
         if "erp_code" in changes:
-            mapped_article = by_code[changes["erp_code"]]
-        elif path_changed:
-            representative = row_records[0]
-            mapper = ExactERPMapper(articles, self.store.load_manual_mappings())
-            mapped_article, mapping_reason = mapper.resolve(
-                representative.expense_type,
-                representative.expense_group,
-                representative.source_article,
-            )
-
-        if "erp_code" in changes or path_changed:
-            for record in row_records:
-                record.erp_code = mapped_article.code if mapped_article else ""
-                record.erp_article_name = mapped_article.name if mapped_article else ""
-
-        if "erp_code" in changes:
             self.store.save_manual_mapping(row_records[0].mapping_key, changes["erp_code"])
+        elif {"expense_group", "source_article"}.intersection(changes):
+            for record in row_records:
+                record.erp_code = ""
+                record.erp_article_name = ""
 
-        for record in row_records:
-            self._refresh_record(record, by_code, mapping_reason)
-
-        self._resolve_row_issues(run, source_row, changes)
-        if path_changed and "erp_code" not in changes and mapping_reason:
-            pointer_key = "article" if "source_article" in changes else "expense_group"
-            record = row_records[0]
-            run.issues.append(
-                Issue(
-                    issue_id=uuid4().hex,
-                    kind="erp-mapping",
-                    description=mapping_reason,
-                    pointer=record.pointers[pointer_key],
-                    reporting_unit=record.reporting_unit,
-                    department=record.department,
-                    cfo=record.cfo,
-                    expense_type=record.expense_type,
-                    expense_group=record.expense_group,
-                    article=record.source_article,
-                    raw_value=record.source_article,
-                )
-            )
+        self._rebuild_row_state(run, source_row)
         return run
 
-    def _refresh_record(
-        self,
-        record,
-        by_code: dict[str, ERPArticle],
-        mapping_reason: str | None = None,
-    ) -> None:
-        removable = (
-            "Точное соответствие ERP",
-            "Точный путь соответствует",
-            "Сохранённое соответствие",
-            "Сохранённое ручное соответствие",
-            "Налогообложение",
-            "Числовой 0",
-            "Выбранный ERP-код",
-            "Не заполнено поле: department",
-            "Не заполнено поле: cfo",
-            "Не заполнено поле: expense_group",
-            "Не заполнено поле: article",
-        )
-        record.reasons = [reason for reason in record.reasons if not reason.startswith(removable)]
-        for field in ("department", "cfo", "expense_group", "source_article"):
-            if not getattr(record, field):
-                source_field = "article" if field == "source_article" else field
-                record.reasons.append(f"Не заполнено поле: {source_field}")
-        if mapping_reason:
-            record.reasons.append(mapping_reason)
-        elif not record.erp_code:
-            record.reasons.append("Точное соответствие ERP не найдено")
-        elif record.erp_code not in by_code:
-            record.reasons.append("Выбранный ERP-код отсутствует в текущем справочнике")
-        tax_reason = normalize_tax(record.tax)[1]
-        if tax_reason:
-            record.reasons.append(tax_reason)
-        if record.status != STATUS_SKIPPED:
-            record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
+    def _rebuild_row_state(self, run: ProcessedRun, source_row: int) -> None:
+        row_records = [record for record in run.records if record.source_row == source_row]
+        if not row_records:
+            return
+        base = row_records[0]
 
-    def _resolve_row_issues(self, run: ProcessedRun, source_row: int, changes: dict[str, str]) -> None:
-        pointers_by_field = {
-            "department": "department",
-            "cfo": "cfo",
-            "expense_group": "expense_group",
-            "source_article": "article",
+        recomputed_shared_fields = {
+            "expense_type",
+            "department",
+            "organization_type",
+            "cfo",
+            "expense_group",
+            "source_article",
         }
         for issue in run.issues:
-            if issue.pointer.row != source_row:
+            if issue.pointer.row != source_row or issue.resolved:
                 continue
-            if "erp_code" in changes and issue.kind == "erp-mapping":
+            if issue.kind in {"tax", "erp-mapping"}:
                 issue.resolved = True
-            elif {"expense_group", "source_article"}.intersection(changes) and issue.kind == "erp-mapping":
+            elif issue.kind == "shared-field" and issue.pointer.field in recomputed_shared_fields:
                 issue.resolved = True
-            elif "tax" in changes and issue.kind == "tax":
-                issue.resolved = True
-            elif issue.kind == "shared-field" and any(
-                issue.pointer.field == pointer
-                for field, pointer in pointers_by_field.items()
-                if field in changes
-            ):
-                issue.resolved = True
+
+        persistent_common = [
+            issue.description
+            for issue in run.issues
+            if not issue.resolved
+            and issue.pointer.row == source_row
+            and issue.kind in {"context-reporting-unit"}
+        ]
+        persistent_reporting_missing = [
+            issue.description
+            for issue in run.issues
+            if not issue.resolved
+            and issue.pointer.row == source_row
+            and issue.kind == "shared-field"
+            and issue.pointer.field == "reporting_unit"
+        ]
+
+        dynamic_reasons: list[str] = []
+        field_values = {
+            "expense_type": base.expense_type,
+            "department": base.department,
+            "organization_type": base.organization_type,
+            "cfo": base.cfo,
+            "expense_group": base.expense_group,
+            "source_article": base.source_article,
+        }
+        field_labels = {
+            "expense_type": "тип расходов",
+            "department": "департамент",
+            "organization_type": "вид организации",
+            "cfo": "отдел / ЦФО",
+            "expense_group": "группа расходов",
+            "source_article": "статья",
+        }
+        for field, value in field_values.items():
+            if value == "":
+                reason = f"Не заполнено поле: {field_labels[field]}"
+                dynamic_reasons.append(reason)
+                run.issues.append(self._issue_from_record(base, "shared-field", reason, field, value))
+
+        tax_reason = normalize_tax(base.tax)[1]
+        if tax_reason:
+            dynamic_reasons.append(tax_reason)
+            run.issues.append(self._issue_from_record(base, "tax", tax_reason, "tax", base.tax))
+
+        mapper = ExactERPMapper(self.erp_articles(), self.store.load_manual_mappings())
+        mapped, mapping_reason = mapper.resolve(
+            base.expense_type,
+            base.expense_group,
+            base.source_article,
+        )
+        for record in row_records:
+            record.erp_code = mapped.code if mapped else ""
+            record.erp_article_name = mapped.name if mapped else ""
+        if mapping_reason:
+            dynamic_reasons.append(mapping_reason)
+            run.issues.append(
+                self._issue_from_record(
+                    base,
+                    "erp-mapping",
+                    mapping_reason,
+                    "source_article",
+                    base.source_article,
+                )
+            )
+
+        common_reasons = [
+            *persistent_common,
+            *persistent_reporting_missing,
+            *dynamic_reasons,
+        ]
+        if not run.context.scenario_erp_confirmed:
+            common_reasons.append("Сценарий не подтверждён справочником ERP")
+
+        monthly_issues = {
+            issue.pointer.month: issue.description
+            for issue in run.issues
+            if not issue.resolved
+            and issue.pointer.row == source_row
+            and issue.kind == "monthly-error"
+        }
+
+        for record in row_records:
+            reasons = list(common_reasons)
+            if record.amount is None:
+                skip_reason = monthly_issues.get(record.month, "Месячная запись не сформирована")
+                pointer = record.pointers["amount"]
+                reasons.append(f"{skip_reason} ({pointer.sheet}!{pointer.cell})")
+                record.status = STATUS_SKIPPED
+            else:
+                if record.amount < 0:
+                    reasons.append("Отрицательная сумма")
+                record.status = STATUS_ATTENTION if reasons else STATUS_OK
+            record.reasons = reasons
+
+    @staticmethod
+    def _issue_from_record(
+        record: PreviewRecord,
+        kind: str,
+        description: str,
+        field: str,
+        raw_value: Any,
+    ) -> Issue:
+        return Issue(
+            issue_id=uuid4().hex,
+            kind=kind,
+            description=description,
+            pointer=record.pointers[field],
+            reporting_unit=record.reporting_unit,
+            department=record.department,
+            cfo=record.cfo,
+            expense_type=record.expense_type,
+            expense_group=record.expense_group,
+            article=record.source_article,
+            raw_value="" if raw_value is None else str(raw_value),
+        )
 
     def export_run(self, run_id: str) -> bytes:
         return export_opiu_light(self.get_run(run_id).visible_records())

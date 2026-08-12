@@ -50,5 +50,6 @@ table { width:100%; border-collapse:collapse; font-size:13px; }
 th, td { padding:10px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
 th { position:sticky; top:0; background:#edf2f7; z-index:1; }
 .status-attention { background:#fffaf0; }
+.status-skipped { background:#fff3f2; }
 .pill { white-space:nowrap; font-weight:750; }
 @media (max-width:900px) { .grid.three,.process-form,.correction-form,.stats { grid-template-columns:1fr; } .hero { align-items:flex-start; flex-direction:column; } .fixed-context { min-width:0; width:100%; } main { padding:16px; } header { padding:14px 16px; } .boundary { display:none; } }

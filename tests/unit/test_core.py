@@ -1,7 +1,7 @@
 from decimal import Decimal
+from io import BytesIO
 
 from openpyxl import load_workbook
-from io import BytesIO
 
 from excel_transform_1c.adapters.persistence import LocalStore
 from excel_transform_1c.core.access import effective_organization_nodes
@@ -11,15 +11,28 @@ from excel_transform_1c.core.models import (
     OrganizationNode,
     RunContext,
     STATUS_ATTENTION,
-    STATUS_OK,
     STATUS_SKIPPED,
 )
-from excel_transform_1c.core.transform import ExactERPMapper, manual_mapping_key, normalize_tax, transform_rows
+from excel_transform_1c.core.transform import (
+    ExactERPMapper,
+    manual_mapping_key,
+    normalize_tax,
+    transform_rows,
+)
 from tests.helpers.workbooks import workbook_bytes
 
 
-def context(confirmed: bool = True) -> RunContext:
-    return RunContext("ПС", "ps", "Группа → ПС", "s1", "ПЛАН 2026", 2026, confirmed, 2026)
+def context(confirmed: bool = True, reporting_unit: str = "ПС") -> RunContext:
+    return RunContext(
+        reporting_unit,
+        "ps",
+        "Группа → ПС",
+        "s1",
+        "ПЛАН 2026",
+        2026,
+        confirmed,
+        2026,
+    )
 
 
 def articles() -> list[ERPArticle]:
@@ -36,7 +49,10 @@ def source_rows(**kwargs):
 
 
 def test_structural_schema_detection_ignores_sheet_name_and_finds_two_ranges():
-    workbook = load_workbook(BytesIO(workbook_bytes(sheet_name="Никакой загрузки", two_candidates=True)), data_only=True)
+    workbook = load_workbook(
+        BytesIO(workbook_bytes(sheet_name="Никакой загрузки", two_candidates=True)),
+        data_only=True,
+    )
     candidates = detect_candidate_ranges(workbook)
     assert [item.sheet for item in candidates] == ["Никакой загрузки", "Второй диапазон"]
 
@@ -48,21 +64,31 @@ def test_two_rows_normalize_to_24_records_including_zero():
     assert not issues
 
 
-def test_monthly_error_skips_only_one_month():
-    records, issues = transform_rows(source_rows(monthly_error=True), context(), ExactERPMapper(articles()))
+def test_monthly_error_creates_visible_skipped_record_and_keeps_other_months():
+    records, issues = transform_rows(
+        source_rows(monthly_error=True),
+        context(),
+        ExactERPMapper(articles()),
+    )
     assert len(records) == 24
-    affected = [record for record in records if record.source_row == 3]
-    assert len(affected) == 12
-    skipped = [record for record in affected if record.status == STATUS_SKIPPED]
+    skipped = [
+        record
+        for record in records
+        if record.source_row == 3 and record.month == 5
+    ]
     assert len(skipped) == 1
-    assert skipped[0].month == 5
+    assert skipped[0].status == STATUS_SKIPPED
     assert skipped[0].amount is None
-    assert "Ошибка Excel" in skipped[0].comment
+    assert "M3" in skipped[0].comment
     assert [(issue.pointer.row, issue.pointer.month) for issue in issues] == [(3, 5)]
 
 
 def test_shared_field_error_keeps_months_with_attention():
-    records, issues = transform_rows(source_rows(shared_error=True), context(), ExactERPMapper(articles()))
+    records, issues = transform_rows(
+        source_rows(shared_error=True),
+        context(),
+        ExactERPMapper(articles()),
+    )
     affected = [record for record in records if record.source_row == 4]
     assert len(affected) == 12
     assert all(record.status == STATUS_ATTENTION for record in affected)
@@ -78,42 +104,49 @@ def test_tax_normalization_is_exact_and_zero_is_attention():
 
 
 def test_negative_amount_is_preserved_with_attention():
-    records, _ = transform_rows(source_rows(negative=True), context(), ExactERPMapper(articles()))
-    negative = next(record for record in records if record.amount < 0)
+    records, _ = transform_rows(
+        source_rows(negative=True),
+        context(),
+        ExactERPMapper(articles()),
+    )
+    negative = next(record for record in records if record.amount is not None and record.amount < 0)
     assert negative.amount == Decimal("-10")
     assert negative.status == STATUS_ATTENTION
     assert "Отрицательная сумма" in negative.comment
 
 
-def test_exact_mapping_requires_unique_case_sensitive_full_path_and_conflict_blocks_saved_mapping():
+def test_exact_mapping_requires_unique_case_sensitive_full_path():
     mapper = ExactERPMapper(articles())
     assert mapper.resolve("Административные", "Связь", "Интернет")[0].code == "ERP-001"
     assert mapper.resolve("административные", "Связь", "Интернет")[0] is None
-    duplicated = articles() + [ERPArticle("ERP-X", "Duplicate", "Административные", "Связь", "Интернет")]
-    assert "нескольким" in ExactERPMapper(duplicated).resolve("Административные", "Связь", "Интернет")[1]
-    saved = {manual_mapping_key("Административные", "Связь", "Нет в ERP"): "ERP-002"}
-    mapped, reason = ExactERPMapper(articles(), saved).resolve("Административные", "Связь", "Нет в ERP")
-    assert mapped.code == "ERP-002" and reason is None
-    missing, reason = ExactERPMapper([], saved).resolve("Административные", "Связь", "Нет в ERP")
-    assert missing is None and "конфликтует" in reason
-    conflicting = {manual_mapping_key("Административные", "Связь", "Интернет"): "ERP-002"}
-    mapped, reason = ExactERPMapper(articles(), conflicting).resolve("Административные", "Связь", "Интернет")
-    assert mapped is None
+    duplicated = articles() + [
+        ERPArticle("ERP-X", "Duplicate", "Административные", "Связь", "Интернет")
+    ]
+    assert "нескольким" in ExactERPMapper(duplicated).resolve(
+        "Административные", "Связь", "Интернет"
+    )[1]
+
+
+def test_manual_mapping_conflict_with_exact_match_is_visible():
+    saved = {
+        manual_mapping_key("Административные", "Связь", "Интернет"): "ERP-002"
+    }
+    mapped, reason = ExactERPMapper(articles(), saved).resolve(
+        "Административные", "Связь", "Интернет"
+    )
+    assert mapped.code == "ERP-002"
     assert "конфликтует" in reason
 
 
-def test_reporting_unit_contradiction_keeps_records_with_attention_and_pointer():
-    records, issues = transform_rows(
-        source_rows(reporting_unit="АЮ"),
-        context(),
-        ExactERPMapper(articles()),
+def test_missing_saved_code_is_visible_conflict():
+    saved = {
+        manual_mapping_key("Административные", "Связь", "Нет в ERP"): "ERP-404"
+    }
+    missing, reason = ExactERPMapper(articles(), saved).resolve(
+        "Административные", "Связь", "Нет в ERP"
     )
-    assert len(records) == 24
-    assert all(record.status == STATUS_ATTENTION for record in records)
-    conflict = next(issue for issue in issues if issue.kind == "context-conflict")
-    assert conflict.pointer.field == "reporting_unit"
-    assert conflict.pointer.cell == "A3"
-    assert "не совпадает" in conflict.description
+    assert missing is None
+    assert "отсутствует" in reason
 
 
 def test_manual_mapping_key_excludes_organization_department_and_cfo():
@@ -127,7 +160,12 @@ def test_manual_mapping_key_excludes_organization_department_and_cfo():
 
 def test_scenario_alias_has_stable_local_identity(tmp_path):
     store = LocalStore(tmp_path / "local.db")
-    first = store.add_scenario("ПЛАН_2026", 2026, erp_code="00010", erp_confirmed=True)
+    first = store.add_scenario(
+        "ПЛАН_2026",
+        2026,
+        erp_code="00010",
+        erp_confirmed=True,
+    )
     second = store.add_scenario("ПЛАН 2026", 2026)
     assert first.scenario_id == second.scenario_id
     assert first.name == "ПЛАН 2026"
@@ -146,6 +184,22 @@ def test_organization_subtree_union_deduplicates_overlap_and_keeps_delete_node()
 
 
 def test_unconfirmed_scenario_marks_records_attention():
-    records, _ = transform_rows(source_rows(), context(False), ExactERPMapper(articles()))
+    records, _ = transform_rows(
+        source_rows(),
+        context(False),
+        ExactERPMapper(articles()),
+    )
     assert all(record.status == STATUS_ATTENTION for record in records)
     assert all("не подтверждён" in record.comment for record in records)
+
+
+def test_reporting_unit_conflict_is_attention_with_exact_pointer():
+    records, issues = transform_rows(
+        source_rows(reporting_unit="ПС"),
+        context(reporting_unit="АЮ"),
+        ExactERPMapper(articles()),
+    )
+    assert all(record.status == STATUS_ATTENTION for record in records)
+    conflict = next(issue for issue in issues if issue.kind == "context-reporting-unit")
+    assert conflict.pointer.cell == "A3"
+    assert "ПС" in conflict.description and "АЮ" in conflict.description

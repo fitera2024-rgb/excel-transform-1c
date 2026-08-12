@@ -18,7 +18,13 @@ def client(tmp_path):
         response = test_client.post(
             "/references",
             data={"kind": kind},
-            files={"reference_file": (f"synthetic-{kind}.xlsx", reference_bytes(kind), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+            files={
+                "reference_file": (
+                    f"synthetic-{kind}.xlsx",
+                    reference_bytes(kind),
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
             follow_redirects=True,
         )
         assert response.status_code == 200
@@ -37,7 +43,13 @@ def upload(client, payload: bytes, **form):
     return client.post(
         "/uploads",
         data=data,
-        files={"budget_file": ("synthetic.xlsx", payload, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "budget_file": (
+                "synthetic.xlsx",
+                payload,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
         follow_redirects=True,
     )
 
@@ -56,7 +68,9 @@ def test_happy_path_to_preview_and_export(client):
     run_id = run_id_from(response)
     exported = client.get(f"/runs/{run_id}/export")
     assert exported.status_code == 200
-    assert exported.headers["content-type"].startswith("application/vnd.openxmlformats")
+    assert exported.headers["content-type"].startswith(
+        "application/vnd.openxmlformats"
+    )
 
 
 def test_attention_path_with_manual_erp_correction(client):
@@ -65,7 +79,15 @@ def test_attention_path_with_manual_erp_correction(client):
     assert "Точное соответствие ERP не найдено" in response.text
     corrected = client.post(
         f"/runs/{run_id}/correct",
-        data={"source_row": 3, "erp_code": "ERP-001", "tax": "", "department": "", "cfo": "", "expense_group": "", "source_article": ""},
+        data={
+            "source_row": 3,
+            "erp_code": "ERP-001",
+            "tax": "",
+            "department": "",
+            "cfo": "",
+            "expense_group": "",
+            "source_article": "",
+        },
         follow_redirects=True,
     )
     assert "Исправление применено без повторного запуска" in corrected.text
@@ -100,11 +122,21 @@ def test_multiple_ranges_are_not_selected_silently(client):
     assert response.text.count('name="candidate_id"') == 2
 
 
-def test_skipped_month_and_reporting_unit_conflict_are_visible(client):
-    response = upload(client, workbook_bytes(monthly_error=True, reporting_unit="АЮ"))
+def test_skipped_month_is_visible_in_preview_with_cell_pointer(client):
+    response = upload(client, workbook_bytes(monthly_error=True))
     assert response.status_code == 200
     assert "Пропущено" in response.text
-    assert "Ошибка Excel в месячной ячейке" in response.text
-    assert "не совпадает с выбранной" in response.text
-    assert "I3" not in response.text
     assert "M3" in response.text
+    assert "Ошибка Excel в месячной ячейке" in response.text
+
+
+def test_reporting_unit_conflict_is_visible_and_does_not_block(client):
+    response = upload(
+        client,
+        workbook_bytes(reporting_unit="ПС"),
+        reporting_unit="АЮ",
+    )
+    assert response.status_code == 200
+    assert "24" in response.text
+    assert "не совпадает с выбранной" in response.text
+    assert "A3" in response.text

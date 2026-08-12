@@ -39,6 +39,7 @@ def workbook_bytes(
     no_range: bool = False,
     monthly_error: bool = False,
     shared_error: bool = False,
+    department_error: bool = False,
     cfo_error: bool = False,
     missing_mapping: bool = False,
     negative: bool = False,
@@ -55,6 +56,7 @@ def workbook_bytes(
             first,
             monthly_error,
             shared_error,
+            department_error,
             cfo_error,
             missing_mapping,
             negative,
@@ -62,7 +64,7 @@ def workbook_bytes(
         )
         if two_candidates:
             second = workbook.create_sheet("Второй диапазон")
-            _append_candidate(second, False, False, False, False, False, "ПС")
+            _append_candidate(second, False, False, False, False, False, False, reporting_unit)
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
@@ -72,6 +74,7 @@ def _append_candidate(
     sheet,
     monthly_error: bool,
     shared_error: bool,
+    department_error: bool,
     cfo_error: bool,
     missing_mapping: bool,
     negative: bool,
@@ -87,9 +90,9 @@ def _append_candidate(
         [
             reporting_unit,
             "Административные",
-            "Департамент 1",
+            "" if department_error else "Департамент 1",
             "ТК",
-            "ЦФО 1",
+            "" if cfo_error else "ЦФО 1",
             0.2,
             "Связь",
             "Интернет" if not missing_mapping else "Нет в ERP",
@@ -102,7 +105,7 @@ def _append_candidate(
             "Коммерческие",
             "" if shared_error else "Департамент 2",
             "ТК",
-            "" if cfo_error else "ЦФО 2",
+            "ЦФО 2",
             "БЕЗ НДС",
             "Маркетинг",
             "Реклама",
@@ -116,7 +119,15 @@ def reference_bytes(kind: str) -> bytes:
     sheet = workbook.active
     sheet.title = "Synthetic"
     if kind == "erp_articles":
-        sheet.append(["Код", "Официальное наименование", "Тип расходов", "Группа расходов", "Исходная статья"])
+        sheet.append(
+            [
+                "Код",
+                "Официальное наименование",
+                "Тип расходов",
+                "Группа расходов",
+                "Исходная статья",
+            ]
+        )
         sheet.append(["ERP-001", "Интернет ERP", "Административные", "Связь", "Интернет"])
         sheet.append(["ERP-002", "Реклама ERP", "Коммерческие", "Маркетинг", "Реклама"])
         sheet.append(["ERP-DEL", "Удалить (видимая запись)", "Административные", "Прочие", "Удалить"])
@@ -135,85 +146,55 @@ def reference_bytes(kind: str) -> bytes:
     return output.getvalue()
 
 
-def realistic_reference_bytes(kind: str) -> bytes:
-    """Synthetic workbooks that reproduce the documented ERP export structures."""
+def real_reference_bytes(kind: str) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "Лист_1"
-    for _ in range(6):
-        sheet.append(["Синтетическая служебная строка"])
 
     if kind == "erp_articles":
-        headers = [""] * 15
-        headers[0] = "Статья доходов и расходов"
-        headers[14] = "Код"
-        sheet.append(headers)
-        _append_hierarchy_name(sheet, "Административные", 0)
-        _append_hierarchy_name(sheet, "Связь", 1)
-        _append_hierarchy_name(sheet, "Интернет", 2)
-        _append_code_row(sheet, 15, "ERP-001")
-        _append_hierarchy_name(sheet, "Прочие", 1)
-        _append_hierarchy_name(sheet, "!!!Удалить", 2)
-        _append_code_row(sheet, 15, "ERP-DEL")
+        sheet.cell(1, 1, "Статья доходов и расходов")
+        sheet.cell(1, 15, "Код")
+        _hierarchy_cell(sheet, 2, "Административные", 0)
+        _hierarchy_cell(sheet, 3, "Связь", 1)
+        _hierarchy_cell(sheet, 4, "Интернет", 2)
+        sheet.cell(5, 15, "ERP-001")
+        _hierarchy_cell(sheet, 6, "Коммерческие", 0)
+        _hierarchy_cell(sheet, 7, "Маркетинг", 1)
+        _hierarchy_cell(sheet, 8, "Реклама", 2)
+        sheet.cell(9, 15, "ERP-002")
+        _hierarchy_cell(sheet, 10, "!!!Удалить", 0)
+        _hierarchy_cell(sheet, 11, "Прочие", 1)
+        _hierarchy_cell(sheet, 12, "Удалить", 2)
+        sheet.cell(13, 15, "ERP-DEL")
     elif kind == "organizations":
-        headers = [""] * 39
-        headers[0] = "Организации"
-        headers[14] = "Код"
-        headers[15] = "Родитель"
-        headers[16] = "Полный путь"
-        sheet.append(headers)
-        _append_organization_export_row(sheet, "Группа", "ORG-1", "", "Группа", 0)
-        _append_organization_export_row(sheet, "ПС", "ORG-2", "ORG-1", "Группа → ПС", 1)
-        _append_organization_export_row(
-            sheet,
-            "!!!Удалить",
-            "ORG-3",
-            "ORG-2",
-            "Группа → ПС → !!!Удалить",
-            2,
-        )
+        sheet.cell(1, 1, "Организации")
+        sheet.cell(1, 39, "Код")
+        rows = [
+            (2, "Группа", "ORG-1", 0),
+            (3, "ПС", "ORG-2", 1),
+            (4, "ЦФО 1", "ORG-3", 2),
+            (5, "!!!Удалить", "ORG-4", 2),
+            (6, "Сосед", "ORG-5", 1),
+        ]
+        for row, name, code, level in rows:
+            _hierarchy_cell(sheet, row, name, level)
+            sheet.cell(row, 39, code)
     elif kind == "scenarios":
-        headers = [""] * 19
-        headers[0] = "Сценарии"
-        headers[18] = "Код"
-        sheet.append(headers)
-        row = [""] * 19
-        row[0], row[18] = "ПЛАН_2026", "00010"
-        sheet.append(row)
-        row = [""] * 19
-        row[0], row[18] = "Факт", "00001"
-        sheet.append(row)
-    else:
-        raise ValueError(kind)
+        sheet.cell(7, 1, "Сценарии")
+        sheet.cell(7, 19, "Код")
+        sheet.cell(8, 1, "ПЛАН 2026")
+        sheet.cell(8, 19, "00010")
+        sheet.cell(9, 1, "Факт")
+        sheet.cell(9, 19, "00001")
 
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
 
 
-def _append_hierarchy_name(sheet, name: str, indent: int) -> None:
-    sheet.append([name])
-    sheet.cell(sheet.max_row, 1).alignment = Alignment(indent=indent)
-
-
-def _append_code_row(sheet, code_column: int, code: str) -> None:
-    row = [""] * code_column
-    row[code_column - 1] = code
-    sheet.append(row)
-
-
-def _append_organization_export_row(
-    sheet,
-    name: str,
-    code: str,
-    parent: str,
-    full_path: str,
-    indent: int,
-) -> None:
-    row = [""] * 39
-    row[0], row[14], row[15], row[16] = name, code, parent, full_path
-    sheet.append(row)
-    sheet.cell(sheet.max_row, 1).alignment = Alignment(indent=indent)
+def _hierarchy_cell(sheet, row: int, value: str, level: int) -> None:
+    cell = sheet.cell(row, 1, value)
+    cell.alignment = Alignment(indent=level)
 
 
 def write_cached_formula_fixture(path: Path) -> None:
@@ -222,7 +203,10 @@ def write_cached_formula_fixture(path: Path) -> None:
         members = {name: source.read(name) for name in source.namelist()}
     sheet_name = "xl/worksheets/sheet1.xml"
     xml = members[sheet_name].decode("utf-8")
-    xml = xml.replace('<c r="I3" t="n"><v>100</v></c>', '<c r="I3"><f>50+50</f><v>100</v></c>')
+    xml = xml.replace(
+        '<c r="I3" t="n"><v>100</v></c>',
+        '<c r="I3"><f>50+50</f><v>100</v></c>',
+    )
     members[sheet_name] = xml.encode("utf-8")
     with ZipFile(path, "w", ZIP_DEFLATED) as target:
         for name, data in members.items():

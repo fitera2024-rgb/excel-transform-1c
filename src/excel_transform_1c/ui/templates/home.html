@@ -26,6 +26,7 @@
         </select>
       </label>
       <label>Файл справочника .xlsx<input type="file" name="reference_file" accept=".xlsx" required></label>
+      <p class="hint">Поддерживаются известные ERP-выгрузки и документированный плоский interchange-формат.</p>
       <button>Загрузить / обновить</button>
     </form>
   </article>
@@ -69,7 +70,7 @@
     <label>Сценарий
       <select name="scenario_id" required>
         <option value="">Выберите</option>
-        {% for scenario in scenarios %}<option value="{{ scenario.scenario_id }}">{{ scenario.name }} · {{ scenario.year }}{% if scenario.marker %} · {{ scenario.marker }}{% endif %}</option>{% endfor %}
+        {% for scenario in scenarios %}<option value="{{ scenario.scenario_id }}">{{ scenario.name }}{% if scenario.year %} · {{ scenario.year }}{% else %} · год выбирается отдельно{% endif %}{% if scenario.marker %} · {{ scenario.marker }}{% endif %}</option>{% endfor %}
       </select>
     </label>
     <label>Год<input name="year" type="number" min="2000" max="2200" placeholder="из сценария"></label>

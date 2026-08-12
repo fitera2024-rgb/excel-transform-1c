@@ -33,260 +33,315 @@ SCENARIO_HEADERS = {
     "comment": {"комментарий"},
 }
 
-REAL_ERP_HEADERS = {
-    "hierarchy_name": {"статья доходов и расходов"},
-    "code": {"код"},
+REAL_EXPORT_HEADERS = {
+    "erp_articles": {
+        "name": {"статья доходов и расходов"},
+        "code": {"код"},
+    },
+    "organizations": {
+        "name": {"организации", "организация", "наименование"},
+        "code": {"код"},
+    },
+    "scenarios": {
+        "name": {"сценарии", "сценарий", "наименование"},
+        "code": {"код"},
+    },
 }
 
-REAL_ORG_REQUIRED_HEADERS = {
-    "name": {"организация", "организации"},
-    "code": {"код"},
-}
-
-REAL_ORG_OPTIONAL_HEADERS = {
-    "parent": {"родитель", "родительский узел", "родительская организация"},
-    "full_path": {"полный путь", "путь", "полное наименование"},
-}
-
-REAL_SCENARIO_REQUIRED_HEADERS = {
-    "name": {"сценарий", "сценарии"},
-    "erp_code": {"код", "erp-код"},
-}
-
-REAL_SCENARIO_OPTIONAL_HEADERS = {
-    "year": {"год"},
-    "comment": {"комментарий"},
-}
+PATH_ALIASES = {"полный путь", "путь", "иерархия"}
 
 
 def parse_reference_workbook(content: bytes, kind: str) -> list[dict[str, Any]]:
-    workbook = load_workbook(BytesIO(content), data_only=True, read_only=False)
+    if kind not in {"erp_articles", "organizations", "scenarios"}:
+        raise ValueError("Неизвестный тип справочника")
+
+    try:
+        workbook = load_workbook(BytesIO(content), data_only=True, read_only=False)
+    except Exception as exc:
+        raise ValueError("Файл справочника не открывается или повреждён") from exc
+
+    flat = _parse_flat_interchange(workbook, kind)
+    if flat is not None:
+        return flat
+
     if kind == "erp_articles":
-        return _parse_erp_articles(workbook)
-    if kind == "organizations":
-        return _parse_organizations(workbook)
-    if kind == "scenarios":
-        return _parse_scenarios(workbook)
-    raise ValueError("Неизвестный тип справочника")
+        result = _parse_real_erp_articles(workbook)
+    elif kind == "organizations":
+        result = _parse_real_organizations(workbook)
+    else:
+        result = _parse_real_scenarios(workbook)
+
+    if not result:
+        raise ValueError(
+            "Не найден распознаваемый диапазон справочника. "
+            "Загрузите известную ERP-выгрузку либо документированный плоский interchange-файл."
+        )
+    return result
 
 
-def _parse_erp_articles(workbook: Any) -> list[dict[str, Any]]:
-    flat = _single_range(workbook, ERP_HEADERS)
-    if flat:
-        return _flat_rows(*flat)
+def _parse_flat_interchange(workbook: Any, kind: str) -> list[dict[str, Any]] | None:
+    required = {
+        "erp_articles": ERP_HEADERS,
+        "organizations": ORG_HEADERS,
+        "scenarios": SCENARIO_HEADERS,
+    }[kind]
+    candidates: list[tuple[Any, int, dict[str, int]]] = []
+    for sheet in workbook.worksheets:
+        for row_number in range(1, min(sheet.max_row, 80) + 1):
+            values = [cell.value for cell in sheet[row_number]]
+            columns = _match_headers(values, required)
+            if columns:
+                candidates.append((sheet, row_number, columns))
+    if not candidates:
+        return None
+    if len(candidates) != 1:
+        raise ValueError("Справочник содержит несколько плоских структурно подходящих диапазонов")
 
-    sheet, header_row, columns = _require_single_range(workbook, REAL_ERP_HEADERS)
-    name_column = columns["hierarchy_name"]
-    code_column = columns["code"]
-    stack: dict[int, str] = {}
+    sheet, header_row, columns = candidates[0]
     rows: list[dict[str, Any]] = []
-    seen_codes: set[str] = set()
     for row_number in range(header_row + 1, sheet.max_row + 1):
-        name_cell = sheet.cell(row_number, name_column)
-        name = _text(name_cell.value)
-        if name:
-            level = _hierarchy_level(name_cell)
-            stack = {key: value for key, value in stack.items() if key < level}
-            stack[level] = name.strip()
-        code = _text(sheet.cell(row_number, code_column).value).strip()
-        if not code:
+        item = {field: sheet.cell(row_number, column).value for field, column in columns.items()}
+        if all(_is_blank(value) for value in item.values()):
             continue
-        path = [stack[key] for key in sorted(stack)]
-        if len(path) < 2:
-            raise ValueError("ERP-справочник содержит код без полного иерархического пути")
-        if code in seen_codes:
-            raise ValueError("ERP-справочник содержит повторяющийся код")
-        seen_codes.add(code)
-        source_article = path[-1]
         rows.append(
             {
-                "code": code,
-                "name": source_article,
-                "expense_type": path[0],
-                "expense_group": path[-2] if len(path) >= 3 else "",
-                "source_article": source_article,
+                field: _clean_flat_value(field, value)
+                for field, value in item.items()
             }
         )
-    if not rows:
-        raise ValueError("ERP-справочник не содержит кодированных статей")
     return rows
 
 
-def _parse_organizations(workbook: Any) -> list[dict[str, Any]]:
-    flat = _single_range(workbook, ORG_HEADERS)
-    if flat:
-        return _flat_rows(*flat)
+def _parse_real_erp_articles(workbook: Any) -> list[dict[str, Any]]:
+    sheet, header_row, name_col, code_col = _best_real_header(workbook, "erp_articles")
+    stack: list[str] = []
+    result: list[dict[str, Any]] = []
+    seen_codes: set[str] = set()
 
-    sheet, header_row, columns = _require_single_range(
-        workbook,
-        REAL_ORG_REQUIRED_HEADERS,
-        REAL_ORG_OPTIONAL_HEADERS,
-    )
-    raw: list[dict[str, str | int | None]] = []
-    stack: dict[int, dict[str, str]] = {}
     for row_number in range(header_row + 1, sheet.max_row + 1):
-        name_cell = sheet.cell(row_number, columns["name"])
-        name = _text(name_cell.value).strip()
-        code = _text(sheet.cell(row_number, columns["code"]).value).strip()
-        if not name and not code:
+        raw_name = sheet.cell(row_number, name_col).value
+        raw_code = sheet.cell(row_number, code_col).value
+
+        if not _is_blank(raw_name):
+            name = _hierarchy_text(raw_name)
+            _set_stack(stack, _row_level(sheet, row_number, name_col, raw_name), name)
+
+        if _is_blank(raw_code):
             continue
-        if not name or not code:
+
+        code = str(raw_code).strip()
+        if not code or normalize_header(code) == "код":
             continue
-        level = _hierarchy_level(name_cell)
-        stack = {key: value for key, value in stack.items() if key < level}
-        parent = _text(sheet.cell(row_number, columns["parent"]).value).strip() if "parent" in columns else ""
-        full_path = (
-            _text(sheet.cell(row_number, columns["full_path"]).value).strip()
-            if "full_path" in columns
-            else ""
+        if code in seen_codes:
+            raise ValueError(f"ERP-справочник статей содержит повторяющийся код: {code}")
+        if not stack:
+            continue
+
+        article = stack[-1]
+        expense_type = stack[0] if len(stack) >= 2 else ""
+        expense_group = stack[-2] if len(stack) >= 3 else ""
+        result.append(
+            {
+                "code": code,
+                "name": article,
+                "expense_type": expense_type,
+                "expense_group": expense_group,
+                "source_article": article,
+            }
         )
-        parent_from_tree = stack[max(stack)]["code"] if stack else ""
-        path_from_tree = " → ".join([stack[key]["name"] for key in sorted(stack)] + [name])
-        raw.append(
+        seen_codes.add(code)
+
+    return result
+
+
+def _parse_real_organizations(workbook: Any) -> list[dict[str, Any]]:
+    sheet, header_row, name_col, code_col = _best_real_header(workbook, "organizations")
+    path_col = _find_optional_column(sheet, header_row, PATH_ALIASES)
+
+    stack: list[str] = []
+    coded_stack: dict[int, str] = {}
+    raw_nodes: list[dict[str, Any]] = []
+    seen_codes: set[str] = set()
+
+    for row_number in range(header_row + 1, sheet.max_row + 1):
+        raw_name = sheet.cell(row_number, name_col).value
+        raw_code = sheet.cell(row_number, code_col).value
+
+        level = 0
+        if not _is_blank(raw_name):
+            name = _hierarchy_text(raw_name)
+            level = _row_level(sheet, row_number, name_col, raw_name)
+            _set_stack(stack, level, name)
+        elif stack:
+            name = stack[-1]
+            level = max(len(stack) - 1, 0)
+        else:
+            continue
+
+        if _is_blank(raw_code):
+            continue
+        code = str(raw_code).strip()
+        if not code or normalize_header(code) == "код":
+            continue
+        if code in seen_codes:
+            raise ValueError(f"Справочник организаций содержит повторяющийся код: {code}")
+
+        explicit_path = ""
+        if path_col is not None:
+            explicit_path = _clean_scalar(sheet.cell(row_number, path_col).value)
+        full_path = explicit_path or " → ".join(stack)
+
+        parent_id = None
+        for parent_level in range(level - 1, -1, -1):
+            if parent_level in coded_stack:
+                parent_id = coded_stack[parent_level]
+                break
+
+        raw_nodes.append(
             {
                 "node_id": code,
                 "code": code,
                 "name": name,
-                "parent": parent,
-                "parent_from_tree": parent_from_tree,
-                "full_path": full_path or path_from_tree,
+                "parent_id": parent_id,
+                "full_path": full_path,
             }
         )
-        stack[level] = {"code": code, "name": name}
+        seen_codes.add(code)
+        coded_stack[level] = code
+        for deeper in [item for item in coded_stack if item > level]:
+            del coded_stack[deeper]
 
-    if not raw:
-        raise ValueError("Справочник организаций не содержит кодированных узлов")
-    by_code = {str(item["code"]): str(item["node_id"]) for item in raw}
-    by_path = {str(item["full_path"]): str(item["node_id"]) for item in raw}
-    by_unique_name: dict[str, str] = {}
-    name_counts: dict[str, int] = {}
-    for item in raw:
-        name = str(item["name"])
-        name_counts[name] = name_counts.get(name, 0) + 1
-        by_unique_name[name] = str(item["node_id"])
+    if path_col is not None:
+        by_path = {node["full_path"]: node["node_id"] for node in raw_nodes}
+        for node in raw_nodes:
+            separator = " → " if " → " in node["full_path"] else None
+            if separator:
+                parent_path = node["full_path"].rsplit(separator, 1)[0]
+                node["parent_id"] = by_path.get(parent_path)
 
+    return raw_nodes
+
+
+def _parse_real_scenarios(workbook: Any) -> list[dict[str, Any]]:
+    sheet, header_row, name_col, code_col = _best_real_header(workbook, "scenarios")
     result: list[dict[str, Any]] = []
-    for item in raw:
-        parent_value = str(item["parent"] or "")
-        parent_id = (
-            by_code.get(parent_value)
-            or by_path.get(parent_value)
-            or (by_unique_name.get(parent_value) if name_counts.get(parent_value) == 1 else None)
-            or str(item["parent_from_tree"] or "")
-        )
+    for row_number in range(header_row + 1, sheet.max_row + 1):
+        raw_name = sheet.cell(row_number, name_col).value
+        raw_code = sheet.cell(row_number, code_col).value
+        if _is_blank(raw_name):
+            continue
+        name = str(raw_name).strip()
+        scenario_header_aliases = {
+            normalize_header(alias)
+            for alias in REAL_EXPORT_HEADERS["scenarios"]["name"]
+        }
+        if not name or normalize_header(name) in scenario_header_aliases:
+            continue
+        code = "" if _is_blank(raw_code) else str(raw_code).strip()
+        year_match = re.search(r"(?<!\d)(20\d{2}|21\d{2})(?!\d)", name)
+        year = int(year_match.group(1)) if year_match else 0
         result.append(
             {
-                "node_id": str(item["node_id"]),
-                "code": str(item["code"]),
-                "name": str(item["name"]),
-                "parent_id": parent_id,
-                "full_path": str(item["full_path"]),
+                "name": name,
+                "year": str(year),
+                "erp_code": code,
+                "comment": "",
             }
         )
     return result
 
 
-def _parse_scenarios(workbook: Any) -> list[dict[str, Any]]:
-    flat = _single_range(workbook, SCENARIO_HEADERS)
-    if flat:
-        return _flat_rows(*flat)
-
-    sheet, header_row, columns = _require_single_range(
-        workbook,
-        REAL_SCENARIO_REQUIRED_HEADERS,
-        REAL_SCENARIO_OPTIONAL_HEADERS,
-    )
-    rows: list[dict[str, Any]] = []
-    for row_number in range(header_row + 1, sheet.max_row + 1):
-        name = _text(sheet.cell(row_number, columns["name"]).value).strip()
-        if not name:
-            continue
-        erp_code = _text(sheet.cell(row_number, columns["erp_code"]).value).strip()
-        explicit_year = _text(sheet.cell(row_number, columns["year"]).value).strip() if "year" in columns else ""
-        year_match = re.search(r"(?<!\d)(20\d{2})(?!\d)", name.replace("_", " "))
-        year = explicit_year or (year_match.group(1) if year_match else "0")
-        comment = _text(sheet.cell(row_number, columns["comment"]).value).strip() if "comment" in columns else ""
-        rows.append({"name": name, "year": year, "erp_code": erp_code, "comment": comment})
-    if not rows:
-        raise ValueError("Справочник сценариев не содержит записей")
-    return rows
-
-
-def _single_range(
-    workbook: Any,
-    required: dict[str, set[str]],
-    optional: dict[str, set[str]] | None = None,
-) -> tuple[Any, int, dict[str, int]] | None:
-    candidates = _find_ranges(workbook, required, optional)
-    return candidates[0] if len(candidates) == 1 else None
-
-
-def _require_single_range(
-    workbook: Any,
-    required: dict[str, set[str]],
-    optional: dict[str, set[str]] | None = None,
-) -> tuple[Any, int, dict[str, int]]:
-    candidates = _find_ranges(workbook, required, optional)
-    if len(candidates) != 1:
-        raise ValueError("Справочник должен содержать ровно один структурно распознаваемый диапазон")
-    return candidates[0]
-
-
-def _find_ranges(
-    workbook: Any,
-    required: dict[str, set[str]],
-    optional: dict[str, set[str]] | None = None,
-) -> list[tuple[Any, int, dict[str, int]]]:
-    candidates: list[tuple[Any, int, dict[str, int]]] = []
+def _best_real_header(workbook: Any, kind: str) -> tuple[Any, int, int, int]:
+    aliases = REAL_EXPORT_HEADERS[kind]
+    candidates: list[tuple[int, Any, int, int, int]] = []
     for sheet in workbook.worksheets:
-        for row_number in range(1, min(sheet.max_row, 50) + 1):
-            values = [cell.value for cell in sheet[row_number]]
-            columns = _match_headers(values, required, optional)
-            if columns:
-                candidates.append((sheet, row_number, columns))
-    return candidates
+        for row_number in range(1, min(sheet.max_row, 100) + 1):
+            normalized = {
+                index: normalize_header(cell.value)
+                for index, cell in enumerate(sheet[row_number], start=1)
+            }
+            name_matches = [
+                index for index, value in normalized.items() if value in aliases["name"]
+            ]
+            code_matches = [
+                index for index, value in normalized.items() if value in aliases["code"]
+            ]
+            if len(name_matches) != 1 or len(code_matches) != 1:
+                continue
+            name_col, code_col = name_matches[0], code_matches[0]
+            score = sum(
+                1
+                for candidate_row in range(row_number + 1, sheet.max_row + 1)
+                if not _is_blank(sheet.cell(candidate_row, code_col).value)
+            )
+            candidates.append((score, sheet, row_number, name_col, code_col))
+
+    if not candidates:
+        raise ValueError("Не найден заголовок известной ERP-выгрузки")
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    _, sheet, header_row, name_col, code_col = candidates[0]
+    return sheet, header_row, name_col, code_col
 
 
-def _flat_rows(sheet: Any, header_row: int, columns: dict[str, int]) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for row_number in range(header_row + 1, sheet.max_row + 1):
-        item = {field: sheet.cell(row_number, column).value for field, column in columns.items()}
-        if all(value is None for value in item.values()):
-            continue
-        rows.append({field: _text(value) for field, value in item.items()})
-    return rows
+def _find_optional_column(sheet: Any, header_row: int, aliases: set[str]) -> int | None:
+    normalized_aliases = {normalize_header(alias) for alias in aliases}
+    matches = [
+        index
+        for index, cell in enumerate(sheet[header_row], start=1)
+        if normalize_header(cell.value) in normalized_aliases
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
-def _match_headers(
-    values: list[Any],
-    required: dict[str, set[str]],
-    optional: dict[str, set[str]] | None = None,
-) -> dict[str, int] | None:
+def _row_level(sheet: Any, row_number: int, name_col: int, value: Any) -> int:
+    cell = sheet.cell(row_number, name_col)
+    indent = int(cell.alignment.indent or 0)
+    outline = int(sheet.row_dimensions[row_number].outlineLevel or 0)
+    text = str(value)
+    leading = len(text) - len(text.lstrip(" \t"))
+    leading_level = leading // 2
+    return max(indent, outline, leading_level)
+
+
+def _set_stack(stack: list[str], level: int, name: str) -> None:
+    level = max(level, 0)
+    if level > len(stack):
+        level = len(stack)
+    del stack[level:]
+    stack.append(name)
+
+
+def _hierarchy_text(value: Any) -> str:
+    return str(value).lstrip(" \t\r\n")
+
+
+def _match_headers(values: list[Any], required: dict[str, set[str]]) -> dict[str, int] | None:
     normalized = {index: normalize_header(value) for index, value in enumerate(values, start=1)}
     columns: dict[str, int] = {}
     for field, aliases in required.items():
-        matches = [index for index, value in normalized.items() if value in {normalize_header(alias) for alias in aliases}]
+        normalized_aliases = {normalize_header(alias) for alias in aliases}
+        matches = [index for index, value in normalized.items() if value in normalized_aliases]
         if len(matches) != 1:
             return None
         columns[field] = matches[0]
-    for field, aliases in (optional or {}).items():
-        matches = [index for index, value in normalized.items() if value in {normalize_header(alias) for alias in aliases}]
-        if len(matches) == 1:
-            columns[field] = matches[0]
     return columns
 
 
-def _hierarchy_level(cell: Any) -> int:
-    indent = int(cell.alignment.indent or 0)
-    if indent:
-        return indent
-    text = _text(cell.value)
-    leading = len(text) - len(text.lstrip())
-    return leading // 2
+def _is_blank(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and value.strip() == "")
 
 
-def _text(value: Any) -> str:
-    return "" if value is None else str(value)
+def _clean_scalar(value: Any) -> str:
+    return "" if value is None else str(value).strip()
+
+
+def _clean_flat_value(field: str, value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value)
+    if field in {"code", "node_id", "parent_id", "erp_code", "year", "comment"}:
+        return text.strip()
+    return text
 
 
 def erp_articles(payload: list[dict[str, Any]]) -> list[ERPArticle]:
