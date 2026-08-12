@@ -1,3 +1,4 @@
+import json
 import re
 
 import pytest
@@ -60,6 +61,16 @@ def run_id_from(response) -> str:
     match = re.search(r"/runs/([a-f0-9]+)", str(response.url))
     assert match
     return match.group(1)
+
+
+def erp_catalog_from(response) -> list[dict[str, str]]:
+    match = re.search(
+        r'<script id="erp-catalog-data" type="application/json">(.*?)</script>',
+        response.text,
+        re.DOTALL,
+    )
+    assert match
+    return json.loads(match.group(1))
 
 
 def test_home_uses_hierarchical_organization_selector_without_access_block(client):
@@ -153,6 +164,117 @@ def test_attention_path_with_manual_erp_correction(client):
     )
     assert "Исправление применено без повторного запуска" in corrected.text
     assert "ERP-001" in corrected.text
+
+
+def test_attention_editor_is_grouped_by_source_row_and_shows_business_context(client):
+    response = upload(
+        client,
+        workbook_bytes(missing_mapping=True, department_error=True),
+    )
+
+    assert '<select name="source_row">' not in response.text
+    assert response.text.count('data-testid="attention-editor"') == 1
+    assert 'data-source-row="3"' in response.text
+    assert 'name="source_row" value="3"' in response.text
+    assert "Административные → Связь → Нет в ERP" in response.text
+    assert "Точное соответствие ERP не найдено" in response.text
+    assert "Не заполнено поле: департамент" in response.text
+    assert "Произвольное имя!H3" in response.text
+    assert "Произвольное имя!C3" in response.text
+    assert "Затронутые месяцы" in response.text
+    assert "Январь, Февраль" in response.text
+    assert "Ноябрь, Декабрь" in response.text
+
+
+def test_erp_cascade_uses_exact_catalog_paths_and_keeps_duplicate_names_separate(client):
+    store = client.app.state.workflow.store
+    articles = store.load_reference("erp_articles")
+    articles.extend(
+        [
+            {
+                "code": "ERP-DUP-A",
+                "name": "Общая статья ERP A",
+                "expense_type": "Административные",
+                "expense_group": "Связь",
+                "source_article": "Общая статья",
+            },
+            {
+                "code": "ERP-DUP-B",
+                "name": "Общая статья ERP B",
+                "expense_type": "Коммерческие",
+                "expense_group": "Маркетинг",
+                "source_article": "Общая статья",
+            },
+        ]
+    )
+    store.replace_reference("erp_articles", articles)
+
+    response = upload(client, workbook_bytes(missing_mapping=True))
+    catalog = erp_catalog_from(response)
+    duplicate_paths = {
+        (item["expenseType"], item["expenseGroup"], item["sourceArticle"], item["code"])
+        for item in catalog
+        if item["sourceArticle"] == "Общая статья"
+    }
+
+    assert duplicate_paths == {
+        ("Административные", "Связь", "Общая статья", "ERP-DUP-A"),
+        ("Коммерческие", "Маркетинг", "Общая статья", "ERP-DUP-B"),
+    }
+    assert any(item["sourceArticle"] == "Удалить" for item in catalog)
+    assert response.text.index('data-erp-level="type"') < response.text.index(
+        'data-erp-level="group"'
+    )
+    assert response.text.index('data-erp-level="group"') < response.text.index(
+        'data-erp-level="article"'
+    )
+    assert response.text.index('data-erp-level="article"') < response.text.index(
+        'data-erp-level="code"'
+    )
+
+    script = client.get("/static/run.js").text
+    assert "article.expenseType === typeSelect.value" in script
+    assert "article.expenseGroup === groupSelect.value" in script
+    assert "article.sourceArticle === articleSelect.value" in script
+    assert "candidates.length === 1" in script
+    assert 'confirmedCode.value = confirmation.checked ? codeSelect.value : ""' in script
+
+
+def test_manual_erp_correction_updates_all_months_and_keeps_other_issue_visible(client):
+    response = upload(
+        client,
+        workbook_bytes(missing_mapping=True, department_error=True),
+    )
+    run_id = run_id_from(response)
+
+    corrected = client.post(
+        f"/runs/{run_id}/correct",
+        data={
+            "source_row": 3,
+            "erp_code": "ERP-001",
+            "tax": "",
+            "department": "",
+            "cfo": "",
+            "expense_group": "",
+            "source_article": "",
+        },
+        follow_redirects=True,
+    )
+    run = client.app.state.workflow.get_run(run_id)
+    row_records = [record for record in run.records if record.source_row == 3]
+    row_issues = [
+        issue.description
+        for issue in run.unresolved_issues
+        if issue.pointer.row == 3
+    ]
+
+    assert len(row_records) == 12
+    assert {record.erp_code for record in row_records} == {"ERP-001"}
+    assert run.rerun_count == 0
+    assert "Не заполнено поле: департамент" in row_issues
+    assert "Точное соответствие ERP не найдено" not in row_issues
+    assert "Не заполнено поле: департамент" in corrected.text
+    assert corrected.text.count('data-testid="attention-editor"') == 1
 
 
 def test_add_scenario_shows_erp_unconfirmed_marker(client):
