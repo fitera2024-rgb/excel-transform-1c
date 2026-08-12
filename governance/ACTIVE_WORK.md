@@ -1,10 +1,12 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / V1_IMPLEMENTATION_ACTIVE / NO_LIVE_WRITE`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / DRAFT_PR_4_OPEN / COORDINATOR_QA_REQUIRED / NO_LIVE_WRITE`
 
 ## Current phase
 
-Discovery, Product Contract and User Flow V1 завершены и приняты владельцем.
+Discovery, Product Contract, Architecture Light boundaries and User Flow V1 завершены и приняты владельцем.
+
+Product/governance PR #1 merged.
 
 Актуальные handoff:
 
@@ -36,9 +38,11 @@ Discovery, Product Contract and User Flow V1 завершены и принят�
 - nodes/records named `Удалить` are not auto-excluded;
 - User Flow accepted.
 
-## Implementation task
+## Implementation authority
 
-GitHub Issue: `#2 — [M] V1: Excel → validation → ERP mapping → preview → export`
+GitHub Issue:
+
+`#2 — [M] V1: Excel → validation → ERP mapping → preview → export`
 
 Exact task contract:
 
@@ -46,26 +50,62 @@ Exact task contract:
 
 Risk: `M`.
 
-## Start gate
+Exact implementation base:
 
-Implementation must not start until:
+`836b3154c4c81ebc9c0ec3f8ef895afee5d47098`
 
-1. Draft PR #1 is reviewed and merged;
-2. exact merged product head is pinned in the task contract/Issue #2;
-3. Codex creates `feat/v1-excel-transform-preview` from that exact commit.
+Target implementation branch:
 
-После выполнения start gate дополнительные Product/UX вопросы владельцу для начала V1 не требуются.
+`feat/v1-excel-transform-preview`
+
+## Start gate — COMPLETED
+
+- PR #1 reviewed and merged;
+- exact merged product commit pinned in Issue #2 and task contract;
+- Product Contract and User Flow accepted;
+- no additional owner Product/UX decision is required to start V1;
+- explicit Codex execution directive posted in Issue #2.
+
+Codex must create the target branch exactly from the pinned implementation base, keep its implementation PR Draft and not merge it.
+
+## Coordinator verification authority
+
+Coordinator QA Issue:
+
+`#3 — [COORD-QA] Проверить Draft PR реализации V1 по Issue #2`
+
+Exact coordinator contract:
+
+`governance/tasks/COORDINATOR-QA-V1-20260812-001.md`
+
+Trigger: появление Draft implementation PR, связанного с Issue #2.
+
+Координатор обязан независимо проверить:
+
+- exact base/head/branch;
+- полный diff и changed files;
+- tests/CI/reproducibility;
+- synthetic fixtures and absence of real business data;
+- Feature Baseline regressions;
+- отсутствие ADO/live write/direct SQL;
+- отсутствие fuzzy/autofix и platform expansion;
+- Codex handoff;
+- готовность к Owner UX Smoke.
 
 ## Current next action
 
-`IMPLEMENT_ISSUE_2_AND_OPEN_DRAFT_PR`
+`COORDINATOR_QA_DRAFT_PR_4`
 
-Product PR #1 merged. Exact implementation base:
-`836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
+После появления Draft PR:
 
-Текущая реализация выполняется только в `feat/v1-excel-transform-preview`.
-После Draft implementation PR требуются coordinator QA и Owner UX Smoke;
-самостоятельный merge запрещён.
+1. активировать Issue #3;
+2. проверить exact base/head, diff, tests and handoff;
+3. проверить Feature Baseline;
+4. при проблемах запросить изменения в PR;
+5. при технической готовности вернуть владельцу Owner UX Smoke;
+6. не merge-ить implementation PR до завершения smoke.
+
+Draft implementation PR создан: `#4`.
 
 ## Forbidden
 
@@ -73,7 +113,7 @@ Product PR #1 merged. Exact implementation base:
 - live write;
 - TEST/PROD write;
 - direct SQL write в 1С;
-- старт Codex от непроверенного/непринятого base;
+- старт Codex от другого base;
 - реальные business Excel/справочники в Git;
 - fuzzy/typo/case auto-match;
 - самостоятельный merge Codex;
@@ -83,10 +123,10 @@ Product PR #1 merged. Exact implementation base:
 ## Git state
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
-- Product branch: `coord/proportional-safety-local-converter`.
 - Product PR: `#1`, merged.
-- Implementation Issue: `#2`, open and in implementation.
-- Product head before this Active Work update: `b4d263b2b2c4dda94621c0b88bc786e3edc77288`.
-- Current exact head: latest head of PR #1.
-- Product implementation: active in `feat/v1-excel-transform-preview`.
+- Product merge commit: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
+- Implementation Issue: `#2`, linked to Draft PR `#4`.
+- Coordinator QA Issue: `#3`, ready to verify Draft PR `#4`.
+- Implementation branch: `feat/v1-excel-transform-preview`, created from the pinned base.
+- Product implementation: committed, pushed and awaiting independent QA/Owner UX Smoke.
 - ADO/live write: not performed.
