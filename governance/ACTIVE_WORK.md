@@ -1,130 +1,134 @@
 # Active Work
 
-STATUS: `PRODUCT_ACCEPTED / USER_FLOW_ACCEPTED / CODEX_DISPATCH_RECORDED / WAITING_FOR_DRAFT_PR`
+STATUS: `PRODUCT_ACCEPTED / USER_FLOW_OWNER_REFINED / THREE_PARALLEL_STREAMS_ACTIVE / DRAFT_PR_4 / NO_LIVE_WRITE`
 
 ## Current phase
 
-Discovery, Product Contract, Architecture Light boundaries and User Flow V1 завершены и приняты владельцем.
-
-Product/governance PR #1 merged.
-
-Актуальные handoff:
-
-- `governance/handoffs/HANDOFF-OWNER-DECISIONS-20260812-002.md` — финальный пакет owner decisions;
-- `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md` — evidence, карты Excel и ERP-справочников.
-
-## Accepted V1
-
-Первая vertical slice:
+Первая vertical slice уже реализована в Draft PR `#4`:
 
 `Excel → structural detection → validation → exact ERP mapping/manual correction → 12-month normalization → maximum preview → error registry → export`
 
-Ключевые принятые решения:
+Owner UX Smoke подтвердил базовую работоспособность и выявил следующие улучшения перед финальным gate:
 
-- local converter, не platform;
-- prepared expense range as input;
-- 12 месяцев, включая нули;
-- cached formula values, без Excel recalculation;
-- continue with attention;
-- exact ERP mapping, no fuzzy/autofix;
-- local persistent scenarios, включая добавленные пользователем;
-- `ПЛАН_2026` = `ПЛАН 2026`, stable local scenario ID;
-- year + optional month filter;
-- manual organization branch selection per run;
-- all organization nodes visible, no guessed status/type filtering;
-- delegation on any tree node and whole subtree;
-- reusable mapping key = report type + full article path;
-- negative amounts preserved with attention;
-- nodes/records named `Удалить` are not auto-excluded;
-- User Flow accepted.
+- исправить системный дефект разбора иерархии ERP-статей;
+- оптимизировать приём больших и защищённых Excel;
+- перенести исправление `Требует внимания` к самой проблемной строке;
+- выбирать ERP-код по иерархии, а не из плоского списка.
 
-## Implementation authority
+## Accepted owner decisions
 
-GitHub Issue:
+Владелец принял ускоренный план и последовательность `A + D`:
 
-`#2 — [M] V1: Excel → validation → ERP mapping → preview → export`
+- сначала исправить ERP parser;
+- exact full path остаётся единственным автоматическим правилом;
+- небольшой остаток разрешается явным иерархическим выбором;
+- fuzzy/typo/case/name-only autofix не включается;
+- `Удалить` / `!!!Удалить` не скрываются;
+- работа распределяется на три независимых агента;
+- этот координаторский контур остаётся единственной точкой интеграции;
+- финальный combined QA выполняется отдельно после интеграции всех трёх потоков.
 
-Exact task contract:
+Exact coordination handoff:
 
-`governance/tasks/CODEX-TASK-EXCEL-V1-20260812-001.md`
+`governance/handoffs/HANDOFF-PARALLEL-WORKSTREAMS-20260813-004.md`
 
-Risk: `M`.
+## Git authority
 
-Exact implementation base:
+- Repository: `fitera2024-rgb/excel-transform-1c`.
+- Parent branch: `feat/v1-excel-transform-preview`.
+- Parent Draft PR: `#4`, open, not merged.
+- Last fully tested implementation head before split: `e96fb403da7b96a5707ba131cb141788fe27bde3`.
+- Coordination handoff commit before this update: `8666ea3ed800f56704b1ddb894d2bc6df3774fbf`.
+- Accepted product base: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
+- ADO/live write: not implemented and not performed.
 
-`836b3154c4c81ebc9c0ec3f8ef895afee5d47098`
+## Parallel stream A — ERP hierarchy parser
 
-Target implementation branch:
+- Issue: `#8`.
+- Risk: `L`.
+- Branch: `fix/erp-article-hierarchy-parser`.
+- Task Contract: `governance/tasks/WORK-ERP-ARTICLE-HIERARCHY-PARSER-20260813-001.md`.
+- Exact contract head: `30f709ed2319d0ee8217f92d4f7f067e9fd3dc8e`.
+- Research authority: Draft PR `#6`, exact head `14bd2c3020043a1affd0adace81a06775bed660b`.
+- Status: `READY_FOR_AGENT_START`.
 
-`feat/v1-excel-transform-preview`
+## Parallel stream B — Large/protected Excel intake
 
-## Start gate — COMPLETED
+- Issue: `#7`.
+- Risk: `M`.
+- Branch: `perf/streaming-protected-excel`.
+- Task Contract: `governance/tasks/CR-LARGE-PROTECTED-EXCEL-20260813-001.md`.
+- Exact contract head: `cdde336e9629fe49108a9819d54e4c2679525289`.
+- Status: `READY_FOR_AGENT_START`.
 
-- PR #1 reviewed and merged;
-- exact merged product commit pinned in Issue #2 and task contract;
-- Product Contract and User Flow accepted;
-- no additional owner Product/UX decision is required to start V1;
-- explicit Codex execution directive posted in Issue #2.
+## Parallel stream C — Inline attention and ERP hierarchy UX
 
-Codex must create the target branch exactly from the pinned implementation base, keep its implementation PR Draft and not merge it.
+- Issue: `#9`.
+- Risk: `M`.
+- Branch: `feat/inline-attention-erp-tree`.
+- Task Contract: `governance/tasks/CR-INLINE-ATTENTION-ERP-TREE-20260813-001.md`.
+- Exact contract head: `e54ebc6a498f42f504fe5f6cb98353b8b09e753a`.
+- Status: `READY_FOR_AGENT_START`.
 
-## Coordinator verification authority
+## Combined QA
 
-Coordinator QA Issue:
+- Issue: `#10`.
+- Status: `BLOCKED_UNTIL_THREE_STREAMS_READY`.
+- QA may not change implementation code.
+- QA starts only from the exact combined head recorded after sequential integration.
 
-`#3 — [COORD-QA] Проверить Draft PR реализации V1 по Issue #2`
+## Integration order
 
-Exact coordinator contract:
+Development is parallel; integration is sequential:
 
-`governance/tasks/COORDINATOR-QA-V1-20260812-001.md`
+1. parser stream;
+2. large/protected upload stream;
+3. inline attention/ERP hierarchy UX stream;
+4. full GitHub CI;
+5. independent combined QA;
+6. Owner UX Smoke;
+7. merge only after explicit owner acceptance.
 
-Trigger: появление Draft implementation PR, связанного с Issue #2.
+## Last verified baseline before new stream code
 
-Координатор обязан независимо проверить:
+GitHub Actions `V1 CI`, run `31644007981`:
 
-- exact base/head/branch;
-- полный diff и changed files;
-- tests/CI/reproducibility;
-- synthetic fixtures and absence of real business data;
-- Feature Baseline regressions;
-- отсутствие ADO/live write/direct SQL;
-- отсутствие fuzzy/autofix и platform expansion;
-- Codex handoff;
-- готовность к Owner UX Smoke.
+- compileall — PASS;
+- unit — `14 passed`;
+- integration — `19 passed`;
+- UI smoke — `11 passed`;
+- full regression — `44 passed`;
+- no tracked `.xlsx/.xls/.xlsm` — PASS.
+
+This evidence applies only to `e96fb403...`. Every new stream must provide fresh tests and CI.
+
+## Cross-stream boundary
+
+An agent must not silently edit another stream's primary files. Required cross-stream work is first recorded in its Issue as:
+
+`CROSS_STREAM_DEPENDENCY`
+
+with the exact DTO, endpoint, helper or behavior required.
 
 ## Current next action
 
-`WAIT_FOR_CODEX_DRAFT_PR`
+`START_THREE_AGENT_TASKS`
 
-После появления Draft PR:
+Each agent opens a Draft PR targeting `feat/v1-excel-transform-preview`, leaves exact Git/test/handoff evidence and finishes with:
 
-1. активировать Issue #3;
-2. проверить exact base/head, diff, tests and handoff;
-3. проверить Feature Baseline;
-4. при проблемах запросить изменения в PR;
-5. при технической готовности вернуть владельцу Owner UX Smoke;
-6. не merge-ить implementation PR до завершения smoke.
+`READY_FOR_COORDINATOR_QA`
+
+No agent merges.
 
 ## Forbidden
 
-- ADO connection;
-- live write;
+- merge while Issues `#7`, `#8`, `#9` or combined QA `#10` are incomplete;
+- ADO connection or live write;
 - TEST/PROD write;
-- direct SQL write в 1С;
-- старт Codex от другого base;
-- реальные business Excel/справочники в Git;
-- fuzzy/typo/case auto-match;
-- самостоятельный merge Codex;
-- platform/multi-tenant/enterprise expansion;
-- переоткрытие ACCEPTED решений без нового evidence или owner decision.
-
-## Git state
-
-- Repository: `fitera2024-rgb/excel-transform-1c`.
-- Product PR: `#1`, merged.
-- Product merge commit: `836b3154c4c81ebc9c0ec3f8ef895afee5d47098`.
-- Implementation Issue: `#2`, ready and explicitly dispatched to Codex.
-- Coordinator QA Issue: `#3`, waiting for implementation Draft PR.
-- Implementation branch: not observed yet; Codex must create it from the pinned base.
-- Product implementation: no Draft PR observed yet.
-- ADO/live write: not performed.
+- direct SQL write into 1C;
+- real business Excel/reference files or password in Git;
+- fuzzy/typo/case/name-only automatic ERP assignment;
+- filename-based source detection;
+- password persistence;
+- reintroduction of local access-rights complexity;
+- platform/multi-tenant/enterprise expansion.

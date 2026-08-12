@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Excel → OPIU Light{% endblock %}</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header>
+    <a href="/" class="brand">Excel → OPIU Light</a>
+    <span class="boundary">Локальный preview и экспорт · без записи в ERP</span>
+  </header>
+  <main>
+    {% if message %}<div class="notice success" data-testid="message">{{ message }}</div>{% endif %}
+    {% if error %}<div class="notice error" data-testid="error">{{ error }}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

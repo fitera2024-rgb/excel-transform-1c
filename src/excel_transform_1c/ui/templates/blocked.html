@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card narrow blocked" data-testid="blocked-no-range">
+  <p class="eyebrow">Обработка остановлена</p>
+  <h1>Подготовленный диапазон не найден</h1>
+  <p>В файле нет диапазона с обязательными бизнес-колонками и двенадцатью месяцами. Проверьте источник или выберите другой файл.</p>
+  <form method="post" action="/uploads/{{ pending.upload_id }}/reset"><button>Сбросить и выбрать другой файл</button></form>
+</section>
+{% endblock %}

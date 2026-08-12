@@ -65,7 +65,8 @@ Business Core не зависит от UI, ADO connection objects и абсол�
 
 ### Reference adapter
 
-Читает локально загруженные справочники:
+Структурно читает локально загруженные справочники в документированных форматах
+ERP без ручной перестройки в промежуточный шаблон:
 
 - ERP-статьи;
 - организационное дерево;
@@ -73,6 +74,7 @@ Business Core не зависит от UI, ADO connection objects и абсол�
 - другие принятые справочники.
 
 Не придумывает активность, тип узла или связи, которых нет в данных/контракте.
+Тесты используют только вымышленные книги, повторяющие структуру этих выгрузок.
 
 ### Local persistence adapter
 
@@ -121,3 +123,19 @@ V1 не содержит ADO, live write, TEST/PROD write или прямого 
 - устойчиво читает реальные Excel и cached formula values;
 - поддерживает локальное постоянное хранилище;
 - не создаёт platform/enterprise architecture.
+
+## V1 implementation stack
+
+Реализация использует предпочтительный baseline Task Contract без изменения
+принятой архитектуры:
+
+- Python 3.11+;
+- FastAPI + server-rendered Jinja templates;
+- SQLite для локальных сценариев, справочников, делегаций, ручных mappings и overrides;
+- openpyxl для structural detection, чтения cached formula values и OPIU Light export;
+- pytest/TestClient для unit, integration и UI smoke.
+
+Это один локальный процесс без SPA, очередей, multi-tenant слоя, ADO connection
+objects или write adapters. Загруженный файл копируется в immutable RUN-local
+snapshot до чтения; один и тот же exact input/context/candidate в текущем
+процессе возвращает существующий RUN вместо создания дубликата.

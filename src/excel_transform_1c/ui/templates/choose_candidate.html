@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card narrow" data-testid="candidate-choice">
+  <p class="eyebrow">Найдено несколько диапазонов</p>
+  <h1>Выберите подготовленный диапазон</h1>
+  <p>Сервис не угадывает источник молча.</p>
+  <form method="post" action="/uploads/{{ pending.upload_id }}/process">
+    {% for candidate in pending.candidates %}
+    <label class="choice"><input type="radio" name="candidate_id" value="{{ candidate.candidate_id }}" required> {{ candidate.label }}</label>
+    {% endfor %}
+    <button>Продолжить</button>
+  </form>
+  <form method="post" action="/uploads/{{ pending.upload_id }}/reset"><button class="secondary">Сбросить и выбрать другой файл</button></form>
+</section>
+{% endblock %}

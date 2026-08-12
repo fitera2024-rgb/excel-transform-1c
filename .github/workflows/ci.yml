@@ -1,0 +1,76 @@
+name: V1 CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/v1-excel-transform-preview
+  push:
+    branches:
+      - feat/v1-excel-transform-preview
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: v1-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Python 3.11 tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e ".[test]"
+
+      - name: Compile source and tests
+        run: python -m compileall -q src tests
+
+      - name: Unit tests
+        run: python -m pytest tests/unit -q
+
+      - name: Integration tests
+        run: python -m pytest tests/integration -q
+
+      - name: UI smoke tests
+        run: python -m pytest tests/ui -q
+
+      - name: Full regression suite
+        run: python -m pytest -q
+
+  repository-guard:
+    name: No tracked business Excel
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reject tracked Excel workbooks
+        shell: bash
+        run: |
+          tracked_files="$(git ls-files '*.xlsx' '*.xls' '*.xlsm')"
+          if [ -n "$tracked_files" ]; then
+            echo "::error::Excel workbooks must not be committed. Use synthetic files generated at test runtime."
+            printf '%s\n' "$tracked_files"
+            exit 1
+          fi
+          echo "No tracked Excel workbooks found."
