@@ -5,10 +5,34 @@
   const catalog = JSON.parse(catalogElement.textContent);
   const collator = new Intl.Collator("ru");
   const unique = (values) => [...new Set(values)].sort(collator.compare);
+  const EMPTY_LEVEL = "__EMPTY__";
+  const VALUE_PREFIX = "__VALUE__:";
+
+  function encodeLevelValue(value) {
+    return value === "" ? EMPTY_LEVEL : `${VALUE_PREFIX}${encodeURIComponent(value)}`;
+  }
+
+  function decodeLevelValue(value) {
+    if (value === EMPTY_LEVEL) return "";
+    if (value.startsWith(VALUE_PREFIX)) {
+      return decodeURIComponent(value.slice(VALUE_PREFIX.length));
+    }
+    return null;
+  }
+
+  function selectedLevelValue(select) {
+    return decodeLevelValue(select.value);
+  }
+
+  function displayLevel(value, emptyLabel) {
+    return value === "" ? emptyLabel : value;
+  }
 
   function replaceOptions(select, items, placeholder, valueOf, labelOf) {
     select.replaceChildren(new Option(placeholder, ""));
-    items.forEach((item) => select.add(new Option(labelOf(item), valueOf(item))));
+    items.forEach((item) =>
+      select.add(new Option(labelOf(item), encodeLevelValue(valueOf(item)))),
+    );
     select.disabled = items.length === 0;
   }
 
@@ -35,33 +59,43 @@
     }
 
     function matchingCodes() {
+      const expenseType = selectedLevelValue(typeSelect);
+      const expenseGroup = selectedLevelValue(groupSelect);
+      const sourceArticle = selectedLevelValue(articleSelect);
+      if (expenseType === null || expenseGroup === null || sourceArticle === null) return [];
       return catalog
         .filter(
           (article) =>
-            article.expenseType === typeSelect.value &&
-            article.expenseGroup === groupSelect.value &&
-            article.sourceArticle === articleSelect.value,
+            article.expenseType === expenseType &&
+            article.expenseGroup === expenseGroup &&
+            article.sourceArticle === sourceArticle,
         )
         .sort((left, right) => collator.compare(left.code, right.code));
     }
 
-    function updateSelection(candidates, preferredCode = "") {
+    function updateSelection(candidates, preferredCode) {
       replaceOptions(
         codeSelect,
         candidates,
         candidates.length ? "Выберите ERP-код" : "Нет кодов в выбранной ветке",
         (article) => article.code,
-        (article) => `${article.code} · ${article.name}`,
+        (article) =>
+          `${displayLevel(article.code, "Без кода")} · ` +
+          `${displayLevel(article.name, "Без официального наименования")}`,
       );
 
-      if (preferredCode && candidates.some((article) => article.code === preferredCode)) {
-        codeSelect.value = preferredCode;
+      if (
+        preferredCode !== undefined &&
+        candidates.some((article) => article.code === preferredCode)
+      ) {
+        codeSelect.value = encodeLevelValue(preferredCode);
       } else if (candidates.length === 1) {
-        codeSelect.value = candidates[0].code;
+        codeSelect.value = encodeLevelValue(candidates[0].code);
       }
 
       clearConfirmation();
-      const selected = candidates.find((article) => article.code === codeSelect.value);
+      const selectedCode = selectedLevelValue(codeSelect);
+      const selected = candidates.find((article) => article.code === selectedCode);
       confirmation.disabled = !selected;
       if (!selected) {
         selection.textContent = candidates.length
@@ -72,53 +106,67 @@
       }
 
       selection.textContent =
-        `${selected.expenseType} → ${selected.expenseGroup} → ` +
-        `${selected.sourceArticle} → ${selected.code} · ${selected.name}`;
+        `${displayLevel(selected.expenseType, "Корневой уровень")} → ` +
+        `${displayLevel(selected.expenseGroup, "Без группы")} → ` +
+        `${displayLevel(selected.sourceArticle, "Без статьи")} → ` +
+        `${displayLevel(selected.code, "Без кода")} · ` +
+        `${displayLevel(selected.name, "Без официального наименования")}`;
       confirmationHint.textContent =
         candidates.length === 1
           ? "Единственный код предварительно выбран. Подтвердите его явно и отправьте форму."
           : "Подтвердите выбранный код явно и отправьте форму.";
     }
 
-    function updateCodes(preferredCode = "") {
+    function updateCodes(preferredCode) {
       updateSelection(matchingCodes(), preferredCode);
     }
 
-    function updateArticles(preferredArticle = "", preferredCode = "") {
+    function updateArticles(preferredArticle, preferredCode) {
+      const expenseType = selectedLevelValue(typeSelect);
+      const expenseGroup = selectedLevelValue(groupSelect);
       const articles = unique(
         catalog
           .filter(
             (article) =>
-              article.expenseType === typeSelect.value &&
-              article.expenseGroup === groupSelect.value,
+              expenseType !== null &&
+              expenseGroup !== null &&
+              article.expenseType === expenseType &&
+              article.expenseGroup === expenseGroup,
           )
           .map((article) => article.sourceArticle),
       );
       replaceOptions(
         articleSelect,
         articles,
-        groupSelect.value ? "Выберите статью" : "Сначала выберите группу",
+        expenseGroup !== null ? "Выберите статью" : "Сначала выберите группу",
         (value) => value,
-        (value) => value,
+        (value) => displayLevel(value, "Без статьи"),
       );
-      if (articles.includes(preferredArticle)) articleSelect.value = preferredArticle;
+      if (preferredArticle !== undefined && articles.includes(preferredArticle)) {
+        articleSelect.value = encodeLevelValue(preferredArticle);
+      }
       updateCodes(preferredCode);
     }
 
-    function updateGroups(preferredGroup = "", preferredArticle = "", preferredCode = "") {
+    function updateGroups(preferredGroup, preferredArticle, preferredCode) {
+      const expenseType = selectedLevelValue(typeSelect);
       const groups = unique(
         catalog
-          .filter((article) => article.expenseType === typeSelect.value)
+          .filter(
+            (article) => expenseType !== null && article.expenseType === expenseType,
+          )
           .map((article) => article.expenseGroup),
       );
       replaceOptions(
         groupSelect,
         groups,
-        typeSelect.value ? "Выберите группу" : "Сначала выберите тип",
+        expenseType !== null ? "Выберите группу" : "Сначала выберите тип",
         (value) => value,
-        (value) => value,
+        (value) => displayLevel(value, "Без группы"),
       );
-      if (groups.includes(preferredGroup)) groupSelect.value = preferredGroup;
+      if (preferredGroup !== undefined && groups.includes(preferredGroup)) {
+        groupSelect.value = encodeLevelValue(preferredGroup);
+      }
       updateArticles(preferredArticle, preferredCode);
     }
 
@@ -128,17 +176,23 @@
       types,
       "Выберите тип расходов",
       (value) => value,
-      (value) => value,
+      (value) => displayLevel(value, "Корневой уровень"),
     );
-    if (types.includes(current.expenseType)) typeSelect.value = current.expenseType;
+    if (types.includes(current.expenseType)) {
+      typeSelect.value = encodeLevelValue(current.expenseType);
+    }
     updateGroups(current.expenseGroup, current.sourceArticle, current.code);
 
     typeSelect.addEventListener("change", () => updateGroups());
     groupSelect.addEventListener("change", () => updateArticles());
     articleSelect.addEventListener("change", () => updateCodes());
-    codeSelect.addEventListener("change", () => updateSelection(matchingCodes(), codeSelect.value));
+    codeSelect.addEventListener("change", () =>
+      updateSelection(matchingCodes(), selectedLevelValue(codeSelect)),
+    );
     confirmation.addEventListener("change", () => {
-      confirmedCode.value = confirmation.checked ? codeSelect.value : "";
+      confirmedCode.value = confirmation.checked
+        ? (selectedLevelValue(codeSelect) ?? "")
+        : "";
     });
   });
 })();

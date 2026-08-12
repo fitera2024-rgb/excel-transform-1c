@@ -15,13 +15,19 @@
 {% if unresolved %}
 <section class="attention-list" data-testid="attention-groups">
   <div class="section-heading">
-    <div><p class="eyebrow ink">Требует внимания</p><h2>Исправления по исходным строкам</h2></div>
-    <p>Каждый блок относится к одной строке Excel и сразу обновляет все созданные из неё месяцы.</p>
+    <div><p class="eyebrow ink">Требует внимания</p><h2>Проблемы по исходным строкам</h2></div>
+    <p>Исправляемые поля можно изменить прямо здесь. Остальные причины остаются видимыми с понятным следующим действием.</p>
   </div>
   {% for issue_group in unresolved|groupby("pointer.row") %}
   {% set row_records = run.records|selectattr("source_row", "equalto", issue_group.grouper)|list %}
   {% if row_records %}
   {% set record = row_records[0] %}
+  {% set correction = namespace(supported=false) %}
+  {% for issue in issue_group.list %}
+    {% if issue.kind in ["erp-mapping", "tax"] or (issue.kind == "shared-field" and issue.pointer.field in ["department", "cfo", "expense_group", "source_article"]) %}
+      {% set correction.supported = true %}
+    {% endif %}
+  {% endfor %}
   <article class="card attention-group" data-testid="attention-group" data-source-row="{{ issue_group.grouper }}">
     <header class="attention-header">
       <div>
@@ -41,14 +47,24 @@
       <h4>Что требует решения</h4>
       <ul>
         {% for issue in issue_group.list %}
-        <li data-testid="attention-reason">
+        {% set issue_editable = issue.kind in ["erp-mapping", "tax"] or (issue.kind == "shared-field" and issue.pointer.field in ["department", "cfo", "expense_group", "source_article"]) %}
+        <li data-testid="attention-reason" data-editable="{{ 'true' if issue_editable else 'false' }}">
           <span>{{ issue.description }}</span>
           <small>{{ issue.pointer.sheet }}!{{ issue.pointer.cell }} · {{ issue.pointer.field }}{% if issue.pointer.month %} · {{ record.year }}, месяц {{ issue.pointer.month }}{% endif %}</small>
+          {% if not issue_editable %}
+          <small class="read-only-action" data-testid="read-only-reason">
+            {% if issue.kind == "monthly-error" %}Исправьте месячную ячейку в исходном Excel и обработайте файл повторно.
+            {% elif issue.kind == "negative-amount" %}Проверьте сумму в исходном Excel; до решения она сохраняется в preview без изменения знака.
+            {% elif issue.kind == "context-reporting-unit" %}Измените выбранную единицу отчёта или исходный Excel и обработайте файл повторно.
+            {% else %}Эта причина не исправляется в preview; проверьте исходный Excel или выбранный контекст.{% endif %}
+          </small>
+          {% endif %}
         </li>
         {% endfor %}
       </ul>
     </div>
 
+    {% if correction.supported %}
     <form
       method="post"
       action="/runs/{{ run.run_id }}/correct"
@@ -88,6 +104,12 @@
 
       <button>Применить к исходной строке и всем месяцам</button>
     </form>
+    {% else %}
+    <aside class="read-only-attention" data-testid="read-only-attention">
+      <strong>Только для просмотра</strong>
+      <p>В этой записи нет полей, которые можно исправить прямо в preview. Выполните действие возле причины и обработайте исходный файл повторно.</p>
+    </aside>
+    {% endif %}
   </article>
   {% endif %}
   {% endfor %}

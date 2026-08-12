@@ -233,11 +233,69 @@ def test_erp_cascade_uses_exact_catalog_paths_and_keeps_duplicate_names_separate
     )
 
     script = client.get("/static/run.js").text
-    assert "article.expenseType === typeSelect.value" in script
-    assert "article.expenseGroup === groupSelect.value" in script
-    assert "article.sourceArticle === articleSelect.value" in script
+    assert "article.expenseType === expenseType" in script
+    assert "article.expenseGroup === expenseGroup" in script
+    assert "article.sourceArticle === sourceArticle" in script
     assert "candidates.length === 1" in script
-    assert 'confirmedCode.value = confirmation.checked ? codeSelect.value : ""' in script
+    assert 'const EMPTY_LEVEL = "__EMPTY__"' in script
+    assert "selectedLevelValue(codeSelect)" in script
+
+
+def test_erp_cascade_preserves_empty_group_for_multiple_articles_and_codes(client):
+    store = client.app.state.workflow.store
+    articles = store.load_reference("erp_articles")
+    articles.extend(
+        [
+            {
+                "code": "ERP-EMPTY-A1",
+                "name": "Корневая статья A, вариант 1",
+                "expense_type": "Прочие доходы",
+                "expense_group": "",
+                "source_article": "Корневая статья A",
+            },
+            {
+                "code": "ERP-EMPTY-A2",
+                "name": "Корневая статья A, вариант 2",
+                "expense_type": "Прочие доходы",
+                "expense_group": "",
+                "source_article": "Корневая статья A",
+            },
+            {
+                "code": "ERP-EMPTY-B",
+                "name": "Корневая статья B",
+                "expense_type": "Прочие доходы",
+                "expense_group": "",
+                "source_article": "Корневая статья B",
+            },
+        ]
+    )
+    store.replace_reference("erp_articles", articles)
+
+    response = upload(client, workbook_bytes(missing_mapping=True))
+    catalog = erp_catalog_from(response)
+    empty_group_entries = [
+        item
+        for item in catalog
+        if item["expenseType"] == "Прочие доходы" and item["expenseGroup"] == ""
+    ]
+    assert {item["sourceArticle"] for item in empty_group_entries} == {
+        "Корневая статья A",
+        "Корневая статья B",
+    }
+    assert {item["code"] for item in empty_group_entries} == {
+        "ERP-EMPTY-A1",
+        "ERP-EMPTY-A2",
+        "ERP-EMPTY-B",
+    }
+
+    script = client.get("/static/run.js").text
+    assert 'const EMPTY_LEVEL = "__EMPTY__"' in script
+    assert 'return value === "" ? EMPTY_LEVEL' in script
+    assert 'if (value === EMPTY_LEVEL) return ""' in script
+    assert 'displayLevel(value, "Корневой уровень")' in script
+    assert 'displayLevel(value, "Без группы")' in script
+    assert 'displayLevel(value, "Без статьи")' in script
+    assert "article.expenseGroup === expenseGroup" in script
 
 
 def test_manual_erp_correction_updates_all_months_and_keeps_other_issue_visible(client):
@@ -311,6 +369,10 @@ def test_skipped_month_is_visible_in_preview_with_cell_pointer(client):
     assert "Пропущено" in response.text
     assert "M3" in response.text
     assert "Ошибка Excel в месячной ячейке" in response.text
+    assert response.text.count('data-testid="read-only-attention"') == 1
+    assert response.text.count('data-testid="attention-editor"') == 0
+    assert "Исправьте месячную ячейку в исходном Excel" in response.text
+    assert "Применить к исходной строке и всем месяцам" not in response.text
 
 
 def test_reporting_unit_conflict_is_visible_and_does_not_block(client):
@@ -323,3 +385,20 @@ def test_reporting_unit_conflict_is_visible_and_does_not_block(client):
     assert "24" in response.text
     assert "не совпадает с выбранной" in response.text
     assert "A3" in response.text
+    assert response.text.count('data-testid="read-only-attention"') == 2
+    assert response.text.count('data-testid="attention-editor"') == 0
+    assert "Измените выбранную единицу отчёта" in response.text
+    assert "Применить к исходной строке и всем месяцам" not in response.text
+
+
+def test_editable_and_read_only_reasons_share_one_group_without_hiding_either(client):
+    response = upload(client, workbook_bytes(missing_mapping=True, negative=True))
+
+    assert response.text.count('data-testid="attention-group"') == 1
+    assert response.text.count('data-testid="attention-editor"') == 1
+    assert response.text.count('data-testid="read-only-attention"') == 0
+    assert "Точное соответствие ERP не найдено" in response.text
+    assert "Отрицательная сумма" in response.text
+    assert "Проверьте сумму в исходном Excel" in response.text
+    assert 'data-testid="read-only-reason"' in response.text
+    assert "Применить к исходной строке и всем месяцам" in response.text
