@@ -433,7 +433,9 @@ def _hierarchy_text(value: Any) -> str:
 
 
 def _looks_like_header(value: Any, aliases: set[str]) -> bool:
-    return _header_quality(value, aliases, allow_contains=True) > 0
+    # Contains matching is useful while locating header cells, but data values
+    # such as "Сценарий отчетности КИК" must not be discarded as headers.
+    return _header_quality(value, aliases, allow_contains=False) > 0
 
 
 def _match_headers(values: list[Any], required: dict[str, set[str]]) -> dict[str, int] | None:
