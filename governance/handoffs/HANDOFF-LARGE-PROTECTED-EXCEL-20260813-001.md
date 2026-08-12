@@ -1,13 +1,14 @@
 # Handoff — Large and protected budget Excel intake
 
-STATUS: `READY_FOR_COORDINATOR_QA`  
+STATUS: `READY_FOR_REPEAT_COORDINATOR_QA`  
 CR: `CR-LARGE-PROTECTED-EXCEL-20260813-001`  
 ISSUE: `#7`  
 BRANCH: `perf/streaming-protected-excel`  
 TARGET: `feat/v1-excel-transform-preview`  
 START BASE: `e96fb403da7b96a5707ba131cb141788fe27bde3`  
 TASK-CONTRACT HEAD: `cdde336e9629fe49108a9819d54e4c2679525289`  
-TESTED IMPLEMENTATION HEAD: `40d967eed4fe82c2222d84deb024f35f2080a2ca`
+INITIAL IMPLEMENTATION HEAD: `40d967eed4fe82c2222d84deb024f35f2080a2ca`  
+COORDINATOR FIX / TESTED CODE HEAD: `b61242abacc34baee1a8946e4724cfc7fbfd5893`
 
 ## Changed
 
@@ -20,6 +21,9 @@ TESTED IMPLEMENTATION HEAD: `40d967eed4fe82c2222d84deb024f35f2080a2ca`
 - Detection scans at most the first 100 structural rows and 100 columns per sheet. Selected-range reading iterates only the candidate rows and the required column span.
 - Blocking decryption, workbook detection and transformation run outside the main async event loop. `/health` remains responsive during analysis.
 - The budget and candidate forms show `Файл загружается и анализируется; не закрывайте страницу` and disable duplicate submit.
+- Coordinator QA fix: the large-file regression now generates a valid `4.46 MiB` synthetic XLSX with only two business rows plus a separate inert sheet containing 200,000 unique synthetic values. The production default `UPLOAD_CHUNK_SIZE = 1 MiB` is used; the test rejects `read(-1)`, requires at least five bounded 1 MiB reads, and completes detection and a 24-record preview.
+- Coordinator QA fix: every unknown decrypt-stage dependency exception is converted to a neutral `ProtectedWorkbookError`; the original exception is retained only as `__cause__`. A HTTP regression injects an exception containing a synthetic credential and proves that value is absent from the response, response metadata, application metadata, runtime filenames/content and captured logs.
+- `/health` responsiveness is verified while the real multi-MiB workbook is inside the worker-thread detection stage.
 
 Detection deliberately closes its workbook after producing serializable candidate metadata. The selected RUN-local snapshot is reopened once after the candidate is known; this is required because explicit candidate choice may cross an HTTP request and no live workbook/file handle is retained between requests.
 
@@ -35,15 +39,15 @@ Detection deliberately closes its workbook after producing serializable candidat
 
 - `compileall src tests` — PASS.
 - Unit: `14 passed`.
-- Integration: `27 passed`.
-- UI smoke: `14 passed` (one existing Starlette/TestClient deprecation warning).
-- Full regression: `55 passed`.
+- Integration: `28 passed`.
+- UI smoke: `15 passed` (one existing Starlette/TestClient deprecation warning).
+- Full regression: `57 passed`.
 - Added coverage: bounded async reads; large synthetic workbook through preview; plain and protected OOXML; correct, wrong and missing synthetic credentials; separate exact-original/decrypted snapshots; no credential persistence/logging; workbook close on success/failure; duplicate-submit state; `/health` responsiveness during worker analysis.
 - Local in-app browser QA: password input and transient-use hint render; desktop form has no horizontal overflow; processing state is initially hidden and controlled by the guarded submit handler.
 
 ## CI
 
-`NOT_TRIGGERED`: Draft PR `#13` correctly targets `feat/v1-excel-transform-preview`, while the existing `V1 CI` workflow accepts `pull_request` events only for `main` and push events only for `feat/v1-excel-transform-preview`. No workflow run or commit status was created for this head. The local compile/unit/integration/UI/full-regression evidence above is complete; CI workflow scope was not changed by this CR.
+GitHub Actions `V1 CI` run `31652379002`, run number `41`, completed `success` for coordinator-fix code head `b61242abacc34baee1a8946e4724cfc7fbfd5893`. The coordinator added stacked-PR coverage for target `feat/v1-excel-transform-preview`; this branch did not change the workflow.
 
 ## Risks and limits
 
@@ -57,4 +61,4 @@ Detection deliberately closes its workbook after producing serializable candidat
 - `MAP-001..005`, `PREVIEW-001..003`, `RESULT-001..002`, `ADO-001`, `WRITE-001..003`: `PRESERVED`.
 - All unrelated baseline IDs: `PRESERVED`.
 
-Final marker: `READY_FOR_COORDINATOR_QA`.
+Final marker: `READY_FOR_REPEAT_COORDINATOR_QA`.
