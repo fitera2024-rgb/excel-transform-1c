@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -82,7 +83,13 @@ def decrypt_protected_ooxml(
         target_path.unlink(missing_ok=True)
         raise ProtectedWorkbookError(UNKNOWN_DECRYPTION_MESSAGE) from exc
     finally:
-        container = getattr(office_file, "file", None)
-        close = getattr(container, "close", None)
-        if callable(close):
-            close()
+        active_error = sys.exc_info()[1]
+        try:
+            container = getattr(office_file, "file", None)
+            close = getattr(container, "close", None)
+            if callable(close):
+                close()
+        except Exception as exc:
+            target_path.unlink(missing_ok=True)
+            if active_error is None:
+                raise ProtectedWorkbookError(UNKNOWN_DECRYPTION_MESSAGE) from exc

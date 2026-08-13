@@ -327,3 +327,55 @@ def test_unknown_decrypt_error_cannot_reveal_password_in_http_or_runtime(
         assert synthetic_password not in path.name
         if path.is_file():
             assert password_bytes not in path.read_bytes()
+
+
+def test_unknown_decrypt_cleanup_error_cannot_reveal_password(
+    client,
+    monkeypatch,
+    caplog,
+):
+    synthetic_password = "synthetic-cleanup-error-password"
+    decrypted = workbook_bytes()
+    protected = protected_workbook_bytes(decrypted, synthetic_password)
+
+    class FailingContainer:
+        def close(self):
+            raise RuntimeError(f"dependency cleanup failed with {synthetic_password}")
+
+    class OfficeFile:
+        format = "ooxml"
+        file = FailingContainer()
+
+        def __init__(self, _source):
+            pass
+
+        def is_encrypted(self):
+            return True
+
+        def load_key(self, **_kwargs):
+            pass
+
+        def decrypt(self, target_file, **_kwargs):
+            target_file.write(decrypted)
+
+    monkeypatch.setattr(protected_adapter.msoffcrypto, "OfficeFile", OfficeFile)
+    response = upload(
+        client,
+        protected,
+        workbook_password=synthetic_password,
+    )
+
+    service = client.app.state.workflow
+    assert response.status_code == 200
+    assert protected_adapter.UNKNOWN_DECRYPTION_MESSAGE in response.text
+    assert synthetic_password not in response.text
+    assert synthetic_password not in repr(dict(response.headers))
+    assert synthetic_password not in repr(service.pending)
+    assert synthetic_password not in repr(service.runs)
+    assert synthetic_password not in caplog.text
+
+    password_bytes = synthetic_password.encode()
+    for path in service.runtime_dir.rglob("*"):
+        assert synthetic_password not in path.name
+        if path.is_file():
+            assert password_bytes not in path.read_bytes()

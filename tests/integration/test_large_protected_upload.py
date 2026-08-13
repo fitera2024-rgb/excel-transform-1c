@@ -196,6 +196,50 @@ def test_unknown_decrypt_exception_is_neutral_and_preserves_only_chained_cause(
     assert not target.exists()
 
 
+def test_unknown_decrypt_cleanup_exception_is_neutral(
+    tmp_path,
+    monkeypatch,
+):
+    synthetic_password = "synthetic-cleanup-cause-password"
+    source = tmp_path / "source.xlsx"
+    target = tmp_path / "working.xlsx"
+    source.write_bytes(b"synthetic encrypted placeholder")
+
+    class FailingContainer:
+        def close(self):
+            raise RuntimeError(f"dependency cleanup exposed {synthetic_password}")
+
+    class OfficeFile:
+        format = "ooxml"
+        file = FailingContainer()
+
+        def __init__(self, _source):
+            pass
+
+        def is_encrypted(self):
+            return True
+
+        def load_key(self, **_kwargs):
+            pass
+
+        def decrypt(self, target_file, **_kwargs):
+            target_file.write(b"synthetic decrypted output")
+
+    monkeypatch.setattr(protected_adapter.msoffcrypto, "OfficeFile", OfficeFile)
+
+    with pytest.raises(protected_adapter.ProtectedWorkbookError) as captured:
+        protected_adapter.decrypt_protected_ooxml(
+            source,
+            target,
+            synthetic_password,
+        )
+
+    assert str(captured.value) == protected_adapter.UNKNOWN_DECRYPTION_MESSAGE
+    assert synthetic_password not in str(captured.value)
+    assert synthetic_password in str(captured.value.__cause__)
+    assert not target.exists()
+
+
 def test_budget_workbook_is_read_only_and_closed_on_success(monkeypatch):
     calls = {}
 
