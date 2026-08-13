@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.116,<1",
   "jinja2>=3.1,<4",
+  "msoffcrypto-tool>=6,<7",
   "openpyxl>=3.1,<4",
   "python-multipart>=0.0.20,<1",
   "uvicorn>=0.35,<1",
@@ -28,7 +29,7 @@ excel-transform-1c = "excel_transform_1c.main:run"
 where = ["src"]
 
 [tool.setuptools.package-data]
-excel_transform_1c = ["ui/templates/*.html", "ui/static/*.css"]
+excel_transform_1c = ["ui/templates/*.html", "ui/static/*.css", "ui/static/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

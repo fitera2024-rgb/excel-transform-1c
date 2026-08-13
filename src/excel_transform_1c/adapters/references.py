@@ -65,6 +65,7 @@ REAL_EXPORT_HEADERS = {
 
 PATH_ALIASES = {"полный путь", "путь", "полное наименование"}
 MAX_HEADER_SCAN_ROWS = 120
+ERP_INDENT_UNITS_PER_LEVEL = 2
 
 
 def parse_reference_workbook(content: bytes, kind: str) -> list[dict[str, Any]]:
@@ -137,19 +138,35 @@ def _parse_real_erp_articles(workbook: Any) -> list[dict[str, Any]]:
     for row_number in range(first_data_row, sheet.max_row + 1):
         raw_name = sheet.cell(row_number, name_col).value
         code_cell = sheet.cell(row_number, code_col)
+        code = _code_text(code_cell)
+        is_code_row = bool(
+            code
+            and not _looks_like_header(code, REAL_EXPORT_HEADERS["erp_articles"]["code"])
+        )
 
-        if not _is_blank(raw_name):
+        # In the documented ERP export, the hierarchy node is the nearest
+        # preceding non-code row. A value beside the code is technical
+        # analytics and must not replace the official article in the stack.
+        if not is_code_row and not _is_blank(raw_name):
             name = _hierarchy_text(raw_name)
             if not _looks_like_header(name, REAL_EXPORT_HEADERS["erp_articles"]["name"]):
-                _set_stack(stack, _row_level(sheet, row_number, name_col, raw_name), name)
+                level = _erp_row_level(sheet, row_number, name_col, raw_name)
+                if level > len(stack):
+                    raise ValueError(
+                        "ERP-иерархия содержит пропущенный уровень: "
+                        f"лист '{sheet.title}', строка {row_number}"
+                    )
+                _set_stack(stack, level, name)
 
-        code = _code_text(code_cell)
-        if not code or _looks_like_header(code, REAL_EXPORT_HEADERS["erp_articles"]["code"]):
+        if not is_code_row:
             continue
         if code in seen_codes:
             raise ValueError(f"ERP-справочник статей содержит повторяющийся код: {code}")
         if not stack:
-            continue
+            raise ValueError(
+                "Строка с ERP-кодом не имеет предшествующего узла иерархии: "
+                f"лист '{sheet.title}', строка {row_number}, код {code}"
+            )
 
         article = stack[-1]
         expense_type = stack[0] if len(stack) >= 2 else ""
@@ -418,6 +435,45 @@ def _row_level(sheet: Any, row_number: int, name_col: int, value: Any) -> int:
     leading = len(text) - len(text.lstrip(" \t"))
     leading_level = leading // 2
     return max(indent, outline, leading_level)
+
+
+def _erp_row_level(sheet: Any, row_number: int, name_col: int, value: Any) -> int:
+    cell = sheet.cell(row_number, name_col)
+    indent = int(cell.alignment.indent or 0)
+    outline = int(sheet.row_dimensions[row_number].outlineLevel or 0)
+    text = str(value)
+    prefix = text[: len(text) - len(text.lstrip(" \t"))]
+    spaces = prefix.count(" ")
+    tabs = prefix.count("\t")
+
+    if indent % ERP_INDENT_UNITS_PER_LEVEL:
+        raise ValueError(
+            "ERP-иерархия использует неподдерживаемый отступ: "
+            f"лист '{sheet.title}', строка {row_number}, indent={indent}; "
+            f"ожидается кратность {ERP_INDENT_UNITS_PER_LEVEL}"
+        )
+    if spaces % ERP_INDENT_UNITS_PER_LEVEL:
+        raise ValueError(
+            "ERP-иерархия использует неоднозначный текстовый отступ: "
+            f"лист '{sheet.title}', строка {row_number}, spaces={spaces}"
+        )
+
+    levels = {
+        level
+        for level in (
+            indent // ERP_INDENT_UNITS_PER_LEVEL,
+            outline,
+            spaces // ERP_INDENT_UNITS_PER_LEVEL + tabs,
+        )
+        if level > 0
+    }
+    if len(levels) > 1:
+        raise ValueError(
+            "ERP-иерархия содержит противоречивые уровни отступа: "
+            f"лист '{sheet.title}', строка {row_number}, "
+            f"indent={indent}, outlineLevel={outline}, leading={len(prefix)}"
+        )
+    return next(iter(levels), 0)
 
 
 def _set_stack(stack: list[str], level: int, name: str) -> None:

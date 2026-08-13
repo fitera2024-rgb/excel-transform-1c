@@ -22,8 +22,8 @@ def _split_header_reference(kind: str, *, supplement: bool = False) -> bytes:
         sheet.cell(6, 15, "Код элемента")
         rows = [
             (8, "Административные", 0, None),
-            (9, "Связь", 1, None),
-            (10, "Интернет" if not supplement else "Телефония", 2, None),
+            (9, "Связь", 2, None),
+            (10, "Интернет" if not supplement else "Телефония", 4, None),
             (11, None, 0, "ERP-001" if not supplement else "ERP-003"),
         ]
         for row, name, level, code in rows:

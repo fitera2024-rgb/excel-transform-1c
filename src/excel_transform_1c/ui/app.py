@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -120,6 +121,10 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             error=error,
         )
 
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
     @app.post("/references")
     async def upload_reference(
         request: Request,
@@ -150,6 +155,7 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
         period_selector_present: str = Form(""),
         all_year: str = Form(""),
         months: list[int] = Form(default=[]),
+        workbook_password: str = Form(""),
     ):
         try:
             # Old API/tests without the new marker retain the historical
@@ -166,10 +172,11 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
                 year=int(year) if year else None,
                 months=selected_months,
             )
-            pending = service.prepare_upload(
+            pending = await service.prepare_upload_stream(
                 budget_file.filename or "source.xlsx",
-                await budget_file.read(),
+                budget_file,
                 context,
+                password=workbook_password,
             )
         except Exception as exc:
             return home(request, error=str(exc))
@@ -177,13 +184,21 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             return page(request, "blocked.html", pending=pending)
         if len(pending.candidates) > 1:
             return page(request, "choose_candidate.html", pending=pending)
-        run = service.process_upload(pending.upload_id, pending.candidates[0].candidate_id)
+        run = await asyncio.to_thread(
+            service.process_upload,
+            pending.upload_id,
+            pending.candidates[0].candidate_id,
+        )
         return RedirectResponse(f"/runs/{run.run_id}", status_code=303)
 
     @app.post("/uploads/{upload_id}/process")
-    def process_candidate(request: Request, upload_id: str, candidate_id: str = Form(...)):
+    async def process_candidate(
+        request: Request,
+        upload_id: str,
+        candidate_id: str = Form(...),
+    ):
         try:
-            run = service.process_upload(upload_id, candidate_id)
+            run = await asyncio.to_thread(service.process_upload, upload_id, candidate_id)
         except Exception as exc:
             return home(request, error=str(exc))
         return RedirectResponse(f"/runs/{run.run_id}", status_code=303)

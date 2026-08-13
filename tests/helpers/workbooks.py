@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment
+from msoffcrypto.format.ooxml import OOXMLFile
 
 
 HEADERS = [
@@ -67,6 +70,38 @@ def workbook_bytes(
             _append_candidate(second, False, False, False, False, False, False, reporting_unit)
     output = BytesIO()
     workbook.save(output)
+    return output.getvalue()
+
+
+def large_workbook_bytes(
+    inert_rows: int = 25_000,
+    inert_columns: int = 8,
+) -> bytes:
+    """Build a multi-MiB XLSX with only two processable business rows."""
+
+    workbook = Workbook(write_only=True)
+    business = workbook.create_sheet("Небольшой business range")
+    _append_candidate(business, False, False, False, False, False, False, "ПС")
+
+    inert = workbook.create_sheet("Большой inert synthetic лист")
+    for row in range(inert_rows):
+        values = []
+        for column in range(inert_columns):
+            digest = hashlib.blake2s(
+                f"inert:{row}:{column}".encode(),
+                digest_size=18,
+            ).digest()
+            values.append(base64.urlsafe_b64encode(digest).decode("ascii"))
+        inert.append(values)
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
+def protected_workbook_bytes(content: bytes, password: str) -> bytes:
+    output = BytesIO()
+    OOXMLFile(BytesIO(content)).encrypt(password, output)
     return output.getvalue()
 
 
@@ -155,16 +190,16 @@ def real_reference_bytes(kind: str) -> bytes:
         sheet.cell(1, 1, "Статья доходов и расходов")
         sheet.cell(1, 15, "Код")
         _hierarchy_cell(sheet, 2, "Административные", 0)
-        _hierarchy_cell(sheet, 3, "Связь", 1)
-        _hierarchy_cell(sheet, 4, "Интернет", 2)
+        _hierarchy_cell(sheet, 3, "Связь", 2)
+        _hierarchy_cell(sheet, 4, "Интернет", 4)
         sheet.cell(5, 15, "ERP-001")
         _hierarchy_cell(sheet, 6, "Коммерческие", 0)
-        _hierarchy_cell(sheet, 7, "Маркетинг", 1)
-        _hierarchy_cell(sheet, 8, "Реклама", 2)
+        _hierarchy_cell(sheet, 7, "Маркетинг", 2)
+        _hierarchy_cell(sheet, 8, "Реклама", 4)
         sheet.cell(9, 15, "ERP-002")
         _hierarchy_cell(sheet, 10, "!!!Удалить", 0)
-        _hierarchy_cell(sheet, 11, "Прочие", 1)
-        _hierarchy_cell(sheet, 12, "Удалить", 2)
+        _hierarchy_cell(sheet, 11, "Прочие", 2)
+        _hierarchy_cell(sheet, 12, "Удалить", 4)
         sheet.cell(13, 15, "ERP-DEL")
     elif kind == "organizations":
         sheet.cell(1, 1, "Организации")
