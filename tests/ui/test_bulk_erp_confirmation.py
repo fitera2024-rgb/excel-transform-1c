@@ -92,9 +92,10 @@ def test_bulk_control_counts_source_rows_not_months_and_keeps_individual_editor(
 
     assert response.status_code == 200
     assert 'data-testid="bulk-confirm-form"' in response.text
+    assert "data-bulk-confirmable-rows='[3]'" in response.text
     assert "Подтверждаю все заполненные ERP-сопоставления" in response.text
     assert "Будет подтверждено: 1 строк" in response.text
-    assert "Применить все заполненные" in response.text
+    assert "Сначала поставьте галку" in response.text
     assert response.text.count('data-testid="attention-editor"') == 1
     assert "Подтверждаю выбранный ERP-код и полный путь" in response.text
 
@@ -103,6 +104,8 @@ def test_bulk_control_counts_source_rows_not_months_and_keeps_individual_editor(
     assert "JSON.stringify(selections)" in script
     assert "bulkConfirmation.checked" in script
     assert "selection.source_row" in script
+    assert "bulkConfirmableRows" in script
+    assert "Сначала поставьте галку" in script
 
 
 def test_bulk_apply_updates_all_months_preserves_other_issue_and_is_idempotent(client):
@@ -128,6 +131,10 @@ def test_bulk_apply_updates_all_months_preserves_other_issue_and_is_idempotent(c
 
     assert first.status_code == 200
     assert "Подтверждено ERP-сопоставлений: 1" in first.text
+    assert "Будет подтверждено: 0 строк" in first.text
+    assert "Уже подтверждённые строки повторно не предлагаются" in first.text
+    assert "Нет новых сопоставлений" in first.text
+    assert "data-bulk-confirmable-rows='[]'" in first.text
     assert len(row_records) == 12
     assert {record.erp_code for record in row_records} == {"ERP-001"}
     assert {record.department for record in row_records} == {""}
@@ -179,7 +186,8 @@ def test_bulk_control_is_disabled_for_read_only_only_attention(client):
     assert response.status_code == 200
     assert 'data-testid="bulk-confirm-form"' in response.text
     assert "Будет подтверждено: 0 строк" in response.text
-    assert "Сейчас нет полностью заполненных ERP-сопоставлений" in response.text
+    assert "Нет новых заполненных ERP-сопоставлений" in response.text
+    assert "Нет новых сопоставлений" in response.text
     assert response.text.count('data-testid="attention-editor"') == 0
     assert response.text.count('data-testid="read-only-attention"') == 1
 
