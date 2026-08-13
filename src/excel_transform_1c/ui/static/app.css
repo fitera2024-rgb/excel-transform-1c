@@ -53,6 +53,16 @@ fieldset { border:1px solid var(--line); border-radius:10px; }
 .section-heading h2, .section-heading p { margin:0; }
 .section-heading > p { max-width:620px; color:var(--muted); }
 .eyebrow.ink { color:var(--accent); opacity:1; margin-bottom:4px; }
+.bulk-confirm-card { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:12px 22px; border-color:#a9d8cc; background:#f2fbf8; }
+.bulk-confirm-copy { grid-column:1/-1; }
+.bulk-confirm-copy h3 { margin:2px 0 5px; font-size:20px; }
+.bulk-confirm-copy p { margin:0; color:var(--muted); }
+.bulk-confirm-copy .eyebrow { color:var(--accent); }
+.bulk-confirm-choice { grid-column:1/-1; padding:12px 14px; border:1px solid #b8ddd3; border-radius:10px; background:#fff; }
+.bulk-confirm-count { margin:0; color:var(--accent); font-weight:800; }
+.bulk-confirm-empty { margin:0; }
+.bulk-confirm-card button { min-width:230px; }
+.bulk-confirm-card button:disabled { cursor:not-allowed; }
 .attention-group { border-left:4px solid var(--warn); }
 .attention-header { display:flex; justify-content:space-between; align-items:start; gap:20px; }
 .attention-header h3 { margin:0 0 5px; font-size:21px; }
@@ -89,4 +99,4 @@ th { position:sticky; top:0; background:#edf2f7; z-index:1; }
 .status-attention { background:#fffaf0; }
 .status-skipped { background:#fff3f2; }
 .pill { white-space:nowrap; font-weight:750; }
-@media (max-width:900px) { .grid.two,.grid.three,.process-form,.stats,.cascade-grid,.correction-grid,.attention-facts { grid-template-columns:1fr; } .hero,.section-heading,.attention-header { align-items:flex-start; flex-direction:column; } .fixed-context { min-width:0; width:100%; } main { padding:16px; } header { padding:14px 16px; } .boundary { display:none; } }
+@media (max-width:900px) { .grid.two,.grid.three,.process-form,.stats,.cascade-grid,.correction-grid,.attention-facts,.bulk-confirm-card { grid-template-columns:1fr; } .hero,.section-heading,.attention-header { align-items:flex-start; flex-direction:column; } .bulk-confirm-card button { width:100%; } .fixed-context { min-width:0; width:100%; } main { padding:16px; } header { padding:14px 16px; } .boundary { display:none; } }
