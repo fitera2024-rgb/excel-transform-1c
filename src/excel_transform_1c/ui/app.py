@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 from collections import defaultdict
 from pathlib import Path
@@ -226,6 +227,7 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             organization_values=sorted({node.full_path for node in service.organization_nodes()}),
             groups=sorted({article.expense_group for article in service.erp_articles()}),
             source_articles=sorted({article.source_article for article in service.erp_articles()}),
+            bulk_confirmable_rows=service.bulk_confirmable_source_rows(run_id),
             message=message,
             error=error,
         )
@@ -259,6 +261,33 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             return preview(request, run_id, error=str(exc))
         return RedirectResponse(
             f"/runs/{run_id}?message=Исправление применено без повторного запуска",
+            status_code=303,
+        )
+
+    @app.post("/runs/{run_id}/confirm-filled-erp")
+    def confirm_filled_erp(
+        request: Request,
+        run_id: str,
+        confirmed: str = Form(""),
+        selections: str = Form("[]"),
+    ):
+        try:
+            if not confirmed:
+                raise ValueError("Поставьте галку подтверждения перед массовым применением")
+            payload = json.loads(selections)
+            if not isinstance(payload, list):
+                raise ValueError("Список ERP-сопоставлений заполнен некорректно")
+            _, count = service.confirm_filled_erp(run_id, payload)
+        except json.JSONDecodeError:
+            return preview(
+                request,
+                run_id,
+                error="Список ERP-сопоставлений заполнен некорректно",
+            )
+        except Exception as exc:
+            return preview(request, run_id, error=str(exc))
+        return RedirectResponse(
+            f"/runs/{run_id}?message=Подтверждено ERP-сопоставлений: {count}. Остальные причины сохранены",
             status_code=303,
         )
 
