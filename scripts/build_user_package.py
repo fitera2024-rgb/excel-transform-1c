@@ -38,13 +38,14 @@ def main() -> None:
     package_dir.mkdir(parents=True)
     (package_dir / "wheels").mkdir()
 
-    user_files = (
-        "START_SERVICE.cmd",
-        "START_SERVICE.ps1",
-        "README_USER_RU.md",
-    )
-    for file_name in user_files:
-        shutil.copy2(repository / "packaging" / "user" / file_name, package_dir)
+    user_source = repository / "packaging" / "user"
+    shutil.copy2(user_source / "START_SERVICE.cmd", package_dir)
+    shutil.copy2(user_source / "README_USER_RU.md", package_dir)
+
+    # Windows PowerShell 5.1 treats a UTF-8 script without BOM as an ANSI file.
+    # Write the packaged launcher with BOM so Russian text cannot corrupt parsing.
+    ps1_text = (user_source / "START_SERVICE.ps1").read_text(encoding="utf-8")
+    (package_dir / "START_SERVICE.ps1").write_text(ps1_text, encoding="utf-8-sig")
 
     for wheel in wheels:
         shutil.copy2(wheel, package_dir / "wheels" / wheel.name)
