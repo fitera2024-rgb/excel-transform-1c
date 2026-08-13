@@ -1,0 +1,116 @@
+name: Bulk Confirm CI and User Package
+
+on:
+  push:
+    branches:
+      - feat/bulk-confirm-filled-erp
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bulk-confirm-package-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Full regression and repository guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e ".[test]"
+
+      - name: Compile source and tests
+        run: python -m compileall -q src tests scripts
+
+      - name: Unit tests
+        run: python -m pytest tests/unit -q
+
+      - name: Integration tests
+        run: python -m pytest tests/integration -q
+
+      - name: UI tests
+        run: python -m pytest tests/ui -q
+
+      - name: Full regression suite
+        run: python -m pytest -q
+
+      - name: JavaScript syntax
+        run: node --check src/excel_transform_1c/ui/static/run.js
+
+      - name: Patch hygiene
+        run: git diff --check HEAD^
+
+      - name: Reject tracked business Excel
+        shell: bash
+        run: |
+          tracked_files="$(git ls-files '*.xlsx' '*.xls' '*.xlsm')"
+          if [ -n "$tracked_files" ]; then
+            echo "::error::Excel workbooks must not be committed."
+            printf '%s\n' "$tracked_files"
+            exit 1
+          fi
+          echo "No tracked Excel workbooks found."
+
+  user-package:
+    name: Offline Windows user package
+    needs: tests
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Build application wheel
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir wheelhouse
+
+      - name: Download offline Windows dependencies
+        shell: pwsh
+        run: |
+          python -m pip download --dest wheelhouse --only-binary=:all: `
+            "fastapi>=0.116,<1" `
+            "jinja2>=3.1,<4" `
+            "msoffcrypto-tool>=6,<7" `
+            "openpyxl>=3.1,<4" `
+            "python-multipart>=0.0.20,<1" `
+            "uvicorn>=0.35,<1"
+
+      - name: Build ZIP
+        shell: pwsh
+        run: |
+          python scripts/build_user_package.py `
+            --wheel-dir wheelhouse `
+            --output-dir dist `
+            --build-sha $env:GITHUB_SHA
+
+      - name: Upload user ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: EXCEL_TO_OPIU_LIGHT_USER_WINDOWS
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
