@@ -148,8 +148,8 @@ jobs:
             if (-not $ready) {
               throw "Packaged service did not become healthy"
             }
-            $home = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8000/" -TimeoutSec 5
-            if ($home.StatusCode -ne 200 -or $home.Content -notmatch "OPIU") {
+            $homeResponse = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8000/" -TimeoutSec 5
+            if ($homeResponse.StatusCode -ne 200 -or $homeResponse.Content -notmatch "OPIU") {
               throw "Packaged home page smoke failed"
             }
           } finally {
