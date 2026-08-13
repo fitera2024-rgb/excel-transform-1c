@@ -97,10 +97,10 @@ The package contains:
 User requirements:
 
 - Windows 10/11 x64;
-- Python 3.11 or newer available through `python.exe` or the Python launcher;
+- 64-bit Python exactly version 3.11, available through `python.exe` or the Python launcher;
 - local port `8000` free.
 
-The first launch creates `.venv` from bundled wheels and then opens `http://127.0.0.1:8000`. Reference catalogs and scenarios are stored in the package-local `runtime` directory. No external service or Internet dependency is required for installing the bundled runtime libraries.
+The bundled native wheels are built for CPython 3.11 x64; other Python versions are intentionally rejected by the launcher. The first launch creates `.venv` from bundled wheels and then opens `http://127.0.0.1:8000`. Reference catalogs and scenarios are stored in the package-local `runtime` directory. No external service or Internet dependency is required for installing the bundled runtime libraries.
 
 ## Remaining gates
 
