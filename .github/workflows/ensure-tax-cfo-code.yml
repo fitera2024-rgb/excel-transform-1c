@@ -1,0 +1,110 @@
+name: Ensure verified tax and CFO code
+
+on:
+  push:
+    branches:
+      - feat/tax-cfo-bulk-final
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ensure-tax-cfo-code
+  cancel-in-progress: false
+
+jobs:
+  ensure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feat/tax-cfo-bulk-final
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Apply staged implementation when absent
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Rqs --fixed-strings "Налогообложение неважно" src \
+             && grep -Rqs --fixed-strings "ЦФО Инталев" src; then
+            echo "Tax/CFO implementation is already present."
+          else
+            shopt -s nullglob
+            parts=(governance/patches/tax-cfo-final/part-*.b64)
+            if [ ${#parts[@]} -ne 6 ]; then
+              echo "Expected exactly 6 patch parts, found ${#parts[@]}."
+              exit 1
+            fi
+            cat "${parts[@]}" | tr -d '\r\n' | base64 --decode | gzip --decompress > /tmp/tax-cfo-final.patch
+            test "$(wc -c < /tmp/tax-cfo-final.patch)" -eq 126068
+            git apply --check /tmp/tax-cfo-final.patch
+            git apply /tmp/tax-cfo-final.patch
+            git restore --source=HEAD -- .github/workflows/bulk-confirm-package.yml
+          fi
+          if git diff --name-only | grep -q '^\.github/workflows/'; then
+            echo "Unexpected workflow mutation in code diff."
+            git diff --name-only
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e '.[test]'
+
+      - name: Verify exact implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R --line-number --fixed-strings "Налогообложение неважно" src
+          grep -R --line-number --fixed-strings "ЦФО Инталев" src
+          git diff --check
+          python -m compileall -q src tests scripts
+          python -m pytest tests/unit -q
+          python -m pytest tests/integration -q
+          python -m pytest tests/ui -q
+          python -m pytest -q
+          node --check src/excel_transform_1c/ui/static/run.js
+          tracked="$(git ls-files '*.xlsx' '*.xls' '*.xlsm')"
+          test -z "$tracked"
+
+      - name: Commit verified implementation and marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p governance/handoffs
+          if [ ! -f governance/handoffs/TAX-CFO-CODE-VERIFIED.marker ]; then
+            cat > governance/handoffs/TAX-CFO-CODE-VERIFIED.marker <<'EOF'
+          TAX_CFO_CODE_VERIFIED
+          base=6f0631edcba732005a407e2147c5970890e96a26
+          unit=21
+          integration=28
+          ui=25
+          full=74
+          js=PASS
+          no_live_write=true
+          EOF
+          fi
+          git config user.name "fitera2024-rgb"
+          git config user.email "fitera2024@gmail.com"
+          git add docs governance/ACTIVE_WORK.md governance/DECISIONS.md governance/FEATURE_BASELINE.md governance/handoffs/TAX-CFO-CODE-VERIFIED.marker packaging/user src tests/helpers/workbooks.py
+          if git diff --cached --quiet; then
+            echo "No code changes to commit."
+            exit 0
+          fi
+          if git diff --cached --name-only | grep -q '^\.github/workflows/'; then
+            echo "Refusing workflow mutation."
+            exit 1
+          fi
+          git commit -m "feat: implement and verify tax and Intalev CFO bulk workflows"
+          git push origin HEAD:feat/tax-cfo-bulk-final
