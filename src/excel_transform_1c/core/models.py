@@ -11,6 +11,7 @@ REPORT_TYPE_CODE = "ОтчетОПрибыляхИУбытках"
 STATUS_OK = "ОК"
 STATUS_ATTENTION = "Требует внимания"
 STATUS_SKIPPED = "Пропущено"
+TAX_NOT_REQUIRED = "Не требуется"
 
 MONTH_NAMES = (
     "Январь",
@@ -92,6 +93,21 @@ class OrganizationNode:
 
 
 @dataclass(frozen=True)
+class IntalevCFO:
+    source_key: str
+    code: str
+    name: str
+    full_path: str = ""
+
+    @property
+    def label(self) -> str:
+        identity = " · ".join(part for part in (self.code, self.name) if part)
+        if self.full_path and self.full_path != self.name:
+            return f"{identity} · {self.full_path}" if identity else self.full_path
+        return identity or self.full_path
+
+
+@dataclass(frozen=True)
 class Scenario:
     scenario_id: str
     name: str
@@ -140,6 +156,10 @@ class PreviewRecord:
     status: str = STATUS_OK
     reasons: list[str] = field(default_factory=list)
     pointers: dict[str, SourcePointer] = field(default_factory=dict)
+    source_cfo: str = ""
+    source_cfo_key: str = ""
+    cfo_target_node_id: str = ""
+    cfo_mapping_confirmed: bool = False
 
     @property
     def comment(self) -> str:
@@ -152,6 +172,10 @@ class PreviewRecord:
     @property
     def mapping_key(self) -> tuple[str, str, str, str]:
         return (REPORT_TYPE_CODE, self.expense_type, self.expense_group, self.source_article)
+
+    @property
+    def tax_not_required(self) -> bool:
+        return self.tax == TAX_NOT_REQUIRED
 
 
 @dataclass
@@ -180,6 +204,7 @@ class ProcessedRun:
     issues: list[Issue]
     created_at: str
     rerun_count: int = 0
+    cfo_mapping_enabled: bool = False
 
     def visible_records(self) -> list[PreviewRecord]:
         if not self.context.selected_months:

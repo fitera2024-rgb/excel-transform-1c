@@ -52,6 +52,11 @@ class LocalStore:
                     erp_code TEXT NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+                CREATE TABLE IF NOT EXISTS cfo_mappings (
+                    source_key TEXT PRIMARY KEY,
+                    target_node_id TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
                 CREATE TABLE IF NOT EXISTS delegations (
                     user_key TEXT NOT NULL,
                     node_id TEXT NOT NULL,
@@ -209,6 +214,7 @@ class LocalStore:
         key_field = {
             "erp_articles": "code",
             "organizations": "code",
+            "intalev_cfos": "source_key",
         }.get(kind)
         if key_field is None:
             self._write_reference(kind, payload)
@@ -301,6 +307,30 @@ class LocalStore:
             tuple(json.loads(row["mapping_key"])): row["erp_code"]
             for row in rows
         }
+
+    def save_cfo_mapping(self, source_key: str, target_node_id: str) -> None:
+        self.save_cfo_mappings({source_key: target_node_id})
+
+    def save_cfo_mappings(self, mappings: dict[str, str]) -> None:
+        rows = [(key, value) for key, value in mappings.items()]
+        if not rows:
+            return
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO cfo_mappings(source_key, target_node_id) VALUES (?, ?)
+                ON CONFLICT(source_key) DO UPDATE
+                SET target_node_id=excluded.target_node_id, updated_at=CURRENT_TIMESTAMP
+                """,
+                rows,
+            )
+
+    def load_cfo_mappings(self) -> dict[str, str]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT source_key, target_node_id FROM cfo_mappings"
+            ).fetchall()
+        return {row["source_key"]: row["target_node_id"] for row in rows}
 
     def set_delegations(self, user_key: str, node_ids: list[str]) -> None:
         with self._connect() as connection:

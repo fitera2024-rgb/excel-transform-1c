@@ -47,6 +47,8 @@ def workbook_bytes(
     missing_mapping: bool = False,
     negative: bool = False,
     reporting_unit: str = "ПС",
+    tax_error: bool = False,
+    second_cfo: str = "ЦФО 2",
 ) -> bytes:
     workbook = Workbook()
     first = workbook.active
@@ -64,10 +66,12 @@ def workbook_bytes(
             missing_mapping,
             negative,
             reporting_unit,
+            tax_error,
+            second_cfo,
         )
         if two_candidates:
             second = workbook.create_sheet("Второй диапазон")
-            _append_candidate(second, False, False, False, False, False, False, reporting_unit)
+            _append_candidate(second, False, False, False, False, False, False, reporting_unit, False, second_cfo)
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
@@ -114,6 +118,8 @@ def _append_candidate(
     missing_mapping: bool,
     negative: bool,
     reporting_unit: str,
+    tax_error: bool = False,
+    second_cfo: str = "ЦФО 2",
 ) -> None:
     sheet.append(["Синтетический fixture: вымышленные данные"])
     sheet.append(HEADERS)
@@ -128,7 +134,7 @@ def _append_candidate(
             "" if department_error else "Департамент 1",
             "ТК",
             "" if cfo_error else "ЦФО 1",
-            0.2,
+            "?" if tax_error else 0.2,
             "Связь",
             "Интернет" if not missing_mapping else "Нет в ERP",
             *months_a,
@@ -140,7 +146,7 @@ def _append_candidate(
             "Коммерческие",
             "" if shared_error else "Департамент 2",
             "ТК",
-            "ЦФО 2",
+            second_cfo,
             "БЕЗ НДС",
             "Маркетинг",
             "Реклама",
@@ -176,6 +182,10 @@ def reference_bytes(kind: str) -> bytes:
     elif kind == "scenarios":
         sheet.append(["Наименование", "Год", "ERP-код", "Комментарий"])
         sheet.append(["ПЛАН_2026", 2026, "00010", "synthetic"])
+    elif kind == "intalev_cfos":
+        sheet.append(["Код ЦФО Инталев", "Наименование ЦФО Инталев", "Полный путь ЦФО"])
+        sheet.append(["INT-CFO-1", "ЦФО 1", "Инталев → ЦФО 1"])
+        sheet.append(["INT-CFO-2", "ЦФО 2", "Инталев → ЦФО 2"])
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
