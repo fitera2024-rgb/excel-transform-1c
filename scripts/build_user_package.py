@@ -38,8 +38,14 @@ def main() -> None:
     package_dir.mkdir(parents=True)
     (package_dir / "wheels").mkdir()
 
-    shutil.copy2(repository / "packaging" / "user" / "START_SERVICE.cmd", package_dir)
-    shutil.copy2(repository / "packaging" / "user" / "README_USER_RU.md", package_dir)
+    user_files = (
+        "START_SERVICE.cmd",
+        "START_SERVICE.ps1",
+        "README_USER_RU.md",
+    )
+    for file_name in user_files:
+        shutil.copy2(repository / "packaging" / "user" / file_name, package_dir)
+
     for wheel in wheels:
         shutil.copy2(wheel, package_dir / "wheels" / wheel.name)
 
