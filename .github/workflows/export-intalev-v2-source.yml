@@ -1,0 +1,27 @@
+name: Export Intalev v2 source
+
+on:
+  push:
+    branches:
+      - feat/intalev-repair-final-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/intalev-repair-final-v2
+          fetch-depth: 0
+      - name: Create exact source archive
+        shell: bash
+        run: tar --exclude=.git -czf /tmp/intalev-v2-source.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: INTALEV_V2_EXACT_SOURCE
+          path: /tmp/intalev-v2-source.tar.gz
+          retention-days: 2
