@@ -26,6 +26,7 @@
     class="card bulk-confirm-card"
     data-testid="bulk-confirm-form"
     data-bulk-confirm-form
+    data-bulk-confirmable-rows='{{ bulk_confirmable_rows|tojson }}'
   >
     <div class="bulk-confirm-copy">
       <p class="eyebrow ink">Массовое подтверждение</p>
@@ -45,8 +46,8 @@
       Подтверждаю все заполненные ERP-сопоставления
     </label>
     <p class="bulk-confirm-count" data-testid="bulk-confirm-count" data-bulk-confirm-count>Будет подтверждено: {{ bulk_count }} строк</p>
-    <p class="hint bulk-confirm-empty" data-bulk-confirm-empty {% if bulk_count > 0 %}hidden{% endif %}>Сейчас нет полностью заполненных ERP-сопоставлений. Заполните путь и ERP-код в нужной строке.</p>
-    <button type="submit" data-testid="bulk-confirm-submit" data-bulk-confirm-submit disabled>Применить все заполненные</button>
+    <p class="hint bulk-confirm-empty" data-bulk-confirm-empty {% if bulk_count > 0 %}hidden{% endif %}>Нет новых заполненных ERP-сопоставлений для подтверждения. Уже подтверждённые строки повторно не предлагаются.</p>
+    <button type="submit" data-testid="bulk-confirm-submit" data-bulk-confirm-submit disabled>{% if bulk_count > 0 %}Сначала поставьте галку{% else %}Нет новых сопоставлений{% endif %}</button>
   </form>
 
   {% for issue_group in unresolved|groupby("pointer.row") %}
