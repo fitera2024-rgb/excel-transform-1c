@@ -99,6 +99,86 @@ try {
         }
     }
 
+    function Get-ListenerProcessIds {
+        param([int]$Port)
+        try {
+            return @(
+                Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction Stop |
+                    Select-Object -ExpandProperty OwningProcess -Unique
+            )
+        } catch {
+            return @()
+        }
+    }
+
+    function Test-IsOpiuServiceProcess {
+        param(
+            [int]$ProcessId,
+            [int]$Port
+        )
+        try {
+            $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction Stop
+            $commandLine = [string]$processInfo.CommandLine
+            if ($commandLine -match "excel_transform_1c") {
+                return $true
+            }
+        } catch {
+        }
+
+        try {
+            $health = Invoke-RestMethod -Uri "http://127.0.0.1:$Port/health" -TimeoutSec 1
+            if ($health.status -ne "ok") {
+                return $false
+            }
+            $homeResponse = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/" -TimeoutSec 2
+            return $homeResponse.StatusCode -eq 200 -and $homeResponse.Content -match "OPIU"
+        } catch {
+            return $false
+        }
+    }
+
+    function Stop-PreviousOpiuServices {
+        param([int[]]$Ports)
+
+        $stopped = New-Object 'System.Collections.Generic.HashSet[int]'
+        foreach ($candidatePort in $Ports) {
+            $listenerProcessIds = Get-ListenerProcessIds $candidatePort
+            foreach ($processId in $listenerProcessIds) {
+                if ($processId -le 0 -or $processId -eq $PID -or $stopped.Contains($processId)) {
+                    continue
+                }
+                if (Test-IsOpiuServiceProcess $processId $candidatePort) {
+                    Write-Host "Останавливаю предыдущий Excel -> OPIU Light на порту $candidatePort (PID $processId)."
+                    try {
+                        Stop-Process -Id $processId -Force -ErrorAction Stop
+                        [void]$stopped.Add($processId)
+                    } catch {
+                        throw "Не удалось остановить предыдущий сервис на порту $candidatePort. Закройте его вручную и повторите запуск."
+                    }
+                } else {
+                    Write-Host "Порт $candidatePort занят другим приложением; оно не будет остановлено."
+                }
+            }
+        }
+
+        if ($stopped.Count -gt 0) {
+            for ($attempt = 0; $attempt -lt 20; $attempt++) {
+                $stillBusy = $false
+                foreach ($candidatePort in $Ports) {
+                    foreach ($processId in (Get-ListenerProcessIds $candidatePort)) {
+                        if ($stopped.Contains($processId)) {
+                            $stillBusy = $true
+                        }
+                    }
+                }
+                if (-not $stillBusy) {
+                    break
+                }
+                Start-Sleep -Milliseconds 250
+            }
+        }
+    }
+
     function Wait-ServiceReady {
         param(
             [string]$HealthUrl,
@@ -249,16 +329,21 @@ try {
         }
     }
 
+    Write-Stage "Очистка предыдущих локальных запусков"
+    Stop-PreviousOpiuServices -Ports @($candidatePorts)
+    Remove-Item -LiteralPath (Join-Path $runtimeDirectory "service.pid") -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath (Join-Path $runtimeDirectory "service.url") -Force -ErrorAction SilentlyContinue
+
     $port = $null
     foreach ($candidatePort in $candidatePorts) {
         if (-not (Test-TcpPort $candidatePort)) {
             $port = $candidatePort
             break
         }
-        Write-Host "Порт $candidatePort занят; проверяю следующий."
+        Write-Host "Порт $candidatePort занят другим приложением; проверяю следующий."
     }
     if (-not $port) {
-        throw "Не найден свободный локальный порт. Закройте старые окна сервиса и повторите запуск."
+        throw "Не найден свободный локальный порт. Закройте приложения, использующие порты 8000, 8765, 8001, 8010 или 8080."
     }
 
     $baseUrl = "http://127.0.0.1:$port"
@@ -287,38 +372,37 @@ try {
             }
         }
     } else {
-        Write-Stage "Сервис запускается"
-        Write-Host "Адрес: $baseUrl"
-        Write-Host "Папка данных: $runtimeDirectory"
-        Write-Host "Для остановки нажмите Ctrl+C в этом окне."
-        Write-Host "Если браузер не откроется автоматически, откройте адрес вручную."
+        Write-Stage "Сервис запускается в фоне"
+        $stdoutPath = Join-Path $runtimeDirectory "service.stdout.log"
+        $stderrPath = Join-Path $runtimeDirectory "service.stderr.log"
+        Remove-Item -LiteralPath $stdoutPath -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $stderrPath -Force -ErrorAction SilentlyContinue
 
-        $browserCommand = @"
-`$healthUrl = '$healthUrl'
-`$baseUrl = '$baseUrl'
-for (`$attempt = 0; `$attempt -lt 100; `$attempt++) {
-    try {
-        `$response = Invoke-RestMethod -Uri `$healthUrl -TimeoutSec 1
-        if (`$response.status -eq 'ok') {
-            Start-Process `$baseUrl
-            exit 0
+        $serverProcess = Start-Process -FilePath $venvPython `
+            -ArgumentList $serverArguments `
+            -PassThru `
+            -WindowStyle Hidden `
+            -RedirectStandardOutput $stdoutPath `
+            -RedirectStandardError $stderrPath
+
+        Set-Content -LiteralPath (Join-Path $runtimeDirectory "service.pid") -Value $serverProcess.Id -Encoding ASCII
+        Set-Content -LiteralPath (Join-Path $runtimeDirectory "service.url") -Value $baseUrl -Encoding ASCII
+
+        if (-not (Wait-ServiceReady $healthUrl 100)) {
+            if ($serverProcess -and -not $serverProcess.HasExited) {
+                Stop-Process -Id $serverProcess.Id -Force
+            }
+            throw "Сервис не ответил на /health. Проверьте service.stderr.log в папке runtime."
         }
-    } catch {
-    }
-    Start-Sleep -Milliseconds 500
-}
-exit 1
-"@
-        $encodedBrowserCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($browserCommand))
-        Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @(
-            "-NoProfile",
-            "-WindowStyle", "Hidden",
-            "-EncodedCommand", $encodedBrowserCommand
-        ) | Out-Null
 
-        & $venvPython @serverArguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "Сервер завершился с кодом $LASTEXITCODE."
+        Write-Host "Сервис запущен: $baseUrl" -ForegroundColor Green
+        Write-Host "Предыдущие экземпляры Excel -> OPIU Light на известных портах остановлены."
+        Write-Host "Сервис продолжит работать после закрытия этого окна."
+        Write-Host "Для ручной остановки используйте STOP_SERVICE.cmd."
+        Write-Host "Логи сервиса: $stdoutPath и $stderrPath"
+
+        if ($env:OPIU_NONINTERACTIVE -ne "1") {
+            Start-Process $baseUrl
         }
     }
 } catch {
