@@ -61,26 +61,36 @@ def _column_schema(values: Iterable[Any]) -> dict[str, int] | None:
     return columns
 
 
-def detect_candidate_ranges(workbook: Any, scan_rows: int = 100) -> list[CandidateRange]:
+def detect_candidate_ranges(
+    workbook: Any,
+    scan_rows: int = 100,
+    scan_columns: int = 100,
+) -> list[CandidateRange]:
     raw: list[tuple[Any, int, dict[str, int]]] = []
     for sheet in workbook.worksheets:
-        max_row = min(sheet.max_row, scan_rows)
-        for row_number in range(1, max_row + 1):
-            schema = _column_schema(cell.value for cell in sheet[row_number])
+        max_row = min(sheet.max_row or scan_rows, scan_rows)
+        max_column = min(sheet.max_column or scan_columns, scan_columns)
+        rows = sheet.iter_rows(
+            min_row=1,
+            max_row=max_row,
+            min_col=1,
+            max_col=max_column,
+            values_only=True,
+        )
+        for row_number, values in enumerate(rows, start=1):
+            schema = _column_schema(values)
             if schema:
                 raw.append((sheet, row_number, schema))
 
     candidates: list[CandidateRange] = []
     for index, (sheet, header_row, columns) in enumerate(raw):
-        next_header = next(
-            (
-                other_row
-                for other_sheet, other_row, _ in raw
-                if other_sheet.title == sheet.title and other_row > header_row
-            ),
-            sheet.max_row + 1,
-        )
-        last_data_row = _last_data_row(sheet, header_row + 1, next_header - 1, columns)
+        later_headers = [
+            other_row
+            for other_sheet, other_row, _ in raw
+            if other_sheet.title == sheet.title and other_row > header_row
+        ]
+        upper_bound = min(later_headers) - 1 if later_headers else sheet.max_row
+        last_data_row = _last_data_row(sheet, header_row + 1, upper_bound, columns)
         if last_data_row < header_row + 1:
             continue
         candidates.append(
@@ -96,12 +106,28 @@ def detect_candidate_ranges(workbook: Any, scan_rows: int = 100) -> list[Candida
     return candidates
 
 
-def _last_data_row(sheet: Any, first_row: int, upper_bound: int, columns: dict[str, int]) -> int:
+def _last_data_row(
+    sheet: Any,
+    first_row: int,
+    upper_bound: int | None,
+    columns: dict[str, int],
+) -> int:
     relevant = list(columns.values())
+    min_column = min(relevant)
+    max_column = max(relevant)
     last = first_row - 1
     empty_streak = 0
-    for row_number in range(first_row, upper_bound + 1):
-        values = [sheet.cell(row_number, column).value for column in relevant]
+    row_options = {
+        "min_row": first_row,
+        "min_col": min_column,
+        "max_col": max_column,
+        "values_only": True,
+    }
+    if upper_bound is not None:
+        row_options["max_row"] = upper_bound
+    rows = sheet.iter_rows(**row_options)
+    for row_number, row in enumerate(rows, start=first_row):
+        values = [row[column - min_column] for column in relevant]
         if all(value is None for value in values):
             empty_streak += 1
             if empty_streak >= 3:
@@ -115,13 +141,26 @@ def _last_data_row(sheet: Any, first_row: int, upper_bound: int, columns: dict[s
 def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str) -> list[SourceRow]:
     sheet = workbook[candidate.sheet]
     result: list[SourceRow] = []
-    for row_number in range(candidate.first_data_row, candidate.last_data_row + 1):
+    relevant = list(candidate.columns.values())
+    min_column = min(relevant)
+    max_column = max(relevant)
+    rows = sheet.iter_rows(
+        min_row=candidate.first_data_row,
+        max_row=candidate.last_data_row,
+        min_col=min_column,
+        max_col=max_column,
+        values_only=True,
+    )
+    for row_number, row in enumerate(rows, start=candidate.first_data_row):
+        def value(field: str) -> Any:
+            return row[candidate.columns[field] - min_column]
+
         month_values = tuple(
-            sheet.cell(row_number, candidate.columns[f"month_{month}"]).value
+            value(f"month_{month}")
             for month in range(1, 13)
         )
         shared_values = {
-            field: sheet.cell(row_number, candidate.columns[field]).value
+            field: value(field)
             for field in BUSINESS_ALIASES
         }
         if all(value is None for value in (*shared_values.values(), *month_values)):
