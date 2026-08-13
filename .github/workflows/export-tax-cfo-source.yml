@@ -1,0 +1,37 @@
+name: Export exact source for tax and CFO implementation
+
+on:
+  push:
+    branches:
+      - feat/tax-cfo-bulk
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact implementation base
+        uses: actions/checkout@v4
+        with:
+          ref: 6f0631edcba732005a407e2147c5970890e96a26
+          fetch-depth: 0
+
+      - name: Create source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/export
+          git archive --format=zip --output=/tmp/export/excel-transform-1c-tax-cfo-source.zip 6f0631edcba732005a407e2147c5970890e96a26
+          sha256sum /tmp/export/excel-transform-1c-tax-cfo-source.zip
+
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: TAX_CFO_EXACT_SOURCE
+          path: /tmp/export/excel-transform-1c-tax-cfo-source.zip
+          if-no-files-found: error
+          retention-days: 2
