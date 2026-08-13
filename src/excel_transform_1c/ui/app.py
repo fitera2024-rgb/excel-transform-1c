@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 from collections import defaultdict
@@ -21,6 +22,16 @@ from excel_transform_1c.core.models import (
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
+
+
+def _static_version() -> str:
+    digest = hashlib.sha256()
+    for file_name in ("app.css", "run.js"):
+        digest.update((PACKAGE_DIR / "static" / file_name).read_bytes())
+    return digest.hexdigest()[:12]
+
+
+STATIC_VERSION = _static_version()
 
 
 def _organization_tree_context(
@@ -98,11 +109,20 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
     templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
     app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
 
+    @app.middleware("http")
+    async def prevent_stale_local_ui(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith(("/static/", "/runs/")):
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+        return response
+
     def page(request: Request, name: str, **context):
         common = {
             "request": request,
             "report_type_name": REPORT_TYPE_NAME,
             "report_type_code": REPORT_TYPE_CODE,
+            "static_version": STATIC_VERSION,
         }
         common.update(context)
         return templates.TemplateResponse(request, name, common)
@@ -310,16 +330,35 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
     def map_cfo(
         request: Request,
         run_id: str,
-        source_key: str = Form(...),
-        target_node_id: str = Form(...),
+        single_source_key: str = Form(""),
+        source_key: str = Form(""),
+        target_node_id: str = Form(""),
+        source_keys: list[str] = Form(default=[]),
+        target_node_ids: list[str] = Form(default=[]),
+        confirmed_source_keys: list[str] = Form(default=[]),
         confirmed: str = Form(""),
     ):
         try:
+            selected_source_key = single_source_key or source_key
+            selected_target_node_id = target_node_id
+            if single_source_key:
+                if len(source_keys) != len(target_node_ids):
+                    raise ValueError("Список сопоставлений ЦФО заполнен некорректно")
+                by_source_key = dict(zip(source_keys, target_node_ids, strict=True))
+                selected_target_node_id = by_source_key.get(single_source_key, "")
+                confirmed = "1" if single_source_key in set(confirmed_source_keys) else ""
             if not confirmed:
-                raise ValueError("Подтвердите выбранное соответствие ЦФО")
+                raise ValueError("Поставьте галку «Подтверждаю соответствие ЦФО»")
+            if not selected_source_key or not selected_target_node_id:
+                raise ValueError("Выберите точный узел 1С для ЦФО")
             _, count = service.confirm_cfo_mappings(
                 run_id,
-                [{"source_key": source_key, "target_node_id": target_node_id}],
+                [
+                    {
+                        "source_key": selected_source_key,
+                        "target_node_id": selected_target_node_id,
+                    }
+                ],
             )
         except Exception as exc:
             return preview(request, run_id, error=str(exc))
@@ -335,11 +374,22 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
         run_id: str,
         confirmed: str = Form(""),
         selections: str = Form("[]"),
+        source_keys: list[str] = Form(default=[]),
+        target_node_ids: list[str] = Form(default=[]),
     ):
         try:
             if not confirmed:
                 raise ValueError("Поставьте галку подтверждения перед массовым применением")
-            payload = json.loads(selections)
+            if source_keys or target_node_ids:
+                if len(source_keys) != len(target_node_ids):
+                    raise ValueError("Список сопоставлений ЦФО заполнен некорректно")
+                payload = [
+                    {"source_key": key, "target_node_id": target}
+                    for key, target in zip(source_keys, target_node_ids, strict=True)
+                    if key and target
+                ]
+            else:
+                payload = json.loads(selections)
             if not isinstance(payload, list):
                 raise ValueError("Список сопоставлений ЦФО заполнен некорректно")
             _, count = service.confirm_cfo_mappings(run_id, payload)
