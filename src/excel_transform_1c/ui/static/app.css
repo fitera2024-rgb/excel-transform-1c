@@ -100,3 +100,32 @@ th { position:sticky; top:0; background:#edf2f7; z-index:1; }
 .status-skipped { background:#fff3f2; }
 .pill { white-space:nowrap; font-weight:750; }
 @media (max-width:900px) { .grid.two,.grid.three,.process-form,.stats,.cascade-grid,.correction-grid,.attention-facts,.bulk-confirm-card { grid-template-columns:1fr; } .hero,.section-heading,.attention-header { align-items:flex-start; flex-direction:column; } .bulk-confirm-card button { width:100%; } .fixed-context { min-width:0; width:100%; } main { padding:16px; } header { padding:14px 16px; } .boundary { display:none; } }
+
+/* Explicit tax and Intalev CFO decisions. */
+button:disabled { cursor:not-allowed; }
+.process-form[aria-busy="true"] button:disabled { cursor:wait; }
+.cfo-mapping-section { border-top:4px solid #365f9d; }
+.cfo-mapping-list { display:grid; gap:10px; margin-top:16px; }
+.cfo-mapping-row { display:grid; grid-template-columns:minmax(260px,.8fr) minmax(360px,1.2fr); gap:18px; align-items:center; padding:16px; border:1px solid var(--line); border-radius:12px; background:#fbfcff; }
+.cfo-mapping-row.is-confirmed { border-color:#a9d8cc; background:#f2fbf8; }
+.cfo-source-card { display:grid; gap:4px; }
+.cfo-source-card strong { font-size:16px; }
+.cfo-source-card span, .cfo-source-card small { color:var(--muted); }
+.cfo-mapping-form { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px 14px; align-items:end; }
+.cfo-mapping-form > label:first-of-type { grid-column:1/-1; }
+.cfo-mapping-form .confirm-choice { align-self:center; }
+.cfo-mapping-form button { min-width:210px; }
+.cfo-confirmed-status, .business-status { display:grid; gap:4px; padding:14px 16px; border:1px solid #a9d8cc; border-radius:10px; background:#fff; color:#075844; }
+.cfo-confirmed-status span, .business-status span { color:var(--muted); }
+.business-status-inline { display:block; margin-bottom:4px; color:#075844; font-weight:800; }
+.mapping-warning { color:var(--error) !important; font-weight:700; }
+.cfo-bulk-card { margin-bottom:0; }
+.tax-bulk-card { border-color:#d6c486; background:#fffaf0; }
+.tax-inline-choice { display:grid; gap:8px; padding:14px 16px; border:1px solid #d6c486; border-radius:10px; background:#fffaf0; }
+.tax-inline-choice p { margin:0; }
+
+@media (max-width:900px) {
+  .cfo-mapping-row, .cfo-mapping-form { grid-template-columns:1fr; }
+  .cfo-mapping-form > label:first-of-type { grid-column:auto; }
+  .cfo-mapping-form button { width:100%; }
+}
