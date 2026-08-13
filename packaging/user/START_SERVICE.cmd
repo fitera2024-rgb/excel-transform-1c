@@ -4,25 +4,26 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 set "PYTHON_CMD="
-where python.exe >nul 2>nul && set "PYTHON_CMD=python.exe"
+where py.exe >nul 2>nul
+if not errorlevel 1 (
+  py.exe -3.11 -c "import struct,sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) and struct.calcsize('P') * 8 == 64 else 1)" >nul 2>nul
+  if not errorlevel 1 set "PYTHON_CMD=py.exe -3.11"
+)
+
 if not defined PYTHON_CMD (
-  where py.exe >nul 2>nul && set "PYTHON_CMD=py.exe -3.11"
+  where python.exe >nul 2>nul
+  if not errorlevel 1 (
+    python.exe -c "import struct,sys; raise SystemExit(0 if sys.version_info[:2] == (3, 11) and struct.calcsize('P') * 8 == 64 else 1)" >nul 2>nul
+    if not errorlevel 1 set "PYTHON_CMD=python.exe"
+  )
 )
 
 if not defined PYTHON_CMD (
   echo.
-  echo Python 3.11 или новее не найден.
-  echo Установите 64-bit Python 3.11+ и включите опцию Add Python to PATH.
+  echo Python 3.11 x64 не найден.
+  echo Установите 64-bit Python 3.11 и включите опцию Add Python to PATH.
+  echo Другие версии Python не подходят к wheel-файлам этого пакета.
   echo После установки снова запустите START_SERVICE.cmd.
-  echo.
-  pause
-  exit /b 1
-)
-
-%PYTHON_CMD% -c "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>nul
-if errorlevel 1 (
-  echo.
-  echo Нужен Python версии 3.11 или новее.
   echo.
   pause
   exit /b 1
