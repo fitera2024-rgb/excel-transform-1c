@@ -18,6 +18,37 @@
     <div><p class="eyebrow ink">Требует внимания</p><h2>Проблемы по исходным строкам</h2></div>
     <p>Исправляемые поля можно изменить прямо здесь. Остальные причины остаются видимыми с понятным следующим действием.</p>
   </div>
+
+  {% set bulk_count = bulk_confirmable_rows|length %}
+  <form
+    method="post"
+    action="/runs/{{ run.run_id }}/confirm-filled-erp"
+    class="card bulk-confirm-card"
+    data-testid="bulk-confirm-form"
+    data-bulk-confirm-form
+  >
+    <div class="bulk-confirm-copy">
+      <p class="eyebrow ink">Массовое подтверждение</p>
+      <h3>Подтвердить уже заполненные ERP-сопоставления</h3>
+      <p>Сервис не выбирает и не меняет коды. В действие войдут только полностью заполненные видимые пути.</p>
+    </div>
+    <input type="hidden" name="selections" value="[]" data-bulk-confirm-selections>
+    <label class="confirm-choice bulk-confirm-choice">
+      <input
+        type="checkbox"
+        name="confirmed"
+        value="1"
+        autocomplete="off"
+        data-bulk-confirm
+        {% if bulk_count == 0 %}disabled{% endif %}
+      >
+      Подтверждаю все заполненные ERP-сопоставления
+    </label>
+    <p class="bulk-confirm-count" data-testid="bulk-confirm-count" data-bulk-confirm-count>Будет подтверждено: {{ bulk_count }} строк</p>
+    <p class="hint bulk-confirm-empty" data-bulk-confirm-empty {% if bulk_count > 0 %}hidden{% endif %}>Сейчас нет полностью заполненных ERP-сопоставлений. Заполните путь и ERP-код в нужной строке.</p>
+    <button type="submit" data-testid="bulk-confirm-submit" data-bulk-confirm-submit disabled>Применить все заполненные</button>
+  </form>
+
   {% for issue_group in unresolved|groupby("pointer.row") %}
   {% set row_records = run.records|selectattr("source_row", "equalto", issue_group.grouper)|list %}
   {% if row_records %}
@@ -70,6 +101,7 @@
       action="/runs/{{ run.run_id }}/correct"
       class="inline-correction-form"
       data-testid="attention-editor"
+      data-source-row="{{ issue_group.grouper }}"
       data-current-erp-type="{{ record.expense_type }}"
       data-current-erp-group="{{ record.expense_group }}"
       data-current-erp-article="{{ record.source_article }}"
