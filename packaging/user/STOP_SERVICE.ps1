@@ -13,14 +13,10 @@ $runtimeDirectory = if ($env:OPIU_RUNTIME_DIR) { $env:OPIU_RUNTIME_DIR } else { 
 
 function Get-ListenerProcessIds {
     param([int]$Port)
-    try {
-        return @(
-            Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction Stop |
-                Select-Object -ExpandProperty OwningProcess -Unique
-        )
-    } catch {
-        return @()
-    }
+    $connections = @(
+        Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue
+    )
+    return @($connections | Select-Object -ExpandProperty OwningProcess -Unique)
 }
 
 function Test-IsOpiuServiceProcess {
@@ -92,7 +88,7 @@ foreach ($entry in $targets.GetEnumerator()) {
             Write-Host "Остановлен Excel -> OPIU Light (PID $processId)." -ForegroundColor Green
             $stopped += 1
         } catch {
-            Write-Host "Не удалось остановить PID $processId: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "Не удалось остановить PID ${processId}: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
 }
