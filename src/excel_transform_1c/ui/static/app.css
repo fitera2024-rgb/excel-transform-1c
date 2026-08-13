@@ -25,10 +25,11 @@ input, select { width:100%; padding:10px 11px; border:1px solid #bec9d6; border-
 select:disabled, input:disabled { background:#eef2f6; color:#7b8794; cursor:not-allowed; }
 select[multiple] { min-height:140px; }
 button, .button { border:0; border-radius:9px; padding:11px 16px; background:var(--accent); color:#fff; font-weight:750; cursor:pointer; text-decoration:none; text-align:center; }
+button:disabled { opacity:.65; cursor:wait; }
 button.secondary, .button.secondary { background:#e5ebf1; color:var(--ink); }
 .process-form { grid-template-columns:repeat(2,minmax(0,1fr)); }
-.process-form fieldset, .process-form button { grid-column:1/-1; }
-.budget-file { grid-column:1/-1; }
+.process-form fieldset, .process-form button, .processing-state { grid-column:1/-1; }
+.budget-file, .budget-password { grid-column:1/-1; }
 fieldset { border:1px solid var(--line); border-radius:10px; }
 .period-selector { padding:14px 16px 12px; }
 .all-year-choice { display:flex; align-items:center; gap:8px; color:var(--ink); margin-bottom:10px; }
@@ -42,6 +43,7 @@ fieldset { border:1px solid var(--line); border-radius:10px; }
 .notice.success { background:var(--accent2); color:#075844; }
 .notice.error, .blocked { background:#fff3f2; color:var(--error); }
 .hint { color:var(--muted); font-size:13px; font-weight:500; }
+.processing-state { margin:0; padding:12px 14px; border-radius:9px; background:var(--accent2); color:#075844; font-weight:750; }
 .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
 .stats div { background:#fff; border:1px solid var(--line); border-radius:12px; padding:17px; display:grid; }
 .stats strong { font-size:26px; }

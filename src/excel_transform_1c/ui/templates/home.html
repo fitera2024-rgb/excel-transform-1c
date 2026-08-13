@@ -45,7 +45,7 @@
 
 <section class="card primary-card">
   <h2>3. Обработать бюджетный Excel</h2>
-  <form method="post" action="/uploads" enctype="multipart/form-data" class="process-form" data-testid="process-form">
+  <form method="post" action="/uploads" enctype="multipart/form-data" class="process-form" data-testid="process-form" data-processing-form>
     <label>Единица отчёта<input name="reporting_unit" required placeholder="ПС"></label>
 
     <label>Верхняя ветка организаций
@@ -90,7 +90,12 @@
     </fieldset>
 
     <label class="budget-file">Бюджетный Excel<input type="file" name="budget_file" accept=".xlsx,.xlsm" required></label>
-    <button class="primary">Построить preview</button>
+    <label class="budget-password">Пароль защищённой книги — необязательно
+      <input type="password" name="workbook_password" autocomplete="off">
+      <span class="hint">Пароль используется только для текущей локальной обработки и не сохраняется.</span>
+    </label>
+    <p class="processing-state" data-testid="processing-state" aria-live="polite" hidden>Файл загружается и анализируется; не закрывайте страницу</p>
+    <button class="primary" type="submit" data-testid="process-submit">Построить preview</button>
   </form>
 </section>
 
@@ -141,6 +146,21 @@
 
   allYear.addEventListener("change", refreshMonths);
   refreshMonths();
+
+  const processForm = document.querySelector("[data-processing-form]");
+  const processButton = processForm.querySelector('[data-testid="process-submit"]');
+  const processingState = processForm.querySelector('[data-testid="processing-state"]');
+  processForm.addEventListener("submit", (event) => {
+    if (processForm.dataset.submitting === "true") {
+      event.preventDefault();
+      return;
+    }
+    processForm.dataset.submitting = "true";
+    processForm.setAttribute("aria-busy", "true");
+    processingState.hidden = false;
+    processButton.disabled = true;
+    processButton.textContent = "Обработка…";
+  });
 })();
 </script>
 {% endblock %}
