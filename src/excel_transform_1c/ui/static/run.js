@@ -14,6 +14,14 @@
   const bulkCount = bulkForm?.querySelector("[data-bulk-confirm-count]");
   const bulkEmpty = bulkForm?.querySelector("[data-bulk-confirm-empty]");
   const bulkSubmit = bulkForm?.querySelector("[data-bulk-confirm-submit]");
+  let bulkConfirmableRows = new Set();
+  try {
+    bulkConfirmableRows = new Set(
+      JSON.parse(bulkForm?.dataset.bulkConfirmableRows || "[]").map((value) => Number(value)),
+    );
+  } catch {
+    bulkConfirmableRows = new Set();
+  }
 
   function encodeLevelValue(value) {
     return value === "" ? EMPTY_LEVEL : `${VALUE_PREFIX}${encodeURIComponent(value)}`;
@@ -86,6 +94,8 @@
   function currentBulkSelections() {
     const bySourceRow = new Map();
     editors.forEach((form) => {
+      const sourceRow = Number(form.dataset.sourceRow);
+      if (!bulkConfirmableRows.has(sourceRow)) return;
       const selection = filledSelection(form);
       if (selection) bySourceRow.set(selection.source_row, selection);
     });
@@ -102,6 +112,13 @@
     bulkConfirmation.disabled = !hasSelections;
     if (!hasSelections) bulkConfirmation.checked = false;
     bulkSubmit.disabled = !hasSelections || !bulkConfirmation.checked;
+    if (!hasSelections) {
+      bulkSubmit.textContent = "Нет новых сопоставлений";
+    } else if (!bulkConfirmation.checked) {
+      bulkSubmit.textContent = "Сначала поставьте галку";
+    } else {
+      bulkSubmit.textContent = "Применить все заполненные";
+    }
   }
 
   editors.forEach((form) => {
