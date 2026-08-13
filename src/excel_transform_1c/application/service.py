@@ -40,6 +40,10 @@ from excel_transform_1c.core.transform import ExactERPMapper, normalize_tax, tra
 
 
 UPLOAD_CHUNK_SIZE = 1024 * 1024
+INLINE_EDITABLE_ISSUE_KINDS = frozenset({"erp-mapping", "tax"})
+INLINE_EDITABLE_SHARED_FIELDS = frozenset(
+    {"department", "cfo", "expense_group", "source_article"}
+)
 
 
 @dataclass
@@ -295,6 +299,127 @@ class WorkflowService:
             raise KeyError(run_id)
         return self.runs[run_id]
 
+    @staticmethod
+    def _issue_is_inline_editable(issue: Issue) -> bool:
+        return issue.kind in INLINE_EDITABLE_ISSUE_KINDS or (
+            issue.kind == "shared-field"
+            and issue.pointer.field in INLINE_EDITABLE_SHARED_FIELDS
+        )
+
+    def bulk_confirmable_source_rows(self, run_id: str) -> list[int]:
+        """Return attention source rows whose current ERP mapping is fully valid."""
+
+        run = self.get_run(run_id)
+        editable_rows = {
+            issue.pointer.row
+            for issue in run.unresolved_issues
+            if self._issue_is_inline_editable(issue)
+        }
+        catalog = {
+            (article.expense_type, article.expense_group, article.source_article, article.code)
+            for article in self.erp_articles()
+        }
+        eligible: set[int] = set()
+        for record in run.records:
+            if record.source_row not in editable_rows or record.source_row in eligible:
+                continue
+            signature = (
+                record.expense_type,
+                record.expense_group,
+                record.source_article,
+                record.erp_code,
+            )
+            if record.erp_code and signature in catalog:
+                eligible.add(record.source_row)
+        return sorted(eligible)
+
+    def confirm_filled_erp(
+        self,
+        run_id: str,
+        selections: list[dict[str, Any]],
+    ) -> tuple[ProcessedRun, int]:
+        """Confirm explicit, already visible ERP selections for multiple source rows."""
+
+        run = self.get_run(run_id)
+        if not isinstance(selections, list) or not selections:
+            raise ValueError("Нет полностью заполненных ERP-сопоставлений для подтверждения")
+
+        records_by_row: dict[int, list[PreviewRecord]] = {}
+        for record in run.records:
+            records_by_row.setdefault(record.source_row, []).append(record)
+        if len(selections) > len(records_by_row):
+            raise ValueError("Список ERP-сопоставлений не соответствует текущему preview")
+
+        editable_rows = {
+            issue.pointer.row
+            for issue in run.unresolved_issues
+            if self._issue_is_inline_editable(issue)
+        }
+        catalog = {
+            (article.expense_type, article.expense_group, article.source_article, article.code): article
+            for article in self.erp_articles()
+        }
+        manual_mappings = self.store.load_manual_mappings()
+        seen_rows: set[int] = set()
+        codes_by_mapping_key: dict[tuple[str, str, str, str], str] = {}
+        validated: list[tuple[int, str]] = []
+
+        required = {
+            "source_row",
+            "expense_type",
+            "expense_group",
+            "source_article",
+            "erp_code",
+        }
+        for item in selections:
+            if not isinstance(item, dict) or not required.issubset(item):
+                raise ValueError("Одно из ERP-сопоставлений заполнено не полностью")
+            try:
+                source_row = int(item["source_row"])
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Некорректная исходная строка ERP-сопоставления") from exc
+            if source_row in seen_rows:
+                continue
+            seen_rows.add(source_row)
+
+            expense_type = str(item["expense_type"])
+            expense_group = str(item["expense_group"])
+            source_article = str(item["source_article"])
+            erp_code = str(item["erp_code"])
+            if not erp_code:
+                raise ValueError("Одно из ERP-сопоставлений не содержит ERP-код")
+            signature = (expense_type, expense_group, source_article, erp_code)
+            if signature not in catalog:
+                raise ValueError(
+                    "Одно из ERP-сопоставлений больше не соответствует загруженному справочнику"
+                )
+
+            row_records = records_by_row.get(source_row)
+            if not row_records:
+                raise ValueError("Исходная строка ERP-сопоставления не найдена")
+            base = row_records[0]
+            already_confirmed = (
+                base.erp_code == erp_code
+                and manual_mappings.get(base.mapping_key) == erp_code
+            )
+            if source_row not in editable_rows and not already_confirmed:
+                raise ValueError("Строка больше не доступна для массового подтверждения")
+
+            previous_code = codes_by_mapping_key.get(base.mapping_key)
+            if previous_code is not None and previous_code != erp_code:
+                raise ValueError(
+                    "Одинаковый исходный путь нельзя подтвердить с разными ERP-кодами"
+                )
+            codes_by_mapping_key[base.mapping_key] = erp_code
+            validated.append((source_row, erp_code))
+
+        if not validated:
+            raise ValueError("Нет полностью заполненных ERP-сопоставлений для подтверждения")
+
+        for source_row, erp_code in validated:
+            self.correct_row(run_id, source_row, {"erp_code": erp_code})
+        return run, len(validated)
+
     def correct_row(self, run_id: str, source_row: int, changes: dict[str, str]) -> ProcessedRun:
         run = self.get_run(run_id)
         row_records = [record for record in run.records if record.source_row == source_row]
@@ -339,7 +464,8 @@ class WorkflowService:
         first = row_records[0]
         for field, selected in changes.items():
             original = str(getattr(first, field))
-            self.store.save_override(run_id, source_row, field, original, selected)
+            if original != selected:
+                self.store.save_override(run_id, source_row, field, original, selected)
 
         for record in row_records:
             for field, selected in changes.items():
@@ -351,7 +477,9 @@ class WorkflowService:
                     setattr(record, field, selected)
 
         if "erp_code" in changes:
-            self.store.save_manual_mapping(row_records[0].mapping_key, changes["erp_code"])
+            mapping_key = row_records[0].mapping_key
+            if self.store.load_manual_mappings().get(mapping_key) != changes["erp_code"]:
+                self.store.save_manual_mapping(mapping_key, changes["erp_code"])
         elif {"expense_group", "source_article"}.intersection(changes):
             for record in row_records:
                 record.erp_code = ""
