@@ -7,6 +7,13 @@
   const unique = (values) => [...new Set(values)].sort(collator.compare);
   const EMPTY_LEVEL = "__EMPTY__";
   const VALUE_PREFIX = "__VALUE__:";
+  const editors = [...document.querySelectorAll('[data-testid="attention-editor"]')];
+  const bulkForm = document.querySelector("[data-bulk-confirm-form]");
+  const bulkConfirmation = bulkForm?.querySelector("[data-bulk-confirm]");
+  const bulkSelections = bulkForm?.querySelector("[data-bulk-confirm-selections]");
+  const bulkCount = bulkForm?.querySelector("[data-bulk-confirm-count]");
+  const bulkEmpty = bulkForm?.querySelector("[data-bulk-confirm-empty]");
+  const bulkSubmit = bulkForm?.querySelector("[data-bulk-confirm-submit]");
 
   function encodeLevelValue(value) {
     return value === "" ? EMPTY_LEVEL : `${VALUE_PREFIX}${encodeURIComponent(value)}`;
@@ -36,7 +43,68 @@
     select.disabled = items.length === 0;
   }
 
-  document.querySelectorAll('[data-testid="attention-editor"]').forEach((form) => {
+  function filledSelection(form) {
+    const typeSelect = form.querySelector('[data-erp-level="type"]');
+    const groupSelect = form.querySelector('[data-erp-level="group"]');
+    const articleSelect = form.querySelector('[data-erp-level="article"]');
+    const codeSelect = form.querySelector('[data-erp-level="code"]');
+    const sourceRow = Number(form.dataset.sourceRow);
+    const expenseType = selectedLevelValue(typeSelect);
+    const expenseGroup = selectedLevelValue(groupSelect);
+    const sourceArticle = selectedLevelValue(articleSelect);
+    const erpCode = selectedLevelValue(codeSelect);
+
+    if (
+      !Number.isInteger(sourceRow) ||
+      expenseType === null ||
+      expenseGroup === null ||
+      sourceArticle === null ||
+      erpCode === null ||
+      erpCode === ""
+    ) {
+      return null;
+    }
+
+    const exactCatalogEntry = catalog.find(
+      (article) =>
+        article.expenseType === expenseType &&
+        article.expenseGroup === expenseGroup &&
+        article.sourceArticle === sourceArticle &&
+        article.code === erpCode,
+    );
+    if (!exactCatalogEntry) return null;
+
+    return {
+      source_row: sourceRow,
+      expense_type: expenseType,
+      expense_group: expenseGroup,
+      source_article: sourceArticle,
+      erp_code: erpCode,
+    };
+  }
+
+  function currentBulkSelections() {
+    const bySourceRow = new Map();
+    editors.forEach((form) => {
+      const selection = filledSelection(form);
+      if (selection) bySourceRow.set(selection.source_row, selection);
+    });
+    return [...bySourceRow.values()].sort((left, right) => left.source_row - right.source_row);
+  }
+
+  function refreshBulkConfirmation() {
+    if (!bulkForm) return;
+    const selections = currentBulkSelections();
+    const hasSelections = selections.length > 0;
+    bulkSelections.value = JSON.stringify(selections);
+    bulkCount.textContent = `Будет подтверждено: ${selections.length} строк`;
+    bulkEmpty.hidden = hasSelections;
+    bulkConfirmation.disabled = !hasSelections;
+    if (!hasSelections) bulkConfirmation.checked = false;
+    bulkSubmit.disabled = !hasSelections || !bulkConfirmation.checked;
+  }
+
+  editors.forEach((form) => {
     const typeSelect = form.querySelector('[data-erp-level="type"]');
     const groupSelect = form.querySelector('[data-erp-level="group"]');
     const articleSelect = form.querySelector('[data-erp-level="article"]');
@@ -102,6 +170,7 @@
           ? "Выберите один из ERP-кодов в этой ветке."
           : "Для выбранного полного пути ERP-коды отсутствуют.";
         confirmationHint.textContent = "ERP-сопоставление останется без изменения.";
+        refreshBulkConfirmation();
         return;
       }
 
@@ -115,6 +184,7 @@
         candidates.length === 1
           ? "Единственный код предварительно выбран. Подтвердите его явно и отправьте форму."
           : "Подтвердите выбранный код явно и отправьте форму.";
+      refreshBulkConfirmation();
     }
 
     function updateCodes(preferredCode) {
@@ -195,4 +265,16 @@
         : "";
     });
   });
+
+  bulkConfirmation?.addEventListener("change", refreshBulkConfirmation);
+  bulkForm?.addEventListener("submit", (event) => {
+    refreshBulkConfirmation();
+    if (bulkSubmit.disabled) {
+      event.preventDefault();
+      return;
+    }
+    bulkSubmit.disabled = true;
+    bulkSubmit.textContent = "Применение…";
+  });
+  refreshBulkConfirmation();
 })();
