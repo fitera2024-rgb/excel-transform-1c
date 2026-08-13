@@ -16,6 +16,7 @@ from excel_transform_1c.core.models import (
     OrganizationNode,
     REPORT_TYPE_CODE,
     REPORT_TYPE_NAME,
+    TAX_NOT_REQUIRED,
 )
 
 
@@ -216,18 +217,13 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
         except KeyError:
             return home(request, error="RUN не найден; выберите файл повторно")
         records = run.visible_records()
-        manual_mappings = service.store.load_manual_mappings()
-        already_confirmed_rows = {
-            record.source_row
-            for record in run.records
-            if record.erp_code
-            and manual_mappings.get(record.mapping_key) == record.erp_code
-        }
+        confirmed_erp_rows = service.confirmed_erp_source_rows(run_id)
         bulk_confirmable_rows = [
             source_row
             for source_row in service.bulk_confirmable_source_rows(run_id)
-            if source_row not in already_confirmed_rows
+            if source_row not in confirmed_erp_rows
         ]
+        _, organization_options = _organization_tree_context(service.organization_nodes())
         return page(
             request,
             "run.html",
@@ -237,9 +233,13 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             source_rows=sorted({record.source_row for record in run.records}),
             articles=service.erp_articles(),
             organization_values=sorted({node.full_path for node in service.organization_nodes()}),
+            organization_options=organization_options,
             groups=sorted({article.expense_group for article in service.erp_articles()}),
             source_articles=sorted({article.source_article for article in service.erp_articles()}),
             bulk_confirmable_rows=bulk_confirmable_rows,
+            confirmed_erp_rows=confirmed_erp_rows,
+            tax_not_required_rows=service.tax_not_required_source_rows(run_id),
+            cfo_mapping_entries=service.cfo_mapping_entries(run_id),
             message=message,
             error=error,
         )
@@ -255,14 +255,16 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
         cfo: str = Form(""),
         expense_group: str = Form(""),
         source_article: str = Form(""),
+        tax_not_required: str = Form(""),
     ):
         try:
+            selected_tax = TAX_NOT_REQUIRED if tax_not_required else tax
             service.correct_row(
                 run_id,
                 source_row,
                 {
                     "erp_code": erp_code,
-                    "tax": tax,
+                    "tax": selected_tax,
                     "department": department,
                     "cfo": cfo,
                     "expense_group": expense_group,
@@ -273,6 +275,85 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             return preview(request, run_id, error=str(exc))
         return RedirectResponse(
             f"/runs/{run_id}?message=Исправление применено без повторного запуска",
+            status_code=303,
+        )
+
+    @app.post("/runs/{run_id}/confirm-tax-not-required")
+    def confirm_tax_not_required(
+        request: Request,
+        run_id: str,
+        confirmed: str = Form(""),
+        source_rows: str = Form("[]"),
+    ):
+        try:
+            if not confirmed:
+                raise ValueError("Поставьте галку подтверждения перед массовым применением")
+            payload = json.loads(source_rows)
+            if not isinstance(payload, list):
+                raise ValueError("Список строк по налогообложению заполнен некорректно")
+            _, count = service.confirm_tax_not_required(run_id, payload)
+        except json.JSONDecodeError:
+            return preview(
+                request,
+                run_id,
+                error="Список строк по налогообложению заполнен некорректно",
+            )
+        except Exception as exc:
+            return preview(request, run_id, error=str(exc))
+        return RedirectResponse(
+            f"/runs/{run_id}?message=Налогообложение отмечено как не требующееся: "
+            f"{count} строк. Остальные причины сохранены",
+            status_code=303,
+        )
+
+    @app.post("/runs/{run_id}/map-cfo")
+    def map_cfo(
+        request: Request,
+        run_id: str,
+        source_key: str = Form(...),
+        target_node_id: str = Form(...),
+        confirmed: str = Form(""),
+    ):
+        try:
+            if not confirmed:
+                raise ValueError("Подтвердите выбранное соответствие ЦФО")
+            _, count = service.confirm_cfo_mappings(
+                run_id,
+                [{"source_key": source_key, "target_node_id": target_node_id}],
+            )
+        except Exception as exc:
+            return preview(request, run_id, error=str(exc))
+        return RedirectResponse(
+            f"/runs/{run_id}?message=Сопоставление ЦФО подтверждено. "
+            f"Обновлено новых соответствий: {count}",
+            status_code=303,
+        )
+
+    @app.post("/runs/{run_id}/confirm-filled-cfo")
+    def confirm_filled_cfo(
+        request: Request,
+        run_id: str,
+        confirmed: str = Form(""),
+        selections: str = Form("[]"),
+    ):
+        try:
+            if not confirmed:
+                raise ValueError("Поставьте галку подтверждения перед массовым применением")
+            payload = json.loads(selections)
+            if not isinstance(payload, list):
+                raise ValueError("Список сопоставлений ЦФО заполнен некорректно")
+            _, count = service.confirm_cfo_mappings(run_id, payload)
+        except json.JSONDecodeError:
+            return preview(
+                request,
+                run_id,
+                error="Список сопоставлений ЦФО заполнен некорректно",
+            )
+        except Exception as exc:
+            return preview(request, run_id, error=str(exc))
+        return RedirectResponse(
+            f"/runs/{run_id}?message=Подтверждено новых сопоставлений ЦФО: "
+            f"{count}. Остальные причины сохранены",
             status_code=303,
         )
 
