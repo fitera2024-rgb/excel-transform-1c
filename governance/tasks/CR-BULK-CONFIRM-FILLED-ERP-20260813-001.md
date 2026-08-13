@@ -1,14 +1,14 @@
 # CR — Bulk confirmation of filled ERP mappings
 
-CR-ID: `CR-BULK-CONFIRM-FILLED-ERP-20260813-001`  
-RISK: `M`  
-STATUS: `OWNER_ACCEPTED / READY_FOR_IMPLEMENTATION / NO_MERGE`  
-ISSUE: `#16`  
-REPOSITORY: `fitera2024-rgb/excel-transform-1c`  
-START BASE: `6f2f0aa1121093f51b229a7fc4e402b13166602f`  
-WORK BRANCH: `feat/bulk-confirm-filled-erp`  
-TARGET BRANCH: `integration/v1-approved-streams`  
-PARENT INTEGRATION PR: `#15`  
+CR-ID: `CR-BULK-CONFIRM-FILLED-ERP-20260813-001`
+RISK: `M`
+STATUS: `OWNER_ACCEPTED / READY_FOR_IMPLEMENTATION / NO_MERGE`
+ISSUE: `#16`
+REPOSITORY: `fitera2024-rgb/excel-transform-1c`
+START BASE: `6f2f0aa1121093f51b229a7fc4e402b13166602f`
+WORK BRANCH: `feat/bulk-confirm-filled-erp`
+TARGET BRANCH: `integration/v1-approved-streams`
+PARENT INTEGRATION PR: `#15`
 SAFETY: `NO ADO / NO LIVE WRITE`
 
 ## Read before implementation
