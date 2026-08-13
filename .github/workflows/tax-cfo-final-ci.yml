@@ -1,0 +1,164 @@
+name: Tax CFO final CI and Windows package
+
+on:
+  push:
+    branches:
+      - feat/tax-cfo-bulk-final
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tax-cfo-final-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    name: Full regression and feature guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e ".[test]"
+
+      - name: Guard required owner features
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R --line-number --fixed-strings "Налогообложение неважно" src
+          grep -R --line-number --fixed-strings "ЦФО Инталев" src
+          grep -R --line-number --fixed-strings "Подтверждаю все заполненные сопоставления ЦФО" src
+          grep -R --line-number --fixed-strings "Применить всё" src
+
+      - name: Compile
+        run: python -m compileall -q src tests scripts
+
+      - name: Unit tests
+        run: python -m pytest tests/unit -q
+
+      - name: Integration tests
+        run: python -m pytest tests/integration -q
+
+      - name: UI tests
+        run: python -m pytest tests/ui -q
+
+      - name: Full regression
+        run: python -m pytest -q
+
+      - name: JavaScript syntax
+        run: node --check src/excel_transform_1c/ui/static/run.js
+
+      - name: Patch hygiene
+        run: git diff --check 6f0631edcba732005a407e2147c5970890e96a26...HEAD
+
+      - name: Reject tracked business Excel
+        shell: bash
+        run: |
+          tracked="$(git ls-files '*.xlsx' '*.xls' '*.xlsm')"
+          if [ -n "$tracked" ]; then
+            printf '%s\n' "$tracked"
+            exit 1
+          fi
+
+  user-package:
+    name: Offline Windows package and real launcher smoke
+    needs: tests
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Build application wheel
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir wheelhouse
+
+      - name: Download offline Windows dependencies
+        shell: pwsh
+        run: |
+          python -m pip download --dest wheelhouse --only-binary=:all: `
+            "fastapi>=0.116,<1" `
+            "jinja2>=3.1,<4" `
+            "msoffcrypto-tool>=6,<7" `
+            "openpyxl>=3.1,<4" `
+            "python-multipart>=0.0.20,<1" `
+            "uvicorn>=0.35,<1"
+
+      - name: Build ZIP
+        shell: pwsh
+        run: |
+          python scripts/build_user_package.py `
+            --wheel-dir wheelhouse `
+            --output-dir dist `
+            --build-sha $env:GITHUB_SHA
+
+      - name: Smoke actual packaged launcher, restart cleanup and stop
+        shell: pwsh
+        run: |
+          $package = Join-Path $PWD "dist\EXCEL_TO_OPIU_LIGHT_USER"
+          $startPs = Join-Path $package "START_SERVICE.ps1"
+          $stopPs = Join-Path $package "STOP_SERVICE.ps1"
+          foreach ($required in @($startPs, $stopPs)) {
+            if (-not (Test-Path -LiteralPath $required)) {
+              throw "Required launcher is missing: $required"
+            }
+          }
+
+          $runtime = Join-Path $env:RUNNER_TEMP "tax-cfo-package-runtime"
+          Remove-Item -LiteralPath $runtime -Recurse -Force -ErrorAction SilentlyContinue
+          $env:OPIU_PORT = "8765"
+          $env:OPIU_RUNTIME_DIR = $runtime
+          $env:OPIU_NONINTERACTIVE = "1"
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
+          if ($LASTEXITCODE -ne 0) { throw "First launcher run failed" }
+          $url = (Get-Content -LiteralPath (Join-Path $runtime "service.url") -Raw).Trim()
+          $firstPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
+          $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
+          if ($health.status -ne "ok") { throw "First health check failed" }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
+          if ($LASTEXITCODE -ne 0) { throw "Second launcher run failed" }
+          $secondPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
+          if ($secondPid -eq $firstPid) { throw "Restart did not replace old process" }
+          $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
+          if ($health.status -ne "ok") { throw "Restarted health check failed" }
+          $homeResponse = Invoke-WebRequest -UseBasicParsing -Uri "$url/" -TimeoutSec 5
+          if ($homeResponse.StatusCode -ne 200 -or $homeResponse.Content -notmatch "OPIU") {
+            throw "Home page smoke failed"
+          }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopPs
+          if ($LASTEXITCODE -ne 0) { throw "Stop launcher failed" }
+
+      - name: Upload user ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: EXCEL_TO_OPIU_LIGHT_TAX_CFO_USER_WINDOWS
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14

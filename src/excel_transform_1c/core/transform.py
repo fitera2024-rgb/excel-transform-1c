@@ -14,6 +14,7 @@ from .models import (
     STATUS_ATTENTION,
     STATUS_OK,
     STATUS_SKIPPED,
+    TAX_NOT_REQUIRED,
     SourcePointer,
     SourceRow,
 )
@@ -37,6 +38,8 @@ def as_text(value: Any) -> str:
 
 def normalize_tax(value: Any, allowed_values: set[str] | None = None) -> tuple[str, str | None]:
     allowed = allowed_values or {"БЕЗ НДС", "20%", "22%"}
+    if value == TAX_NOT_REQUIRED:
+        return TAX_NOT_REQUIRED, None
     if value is None or value == "?" or value == "":
         return "", "Налогообложение не определено"
     if isinstance(value, bool):
@@ -242,6 +245,7 @@ def transform_rows(
                         erp_article_name=mapped.name if mapped else "",
                         tax=tax,
                         amount=None,
+                        source_cfo=shared["cfo"],
                         status=STATUS_SKIPPED,
                         reasons=[
                             *shared_reasons,
@@ -285,6 +289,7 @@ def transform_rows(
                     erp_article_name=mapped.name if mapped else "",
                     tax=tax,
                     amount=amount,
+                    source_cfo=shared["cfo"],
                     status=STATUS_ATTENTION if reasons else STATUS_OK,
                     reasons=reasons,
                     pointers=pointers,

@@ -16,17 +16,18 @@
 <section class="grid two">
   <article class="card">
     <h2>1. Справочники</h2>
-    <p>ERP-статьи: <strong>{{ counts.erp_articles }}</strong><br>Организации и узлы: <strong>{{ counts.organizations }}</strong><br>Сценарии: <strong>{{ counts.scenarios }}</strong></p>
+    <p>ERP-статьи: <strong>{{ counts.erp_articles }}</strong><br>Организации и узлы: <strong>{{ counts.organizations }}</strong><br>Сценарии: <strong>{{ counts.scenarios }}</strong><br>ЦФО Инталев: <strong>{{ counts.intalev_cfos }}</strong></p>
     <form method="post" action="/references" enctype="multipart/form-data" data-testid="reference-form">
       <label>Тип справочника
         <select name="kind">
           <option value="erp_articles">ERP-статьи</option>
           <option value="organizations">Организации и узлы</option>
           <option value="scenarios">Сценарии</option>
+          <option value="intalev_cfos">Классификатор ЦФО Инталев</option>
         </select>
       </label>
       <label>Файл справочника .xlsx<input type="file" name="reference_file" accept=".xlsx" required></label>
-      <p class="hint">Загрузите полный ERP-справочник один раз. Он сохраняется локально и используется для всех организаций и следующих запусков. Повторная загрузка дополняет список и обновляет записи по коду, не удаляя ранее загруженные.</p>
+      <p class="hint">Загрузите ERP-справочники и классификатор ЦФО Инталев один раз. Они сохраняются локально и используются для всех организаций и следующих запусков. Повторная загрузка дополняет список и обновляет записи по точному коду, не удаляя ранее загруженные.</p>
       <button>Загрузить / дополнить</button>
     </form>
   </article>

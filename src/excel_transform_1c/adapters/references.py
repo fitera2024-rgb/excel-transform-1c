@@ -7,7 +7,7 @@ from typing import Any
 from openpyxl import load_workbook
 
 from excel_transform_1c.core.detection import normalize_header
-from excel_transform_1c.core.models import ERPArticle, OrganizationNode
+from excel_transform_1c.core.models import ERPArticle, IntalevCFO, OrganizationNode
 
 
 ERP_HEADERS = {
@@ -24,6 +24,33 @@ ORG_HEADERS = {
     "name": {"наименование", "узел"},
     "parent_id": {"родитель id", "parent id"},
     "full_path": {"полный путь", "путь"},
+}
+
+INTALEV_CFO_NAME_ALIASES = {
+    "цфо инталев",
+    "наименование цфо",
+    "наименование цфо инталев",
+    "наименование центра финансовой ответственности",
+    "центр финансовой ответственности инталев",
+    "цфо / подразделение",
+    "цфо подразделение",
+    "отдел (цфо)",
+    "цфо",
+    "центр финансовой ответственности",
+}
+INTALEV_CFO_CODE_ALIASES = {
+    "код цфо инталев",
+    "код цфо",
+    "код центра финансовой ответственности",
+    "код",
+}
+INTALEV_CFO_PATH_ALIASES = {
+    "полный путь цфо",
+    "путь цфо",
+    "иерархия цфо",
+    "полное наименование цфо",
+    "полный путь",
+    "путь",
 }
 
 SCENARIO_HEADERS = {
@@ -69,13 +96,22 @@ ERP_INDENT_UNITS_PER_LEVEL = 2
 
 
 def parse_reference_workbook(content: bytes, kind: str) -> list[dict[str, Any]]:
-    if kind not in {"erp_articles", "organizations", "scenarios"}:
+    if kind not in {"erp_articles", "organizations", "scenarios", "intalev_cfos"}:
         raise ValueError("Неизвестный тип справочника")
 
     try:
         workbook = load_workbook(BytesIO(content), data_only=True, read_only=False)
     except Exception as exc:
         raise ValueError("Файл справочника не открывается или повреждён") from exc
+
+    if kind == "intalev_cfos":
+        result = _parse_intalev_cfos(workbook)
+        if not result:
+            raise ValueError(
+                "Не найден каталог ЦФО Инталев. Нужна колонка «ЦФО Инталев» "
+                "или «Наименование ЦФО»; код и полный путь необязательны."
+            )
+        return result
 
     flat = _parse_flat_interchange(workbook, kind)
     if flat is not None:
@@ -93,6 +129,106 @@ def parse_reference_workbook(content: bytes, kind: str) -> list[dict[str, Any]]:
             "Не найден распознаваемый диапазон справочника. "
             "Загрузите известную ERP-выгрузку либо документированный плоский interchange-файл."
         )
+    return result
+
+
+def intalev_cfo_source_key(code: str, name: str, full_path: str = "") -> str:
+    code = code.strip()
+    name = name.strip()
+    full_path = full_path.strip()
+    if code:
+        return f"code:{code}"
+    if full_path:
+        return f"path:{full_path}"
+    return f"name:{name}"
+
+
+def _parse_intalev_cfos(workbook: Any) -> list[dict[str, Any]]:
+    candidates: list[tuple[int, Any, int, int, int | None, int | None]] = []
+    for sheet in workbook.worksheets:
+        for row_number in range(1, min(sheet.max_row, 80) + 1):
+            headers = [normalize_header(cell.value) for cell in sheet[row_number]]
+
+            def best_column(aliases: set[str], *, allow_contains: bool) -> int | None:
+                scores: list[tuple[int, int]] = []
+                normalized_aliases = {normalize_header(alias) for alias in aliases}
+                for index, value in enumerate(headers, start=1):
+                    if not value:
+                        continue
+                    quality = 3 if value in normalized_aliases else 0
+                    if not quality and allow_contains:
+                        for alias in normalized_aliases:
+                            if len(alias) >= 4 and (alias in value or value in alias):
+                                quality = max(quality, 2)
+                    if quality:
+                        scores.append((quality, index))
+                if not scores:
+                    return None
+                best = max(score for score, _ in scores)
+                columns = {column for score, column in scores if score == best}
+                return next(iter(columns)) if len(columns) == 1 else None
+
+            name_col = best_column(INTALEV_CFO_NAME_ALIASES, allow_contains=True)
+            if name_col is None:
+                continue
+            code_col = best_column(INTALEV_CFO_CODE_ALIASES, allow_contains=False)
+            path_col = best_column(INTALEV_CFO_PATH_ALIASES, allow_contains=True)
+            if code_col == name_col:
+                code_col = None
+            if path_col == name_col:
+                path_col = None
+            if path_col == code_col:
+                path_col = None
+            data_count = sum(
+                1
+                for data_row in range(row_number + 1, sheet.max_row + 1)
+                if not _is_blank(sheet.cell(data_row, name_col).value)
+            )
+            if data_count:
+                score = data_count * 10 + (20 if code_col else 0) + (10 if path_col else 0)
+                candidates.append((score, sheet, row_number, name_col, code_col, path_col))
+
+    if not candidates:
+        return []
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    best_score = candidates[0][0]
+    best = [item for item in candidates if item[0] == best_score]
+    if len(best) != 1:
+        raise ValueError("Классификатор содержит несколько одинаково подходящих диапазонов ЦФО Инталев")
+
+    _, sheet, header_row, name_col, code_col, path_col = best[0]
+    result: list[dict[str, Any]] = []
+    seen: dict[str, dict[str, Any]] = {}
+    for row_number in range(header_row + 1, sheet.max_row + 1):
+        name = _clean_scalar(sheet.cell(row_number, name_col).value)
+        code = _code_text(sheet.cell(row_number, code_col)) if code_col else ""
+        full_path = _clean_scalar(sheet.cell(row_number, path_col).value) if path_col else ""
+        if not name and not code and not full_path:
+            continue
+        if not name:
+            name = full_path.split("→")[-1].strip() if full_path else code
+        if not name:
+            raise ValueError(
+                f"Каталог ЦФО Инталев содержит запись без наименования: строка {row_number}"
+            )
+        source_key = intalev_cfo_source_key(code, name, full_path)
+        item = {
+            "source_key": source_key,
+            "code": code,
+            "name": name,
+            "full_path": full_path,
+        }
+        if source_key in seen:
+            if seen[source_key] != item:
+                raise ValueError(
+                    f"Каталог ЦФО Инталев содержит конфликтующий ключ: "
+                    f"{code or full_path or name}"
+                )
+            # Combined article classifiers often repeat one CFO on many rows.
+            # Exact duplicates describe one source entity and are collapsed.
+            continue
+        seen[source_key] = item
+        result.append(item)
     return result
 
 
@@ -559,3 +695,7 @@ def organization_nodes(payload: list[dict[str, Any]]) -> list[OrganizationNode]:
         )
         for item in payload
     ]
+
+
+def intalev_cfos(payload: list[dict[str, Any]]) -> list[IntalevCFO]:
+    return [IntalevCFO(**item) for item in payload]
