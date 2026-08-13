@@ -3,6 +3,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$env:PYTHONUTF8 = "1"
+try {
+    $utf8 = New-Object System.Text.UTF8Encoding($false)
+    [Console]::OutputEncoding = $utf8
+    $OutputEncoding = $utf8
+} catch {
+}
+
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location -LiteralPath $root
 $logPath = Join-Path $root "startup.log"
@@ -221,15 +229,15 @@ try {
         Copy-Item -LiteralPath $packageMarker -Destination $venvMarker -Force
     }
 
-    & $venvPython -c "import excel_transform_1c, fastapi, openpyxl, msoffcrypto; print('Компоненты приложения проверены.')"
+    & $venvPython -c "import excel_transform_1c, fastapi, openpyxl, msoffcrypto"
     if ($LASTEXITCODE -ne 0) {
         throw "Проверка установленных компонентов завершилась ошибкой. Удалите .venv и повторите запуск."
     }
+    Write-Host "Компоненты приложения проверены."
 
     $runtimeDirectory = if ($env:OPIU_RUNTIME_DIR) { $env:OPIU_RUNTIME_DIR } else { Join-Path $root "runtime" }
     New-Item -ItemType Directory -Path $runtimeDirectory -Force | Out-Null
     $env:EXCEL_TRANSFORM_RUNTIME = $runtimeDirectory
-    $env:PYTHONUTF8 = "1"
 
     $candidatePorts = New-Object 'System.Collections.Generic.List[int]'
     if ($env:OPIU_PORT) {
@@ -320,9 +328,11 @@ exit 1
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ""
     Write-Host "Подробности: $logPath"
-    try {
-        Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ("ERROR: " + $_.Exception.ToString())
-    } catch {
+    if (-not $transcriptStarted) {
+        try {
+            Add-Content -LiteralPath $logPath -Encoding UTF8 -Value ("ERROR: " + $_.Exception.ToString())
+        } catch {
+        }
     }
     if (-not $SmokeTest -and $env:OPIU_NONINTERACTIVE -ne "1") {
         Read-Host "Нажмите Enter, чтобы закрыть окно"
