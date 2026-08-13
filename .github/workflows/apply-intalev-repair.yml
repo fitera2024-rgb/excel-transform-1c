@@ -1,0 +1,92 @@
+name: Apply and verify Intalev workbook repair
+
+on:
+  push:
+    branches:
+      - feat/intalev-repair-and-confirmations
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: intalev-repair-apply
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout exact work branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/intalev-repair-and-confirmations
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Assemble repair patch
+        id: decode
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          parts=(governance/patches/intalev-repair/part-*.b64)
+          if [ ${#parts[@]} -eq 0 ]; then
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test ${#parts[@]} -eq 11
+          cat "${parts[@]}" | tr -d '[:space:]' | base64 --decode > /tmp/intalev-repair.patch.gz
+          test "$(wc -c < /tmp/intalev-repair.patch.gz)" -eq 30680
+          gzip --decompress --stdout /tmp/intalev-repair.patch.gz > /tmp/intalev-repair.patch
+          test "$(wc -c < /tmp/intalev-repair.patch)" -eq 121617
+          git apply --check /tmp/intalev-repair.patch
+          echo "has_patch=true" >> "$GITHUB_OUTPUT"
+
+      - name: Apply repair implementation
+        if: steps.decode.outputs.has_patch == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply /tmp/intalev-repair.patch
+          rm -rf governance/patches/intalev-repair
+          git status --short
+
+      - name: Install project and test dependencies
+        if: steps.decode.outputs.has_patch == 'true'
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e '.[test]'
+
+      - name: Verify full repaired cycle
+        if: steps.decode.outputs.has_patch == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          python -m compileall -q src tests scripts
+          python -m pytest tests/unit -q
+          python -m pytest tests/integration -q
+          python -m pytest tests/ui -q
+          python -m pytest -q
+          node --check src/excel_transform_1c/ui/static/run.js
+          test -z "$(git ls-files '*.xlsx' '*.xls' '*.xlsm')"
+
+      - name: Commit and push verified implementation
+        if: steps.decode.outputs.has_patch == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "fitera2024-rgb"
+          git config user.email "fitera2024@gmail.com"
+          git add -A
+          git commit -m "feat: repair Intalev workbooks and persist CFO confirmations"
+          git push origin HEAD:feat/intalev-repair-and-confirmations
