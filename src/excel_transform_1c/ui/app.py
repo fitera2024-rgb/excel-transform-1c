@@ -216,6 +216,18 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
         except KeyError:
             return home(request, error="RUN не найден; выберите файл повторно")
         records = run.visible_records()
+        manual_mappings = service.store.load_manual_mappings()
+        already_confirmed_rows = {
+            record.source_row
+            for record in run.records
+            if record.erp_code
+            and manual_mappings.get(record.mapping_key) == record.erp_code
+        }
+        bulk_confirmable_rows = [
+            source_row
+            for source_row in service.bulk_confirmable_source_rows(run_id)
+            if source_row not in already_confirmed_rows
+        ]
         return page(
             request,
             "run.html",
@@ -227,7 +239,7 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             organization_values=sorted({node.full_path for node in service.organization_nodes()}),
             groups=sorted({article.expense_group for article in service.erp_articles()}),
             source_articles=sorted({article.source_article for article in service.erp_articles()}),
-            bulk_confirmable_rows=service.bulk_confirmable_source_rows(run_id),
+            bulk_confirmable_rows=bulk_confirmable_rows,
             message=message,
             error=error,
         )
