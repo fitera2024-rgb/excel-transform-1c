@@ -1,0 +1,159 @@
+name: Publish tax CFO owner-smoke package
+
+on:
+  push:
+    branches:
+      - feat/tax-cfo-bulk-final
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-tax-cfo-owner-smoke
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify tax and CFO implementation
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Feature and provenance guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f governance/handoffs/TAX-CFO-CODE-VERIFIED.marker
+          grep -R --line-number --fixed-strings "Налогообложение неважно" src
+          grep -R --line-number --fixed-strings "ЦФО Инталев" src
+          grep -R --line-number --fixed-strings "Подтверждаю все заполненные сопоставления ЦФО" src
+          grep -R --line-number --fixed-strings "Применить всё" src
+          ! grep -R --line-number -E "pyodbc|adodb|ADOConnection|live_write_allowed *= *true" src
+
+      - name: Install and test
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e '.[test]'
+          git diff --check
+          python -m compileall -q src tests scripts
+          python -m pytest tests/unit -q
+          python -m pytest tests/integration -q
+          python -m pytest tests/ui -q
+          python -m pytest -q
+          node --check src/excel_transform_1c/ui/static/run.js
+          tracked="$(git ls-files '*.xlsx' '*.xls' '*.xlsm')"
+          test -z "$tracked"
+
+  package:
+    name: Build, smoke and publish Windows package
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Build application wheel
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir wheelhouse
+
+      - name: Download offline Windows dependencies
+        shell: pwsh
+        run: |
+          python -m pip download --dest wheelhouse --only-binary=:all: `
+            "fastapi>=0.116,<1" `
+            "jinja2>=3.1,<4" `
+            "msoffcrypto-tool>=6,<7" `
+            "openpyxl>=3.1,<4" `
+            "python-multipart>=0.0.20,<1" `
+            "uvicorn>=0.35,<1"
+
+      - name: Build user ZIP
+        shell: pwsh
+        run: |
+          python scripts/build_user_package.py `
+            --wheel-dir wheelhouse `
+            --output-dir dist `
+            --build-sha $env:GITHUB_SHA
+
+      - name: Smoke actual packaged launcher, restart cleanup and stop
+        shell: pwsh
+        run: |
+          $package = Join-Path $PWD "dist\EXCEL_TO_OPIU_LIGHT_USER"
+          $startPs = Join-Path $package "START_SERVICE.ps1"
+          $stopPs = Join-Path $package "STOP_SERVICE.ps1"
+          foreach ($required in @($startPs, $stopPs)) {
+            if (-not (Test-Path -LiteralPath $required)) { throw "Missing: $required" }
+          }
+          $runtime = Join-Path $env:RUNNER_TEMP "tax-cfo-owner-smoke-runtime"
+          Remove-Item -LiteralPath $runtime -Recurse -Force -ErrorAction SilentlyContinue
+          $env:OPIU_PORT = "8765"
+          $env:OPIU_RUNTIME_DIR = $runtime
+          $env:OPIU_NONINTERACTIVE = "1"
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
+          if ($LASTEXITCODE -ne 0) { throw "First launcher run failed" }
+          $url = (Get-Content -LiteralPath (Join-Path $runtime "service.url") -Raw).Trim()
+          $firstPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
+          $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
+          if ($health.status -ne "ok") { throw "First health failed" }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
+          if ($LASTEXITCODE -ne 0) { throw "Second launcher run failed" }
+          $secondPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
+          if ($secondPid -eq $firstPid) { throw "Restart did not replace prior process" }
+          $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
+          if ($health.status -ne "ok") { throw "Restarted health failed" }
+          $home = Invoke-WebRequest -UseBasicParsing -Uri "$url/" -TimeoutSec 5
+          if ($home.StatusCode -ne 200 -or $home.Content -notmatch "OPIU") { throw "Home smoke failed" }
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopPs
+          if ($LASTEXITCODE -ne 0) { throw "Stop launcher failed" }
+
+      - name: Calculate package digest
+        id: digest
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -LiteralPath dist -Filter '*.zip' | Select-Object -First 1
+          if (-not $zip) { throw 'Package ZIP not found' }
+          $hash = (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "zip=$($zip.FullName)" >> $env:GITHUB_OUTPUT
+          "name=$($zip.Name)" >> $env:GITHUB_OUTPUT
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+          "PACKAGE_ZIP=$($zip.FullName)" >> $env:GITHUB_ENV
+
+      - name: Publish fixed owner-smoke prerelease
+        shell: pwsh
+        run: |
+          gh release delete owner-smoke-tax-cfo-latest --cleanup-tag --yes 2>$null
+          gh release create owner-smoke-tax-cfo-latest "$env:PACKAGE_ZIP" `
+            --target "$env:GITHUB_SHA" `
+            --title "Excel → OPIU Light — TAX/CFO owner smoke" `
+            --notes "Owner-smoke package. Exact head: $env:GITHUB_SHA. SHA-256: ${{ steps.digest.outputs.sha256 }}. No ADO / no live write." `
+            --prerelease
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EXCEL_TO_OPIU_LIGHT_TAX_CFO_OWNER_SMOKE_WINDOWS
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
