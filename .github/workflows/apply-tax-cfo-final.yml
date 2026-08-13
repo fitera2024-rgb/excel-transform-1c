@@ -1,28 +1,28 @@
-name: Apply final tax and CFO implementation
+name: Apply verified Intalev repair implementation
 
 on:
   push:
     branches:
-      - feat/tax-cfo-bulk-complete
+      - feat/intalev-repair-and-confirmations
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: tax-cfo-final-apply
+  group: intalev-repair-self-apply
   cancel-in-progress: false
 
 jobs:
   apply-and-verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     steps:
       - name: Checkout exact work branch
         uses: actions/checkout@v4
         with:
-          ref: feat/tax-cfo-bulk-complete
+          ref: feat/intalev-repair-and-confirmations
           fetch-depth: 0
           persist-credentials: true
 
@@ -32,40 +32,47 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Decode and inspect staged patch
+      - name: Decode and inspect staged repair patch
+        id: decode
         shell: bash
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          parts=(governance/patches/tax-cfo-final/part-*.b64)
-          if [ ${#parts[@]} -ne 6 ]; then
-            echo "Expected exactly 6 staged patch parts, found ${#parts[@]}."
-            exit 1
+          staged="governance/patches/intalev-repair/implementation.patch.gz.b64"
+          if [ ! -f "$staged" ]; then
+            echo "No staged repair patch remains; verified implementation is already applied."
+            echo "has_patch=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          cat "${parts[@]}" | tr -d '\r\n' | base64 --decode | gzip --decompress > /tmp/tax-cfo-final.patch
-          echo "Decoded patch bytes: $(wc -c < /tmp/tax-cfo-final.patch)"
-          test "$(wc -c < /tmp/tax-cfo-final.patch)" -eq 126068
-          echo "Files in patch:"
-          grep '^+++ b/' /tmp/tax-cfo-final.patch | sed 's#^+++ b/##' | sort -u
-          git apply --check /tmp/tax-cfo-final.patch
+          tr -d '\r\n' < "$staged" | base64 --decode > /tmp/intalev-repair.patch.gz
+          test "$(wc -c < /tmp/intalev-repair.patch.gz)" -eq 30680
+          echo "a979a8e61dbe798acd6cbc164d3e9c82a0799962d918c9873f6b977042c12205  /tmp/intalev-repair.patch.gz" | sha256sum --check
+          gzip --decompress --stdout /tmp/intalev-repair.patch.gz > /tmp/intalev-repair.patch
+          test "$(wc -c < /tmp/intalev-repair.patch)" -eq 121617
+          echo "c1c53863fe641882b84cabb0194fe05cc365cbeea44eba318c2825b8d9db56f0  /tmp/intalev-repair.patch" | sha256sum --check
+          echo "Files in repair patch:"
+          grep '^+++ b/' /tmp/intalev-repair.patch | sed 's#^+++ b/##' | sort -u
+          git apply --check /tmp/intalev-repair.patch
+          echo "has_patch=true" >> "$GITHUB_OUTPUT"
 
-      - name: Apply final implementation
+      - name: Apply repair implementation
+        if: steps.decode.outputs.has_patch == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          git apply /tmp/tax-cfo-final.patch
-          rm -rf governance/patches/tax-cfo-final
-          rm -f .github/workflows/apply-tax-cfo-final.yml
+          git apply /tmp/intalev-repair.patch
+          rm -rf governance/patches/intalev-repair
           git status --short
 
       - name: Install project and test dependencies
+        if: steps.decode.outputs.has_patch == 'true'
         shell: bash
         run: |
           set -euo pipefail
           python -m pip install --upgrade pip setuptools wheel
           python -m pip install -e '.[test]'
 
-      - name: Verify implementation
+      - name: Verify repaired workbook and confirmation flows
+        if: steps.decode.outputs.has_patch == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -84,11 +91,12 @@ jobs:
           fi
 
       - name: Commit and push verified implementation
+        if: steps.decode.outputs.has_patch == 'true'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "fitera2024-rgb"
           git config user.email "fitera2024@gmail.com"
           git add -A
-          git commit -m "feat: implement tax and Intalev CFO bulk workflows [tax-cfo-final-applied]"
-          git push origin HEAD:feat/tax-cfo-bulk-complete
+          git commit -m "feat: repair Intalev workbooks and persist CFO confirmations"
+          git push origin HEAD:feat/intalev-repair-and-confirmations
