@@ -79,6 +79,38 @@ def _split_header_reference(kind: str, *, supplement: bool = False) -> bytes:
     return _bytes(workbook)
 
 
+
+def test_new_store_starts_with_packaged_baselines_and_keeps_them_on_restart(tmp_path):
+    runtime = tmp_path / "runtime"
+    first = WorkflowService(runtime)
+
+    assert first.reference_counts() == {
+        "erp_articles": 271,
+        "organizations": 357,
+        "scenarios": 12,
+        "intalev_cfos": 15,
+    }
+    assert first.store.catalog_source("erp_articles") == "baseline"
+    assert first.store.catalog_source("organizations") == "baseline"
+    assert first.store.catalog_source("scenarios") == "baseline"
+    assert first.store.catalog_source("intalev_cfos") == "baseline"
+
+    restarted = WorkflowService(runtime)
+    assert restarted.reference_counts() == first.reference_counts()
+    assert restarted.store.catalog_source("scenarios") == "baseline"
+
+
+def test_first_explicit_upload_replaces_only_its_packaged_baseline(tmp_path):
+    service = WorkflowService(tmp_path / "runtime")
+
+    service.upload_reference("organizations", _split_header_reference("organizations"))
+
+    assert service.reference_counts()["organizations"] == 3
+    assert service.reference_counts()["erp_articles"] == 271
+    assert service.reference_counts()["scenarios"] == 12
+    assert service.reference_counts()["intalev_cfos"] == 15
+    assert service.store.catalog_source("organizations") == "user"
+
 def test_real_exports_accept_split_multiline_header_rows(tmp_path):
     service = WorkflowService(tmp_path / "runtime")
 

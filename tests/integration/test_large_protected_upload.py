@@ -32,8 +32,11 @@ class RecordingAsyncReader:
 
 def configured_service(tmp_path) -> WorkflowService:
     service = WorkflowService(tmp_path / "runtime")
-    for kind in ("erp_articles", "organizations", "scenarios"):
+    for kind in ("erp_articles", "organizations", "scenarios", "intalev_cfos"):
         service.upload_reference(kind, reference_bytes(kind))
+    service.store.save_cfo_mappings(
+        {"code:INT-CFO-1": "cfo", "code:INT-CFO-2": "other"}
+    )
     return service
 
 

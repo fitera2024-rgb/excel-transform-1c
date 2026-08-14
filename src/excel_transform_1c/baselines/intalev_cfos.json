@@ -1,0 +1,92 @@
+[
+  {
+    "source_key": "code:1",
+    "code": "1",
+    "name": "ЦИ\\ЦП Планета",
+    "full_path": "ЦИ\\ЦП Планета"
+  },
+  {
+    "source_key": "code:13",
+    "code": "13",
+    "name": "Пригородный",
+    "full_path": "Пригородный"
+  },
+  {
+    "source_key": "code:9",
+    "code": "9",
+    "name": "Служебный",
+    "full_path": "Служебный"
+  },
+  {
+    "source_key": "code:7",
+    "code": "7",
+    "name": "ЦД/ЦЗ Фонд развития",
+    "full_path": "ЦД/ЦЗ Фонд развития"
+  },
+  {
+    "source_key": "code:8",
+    "code": "8",
+    "name": "ЦЗ Филиал СПб",
+    "full_path": "ЦЗ Филиал СПб"
+  },
+  {
+    "source_key": "code:2",
+    "code": "2",
+    "name": "ЦМД Владивосток",
+    "full_path": "ЦМД Владивосток"
+  },
+  {
+    "source_key": "code:5",
+    "code": "5",
+    "name": "ЦМД Камчатка",
+    "full_path": "ЦМД Камчатка"
+  },
+  {
+    "source_key": "code:6",
+    "code": "6",
+    "name": "ЦМД Квестор",
+    "full_path": "ЦМД Квестор"
+  },
+  {
+    "source_key": "code:11",
+    "code": "11",
+    "name": "ЦМД КонсалтСервис",
+    "full_path": "ЦМД КонсалтСервис"
+  },
+  {
+    "source_key": "code:15",
+    "code": "15",
+    "name": "ЦМД МегаАйс",
+    "full_path": "ЦМД МегаАйс"
+  },
+  {
+    "source_key": "code:3",
+    "code": "3",
+    "name": "ЦМД НХ",
+    "full_path": "ЦМД НХ"
+  },
+  {
+    "source_key": "code:16",
+    "code": "16",
+    "name": "ЦМД Первый ХК",
+    "full_path": "ЦМД Первый ХК"
+  },
+  {
+    "source_key": "code:12",
+    "code": "12",
+    "name": "ЦМД Производитель",
+    "full_path": "ЦМД Производитель"
+  },
+  {
+    "source_key": "code:4",
+    "code": "4",
+    "name": "ЦМД Сахалин",
+    "full_path": "ЦМД Сахалин"
+  },
+  {
+    "source_key": "code:10",
+    "code": "10",
+    "name": "ЦМД Хабаровск",
+    "full_path": "ЦМД Хабаровск"
+  }
+]

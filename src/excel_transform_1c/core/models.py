@@ -47,6 +47,9 @@ class CandidateRange:
     first_data_row: int
     last_data_row: int
     columns: dict[str, int]
+    source_kind: str = "prepared_budget"
+    source_cfo: str = ""
+    source_year: int | None = None
 
     @property
     def label(self) -> str:
@@ -156,6 +159,7 @@ class PreviewRecord:
     status: str = STATUS_OK
     reasons: list[str] = field(default_factory=list)
     pointers: dict[str, SourcePointer] = field(default_factory=dict)
+    source_reporting_unit: str = ""
     source_cfo: str = ""
     source_cfo_key: str = ""
     cfo_target_node_id: str = ""

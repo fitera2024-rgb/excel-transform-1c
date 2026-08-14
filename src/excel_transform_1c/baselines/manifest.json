@@ -1,0 +1,39 @@
+{
+  "version": "baseline-catalogs-v1-20260814-001",
+  "catalogs": {
+    "erp_articles": {
+      "file": "erp_articles.json",
+      "count": 271
+    },
+    "organizations": {
+      "file": "organizations.json",
+      "count": 357
+    },
+    "scenarios": {
+      "file": "scenarios.json",
+      "count": 12
+    },
+    "intalev_cfos": {
+      "file": "intalev_cfos.json",
+      "count": 15
+    }
+  },
+  "source_evidence": {
+    "erp_articles": {
+      "file_name": "СтатьиДоходовИРасходовЕРП.xlsx",
+      "sha256": "8c7ca0e3884bb78f610a95e01a935debf55871312d3193728b248e7c4a197bbf"
+    },
+    "organizations": {
+      "file_name": "ОрганизациииерархияЕРП.xlsx",
+      "sha256": "3342603c0782fe12871ad55e7e19e778a97651e8cff2e00f0ce6774295c57522"
+    },
+    "scenarios": {
+      "file_name": "СЦЕНАРИИ_СПР_ЕРП.xlsx",
+      "sha256": "94364904a4ed9573ee058239d97b298096359de9dc4074017236546e8f6cd77f"
+    },
+    "intalev_cfos": {
+      "file_name": "ЦФО_Инталев.xlsx",
+      "sha256": "a6bf5723bf998de6b4e852dce908010202aa3573f2d31ca43046f391c2ec4c60"
+    }
+  }
+}

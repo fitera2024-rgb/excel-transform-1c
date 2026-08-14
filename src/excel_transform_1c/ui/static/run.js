@@ -380,17 +380,26 @@
   const cfoBulkSubmit = cfoBulkForm?.querySelector("[data-cfo-bulk-submit]");
 
   function currentCfoSelections() {
-    const bySourceKey = new Map();
+    const byEntryKey = new Map();
     cfoEntries.forEach((entry) => {
-      if (entry.dataset.confirmed === "true" || entry.dataset.eligible !== "true") return;
-      const sourceKey = entry.dataset.sourceKey || "";
+      if (entry.dataset.confirmed === "true") return;
+      const entryKey = entry.dataset.entryKey || "";
+      const intalevSourceKey = entry.querySelector("[data-cfo-intalev]")?.value || "";
       const target = entry.querySelector("[data-cfo-target]")?.value || "";
-      if (sourceKey && target) {
-        bySourceKey.set(sourceKey, { source_key: sourceKey, target_node_id: target });
+      if (entryKey && intalevSourceKey && target) {
+        byEntryKey.set(entryKey, {
+          source_reporting_unit: entry.dataset.sourceReportingUnit || "",
+          source_cfo: entry.dataset.sourceCfo || "",
+          intalev_source_key: intalevSourceKey,
+          target_node_id: target,
+        });
       }
     });
-    return [...bySourceKey.values()].sort((left, right) =>
-      collator.compare(left.source_key, right.source_key),
+    return [...byEntryKey.values()].sort((left, right) =>
+      collator.compare(
+        `${left.source_reporting_unit}\u0000${left.source_cfo}`,
+        `${right.source_reporting_unit}\u0000${right.source_cfo}`,
+      ),
     );
   }
 
@@ -421,20 +430,21 @@
   cfoEntries.forEach((entry) => {
     const form = entry.querySelector("[data-cfo-form]");
     if (!form) return;
+    const intalev = form.querySelector("[data-cfo-intalev]");
     const target = form.querySelector("[data-cfo-target]");
     const confirmation = form.querySelector("[data-cfo-confirm]");
     const submit = form.querySelector("[data-cfo-submit]");
 
     function refreshCfoForm() {
-      const hasTarget = Boolean(target?.value);
+      const hasBoth = Boolean(intalev?.value && target?.value);
       if (confirmation) {
-        confirmation.disabled = !hasTarget;
-        if (!hasTarget) confirmation.checked = false;
+        confirmation.disabled = !hasBoth;
+        if (!hasBoth) confirmation.checked = false;
       }
       if (submit) {
-        submit.disabled = !hasTarget || !confirmation?.checked;
-        submit.textContent = !hasTarget
-          ? "Сначала выберите узел"
+        submit.disabled = !hasBoth || !confirmation?.checked;
+        submit.textContent = !hasBoth
+          ? "Сначала выберите оба значения"
           : !confirmation?.checked
             ? "Сначала поставьте галку"
             : "Применить соответствие";
@@ -442,6 +452,7 @@
       refreshCfoBulk();
     }
 
+    intalev?.addEventListener("change", refreshCfoForm);
     target?.addEventListener("change", refreshCfoForm);
     confirmation?.addEventListener("change", refreshCfoForm);
     form.addEventListener("submit", (event) => {

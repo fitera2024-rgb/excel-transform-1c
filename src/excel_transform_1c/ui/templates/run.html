@@ -23,17 +23,17 @@
 <section class="card cfo-mapping-section" data-testid="cfo-mapping-section">
   <div class="section-heading">
     <div>
-      <p class="eyebrow ink">ЦФО Инталев</p>
-      <h2>Сопоставление с деревом 1С</h2>
+      <p class="eyebrow ink">ЦФО</p>
+      <h2>Исходный ЦФО → ЦФО Инталев → узел 1С</h2>
     </div>
-    <p>Выберите точный узел 1С для каждого уникального ЦФО Инталев. Одно соответствие применяется ко всем строкам и месяцам этого ЦФО.</p>
+    <p>Для каждого уникального исходного ЦФО явно выберите ЦФО Инталев и точный узел 1С. Выбор сохраняется по единице отчёта и исходному ЦФО и применяется ко всем его строкам и месяцам.</p>
   </div>
 
   <form method="post" action="/runs/{{ run.run_id }}/confirm-filled-cfo" class="bulk-confirm-card cfo-bulk-card" data-cfo-bulk-form data-testid="cfo-bulk-form">
     <div class="bulk-confirm-copy">
       <p class="eyebrow ink">Массовое применение ЦФО</p>
       <h3>Применить все заполненные соответствия</h3>
-      <p>Сервис не выбирает узлы автоматически. В действие входят только заполненные точные соответствия.</p>
+      <p>Сервис не угадывает названия. В действие входят только строки, где явно выбраны оба уровня.</p>
     </div>
     <input type="hidden" name="selections" value="[]" data-cfo-bulk-selections>
     <label class="confirm-choice bulk-confirm-choice">
@@ -50,43 +50,51 @@
     <article
       class="cfo-mapping-row{% if entry.confirmed %} is-confirmed{% endif %}"
       data-cfo-entry
-      data-source-key="{{ entry.source_key }}"
+      data-entry-key="{{ entry.entry_key }}"
+      data-source-reporting-unit="{{ entry.source_reporting_unit }}"
+      data-source-cfo="{{ entry.source_cfo }}"
       data-confirmed="{{ 'true' if entry.confirmed else 'false' }}"
-      data-eligible="{{ 'true' if entry.eligible else 'false' }}"
+      data-eligible="true"
     >
       <div class="cfo-source-card">
         <strong>{{ entry.source_label or "ЦФО не указан" }}</strong>
         <span>Используется в {{ entry.row_count }} исходных строках текущего файла</span>
-        {% if not entry.eligible %}<small class="mapping-warning">{{ entry.status }}</small>{% endif %}
+        {% if entry.intalev_confirmed %}<small>ЦФО Инталев: {{ entry.intalev_label }}</small>{% endif %}
       </div>
       {% if entry.confirmed %}
       <div class="business-status cfo-confirmed-status" data-testid="cfo-confirmed-status">
         <strong>Сопоставление ЦФО подтверждено</strong>
-        <span>{{ entry.target_label }}</span>
+        <span>{{ entry.intalev_label }} → {{ entry.target_label }}</span>
       </div>
-      {% elif entry.eligible %}
+      {% else %}
       <form method="post" action="/runs/{{ run.run_id }}/map-cfo" class="cfo-mapping-form" data-cfo-form>
-        <input type="hidden" name="source_key" value="{{ entry.source_key }}">
+        <input type="hidden" name="source_reporting_unit" value="{{ entry.source_reporting_unit }}">
+        <input type="hidden" name="source_cfo" value="{{ entry.source_cfo }}">
+        <label>
+          ЦФО Инталев
+          <select name="intalev_source_key" data-cfo-intalev>
+            <option value="">Выберите точный ЦФО Инталев</option>
+            {% for option in intalev_cfo_options %}
+            <option value="{{ option.source_key }}"{% if option.source_key == entry.intalev_source_key %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+          </select>
+        </label>
         <label>
           ЦФО / подразделение / узел 1С
           <select name="target_node_id" data-cfo-target>
             <option value="">Выберите точный узел 1С</option>
             {% for option in organization_options %}
-            <option value="{{ option.node_id }}">{{ option.label }}{% if option.full_path and option.full_path != option.name %} · {{ option.full_path }}{% endif %}</option>
+            <option value="{{ option.node_id }}"{% if option.node_id == entry.target_node_id %} selected{% endif %}>{{ option.label }}{% if option.full_path and option.full_path != option.name %} · {{ option.full_path }}{% endif %}</option>
             {% endfor %}
           </select>
         </label>
         <label class="confirm-choice">
           <input type="checkbox" name="confirmed" value="1" data-cfo-confirm autocomplete="off" disabled>
-          Подтверждаю соответствие ЦФО
+          Подтверждаю оба соответствия ЦФО
         </label>
-        <button type="submit" data-cfo-submit disabled>Сначала выберите узел и поставьте галку</button>
+        <button type="submit" data-cfo-submit disabled>Сначала выберите оба значения и поставьте галку</button>
+        <small class="mapping-warning">{{ entry.status }}</small>
       </form>
-      {% else %}
-      <div class="read-only-attention">
-        <strong>Сопоставление заблокировано</strong>
-        <p>{{ entry.status }}. Проверьте классификатор ЦФО Инталев.</p>
-      </div>
       {% endif %}
     </article>
     {% else %}

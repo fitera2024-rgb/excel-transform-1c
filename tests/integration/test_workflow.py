@@ -21,8 +21,11 @@ pytestmark = pytest.mark.integration
 
 def configured_service(tmp_path) -> WorkflowService:
     service = WorkflowService(tmp_path / "runtime")
-    for kind in ("erp_articles", "organizations", "scenarios"):
+    for kind in ("erp_articles", "organizations", "scenarios", "intalev_cfos"):
         service.upload_reference(kind, reference_bytes(kind))
+    service.store.save_cfo_mappings(
+        {"code:INT-CFO-1": "cfo", "code:INT-CFO-2": "other"}
+    )
     return service
 
 
@@ -109,7 +112,10 @@ def test_local_persistence_survives_restart_and_keeps_mapping(tmp_path):
     key = ("ОтчетОПрибыляхИУбытках", "Тип", "Группа", "Статья")
     first.save_manual_mapping(key, "ERP-001")
     second = LocalStore(database)
-    assert second.list_scenarios()[0].scenario_id == scenario.scenario_id
+    restarted = next(
+        item for item in second.list_scenarios() if item.name == "ПЛАН 2027"
+    )
+    assert restarted.scenario_id == scenario.scenario_id
     assert second.load_manual_mappings()[key] == "ERP-001"
 
 

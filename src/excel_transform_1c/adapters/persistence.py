@@ -7,7 +7,18 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from excel_transform_1c.adapters.references import (
+    reference_exact_key,
+    validate_reference_payload,
+)
+from excel_transform_1c.baselines import load_baseline_catalogs
 from excel_transform_1c.core.models import Scenario
+
+
+BASELINE_CATALOG_SOURCE = "baseline"
+USER_CATALOG_SOURCE = "user"
+REFERENCE_KINDS = ("erp_articles", "organizations", "intalev_cfos")
+SCENARIO_KIND = "scenarios"
 
 
 @dataclass(frozen=True)
@@ -23,6 +34,7 @@ class LocalStore:
         self.database = Path(database)
         self.database.parent.mkdir(parents=True, exist_ok=True)
         self._initialize()
+        self._bootstrap_baselines()
 
     def _connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.database)
@@ -47,10 +59,22 @@ class LocalStore:
                     payload TEXT NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+                CREATE TABLE IF NOT EXISTS catalog_sources (
+                    kind TEXT PRIMARY KEY,
+                    source TEXT NOT NULL CHECK(source IN ('baseline', 'user')),
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
                 CREATE TABLE IF NOT EXISTS manual_mappings (
                     mapping_key TEXT PRIMARY KEY,
                     erp_code TEXT NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS source_cfo_mappings (
+                    reporting_unit TEXT NOT NULL,
+                    source_cfo TEXT NOT NULL,
+                    intalev_source_key TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(reporting_unit, source_cfo)
                 );
                 CREATE TABLE IF NOT EXISTS cfo_mappings (
                     source_key TEXT PRIMARY KEY,
@@ -72,6 +96,36 @@ class LocalStore:
                 );
                 """
             )
+
+    def _bootstrap_baselines(self) -> None:
+        """Seed a brand-new store without overriding an existing user catalog.
+
+        Packaged baselines are initial application data, not a previous user
+        upload.  The first explicit catalog upload therefore replaces the
+        corresponding baseline; later uploads supplement the user catalog.
+        ``catalog_sources`` records that distinction across restarts and also
+        treats pre-upgrade stores with existing data as user-owned.
+        """
+
+        catalogs = load_baseline_catalogs()
+        for kind in REFERENCE_KINDS:
+            source = self.catalog_source(kind)
+            existing = self.load_reference(kind)
+            if source is None and existing:
+                self._set_catalog_source(kind, USER_CATALOG_SOURCE)
+                continue
+            if source is None:
+                payload = validate_reference_payload(kind, catalogs[kind])
+                self._write_reference(kind, payload)
+                self._set_catalog_source(kind, BASELINE_CATALOG_SOURCE)
+
+        source = self.catalog_source(SCENARIO_KIND)
+        existing_scenarios = self.list_scenarios()
+        if source is None and existing_scenarios:
+            self._set_catalog_source(SCENARIO_KIND, USER_CATALOG_SOURCE)
+        elif source is None:
+            self._merge_scenarios(catalogs[SCENARIO_KIND], preserve_existing=True)
+            self._set_catalog_source(SCENARIO_KIND, BASELINE_CATALOG_SOURCE)
 
     def list_scenarios(self) -> list[Scenario]:
         with self._connect() as connection:
@@ -106,6 +160,9 @@ class LocalStore:
             erp_code=erp_code,
             erp_confirmed=erp_confirmed,
         )
+        # A manually added scenario supplements the visible baseline rather
+        # than deleting it, but the resulting catalog is now user-owned.
+        self._set_catalog_source(SCENARIO_KIND, USER_CATALOG_SOURCE)
         return scenario
 
     def upsert_scenario(
@@ -184,13 +241,46 @@ class LocalStore:
             )
             return scenario, False, updated
 
-    def merge_scenarios(self, payload: list[dict[str, Any]]) -> ImportStats:
+    def merge_scenarios(
+        self,
+        payload: list[dict[str, Any]],
+        *,
+        preserve_existing: bool = False,
+    ) -> ImportStats:
+        normalized = _validate_scenario_payload(payload)
+        if (
+            not preserve_existing
+            and self.catalog_source(SCENARIO_KIND) == BASELINE_CATALOG_SOURCE
+        ):
+            with self._connect() as connection:
+                connection.execute("DELETE FROM scenarios")
+
+        stats = self._merge_scenarios(
+            normalized, preserve_existing=preserve_existing
+        )
+        if not preserve_existing:
+            self._set_catalog_source(SCENARIO_KIND, USER_CATALOG_SOURCE)
+        return stats
+
+    def _merge_scenarios(
+        self,
+        payload: list[dict[str, Any]],
+        *,
+        preserve_existing: bool,
+    ) -> ImportStats:
+        normalized = _validate_scenario_payload(payload)
         added = 0
         updated = 0
-        for item in payload:
+        existing_keys = {
+            (scenario.name, scenario.year) for scenario in self.list_scenarios()
+        }
+        for item in normalized:
+            identity = (str(item["name"]), int(item["year"]))
+            if preserve_existing and identity in existing_keys:
+                continue
             _, was_added, was_updated = self.upsert_scenario(
                 name=str(item["name"]),
-                year=int(item.get("year") or 0),
+                year=int(item["year"]),
                 comment=str(item.get("comment") or ""),
                 erp_code=str(item.get("erp_code") or "") or None,
                 erp_confirmed=bool(item.get("erp_code")),
@@ -198,71 +288,61 @@ class LocalStore:
             added += int(was_added)
             updated += int(was_updated)
         return ImportStats(
-            incoming=len(payload),
+            incoming=len(normalized),
             added=added,
             updated=updated,
             total=len(self.list_scenarios()),
         )
 
     def replace_reference(self, kind: str, payload: list[dict[str, Any]]) -> None:
-        """
-        Persist one global local reference catalog.
+        """Persist one global local reference catalog.
 
-        The first upload creates the catalog. Later uploads supplement/update it
-        by stable code and never create a per-organization copy.
+        The packaged baseline is replaced by the first explicit upload. Later
+        uploads supplement/update that user catalog by exact stable identity.
         """
-        key_field = {
-            "erp_articles": "code",
-            "organizations": "code",
-            "intalev_cfos": "source_key",
-        }.get(kind)
-        if key_field is None:
-            self._write_reference(kind, payload)
-            return
-        self.merge_reference(kind, payload, key_field=key_field)
+
+        incoming = validate_reference_payload(kind, payload)
+        if self.catalog_source(kind) == BASELINE_CATALOG_SOURCE:
+            self._write_reference(kind, incoming)
+        else:
+            self.merge_reference(kind, incoming)
+        self._set_catalog_source(kind, USER_CATALOG_SOURCE)
 
     def merge_reference(
         self,
         kind: str,
         payload: list[dict[str, Any]],
         *,
-        key_field: str,
+        preserve_existing: bool = False,
     ) -> ImportStats:
-        existing = self.load_reference(kind)
+        existing = validate_reference_payload(kind, self.load_reference(kind))
+        incoming = validate_reference_payload(kind, payload)
         ordered_keys: list[str] = []
         merged: dict[str, dict[str, Any]] = {}
 
         for item in existing:
-            key = _reference_key(item, key_field)
-            if not key or key in merged:
-                continue
+            key = reference_exact_key(kind, item)
             ordered_keys.append(key)
             merged[key] = item
 
-        incoming_seen: set[str] = set()
         added = 0
         updated = 0
-        for item in payload:
-            key = _reference_key(item, key_field)
-            if not key:
-                raise ValueError(f"Справочник {kind} содержит запись без кода")
-            if key in incoming_seen:
-                raise ValueError(f"Справочник {kind} содержит повторяющийся код: {key}")
-            incoming_seen.add(key)
-
+        for item in incoming:
+            key = reference_exact_key(kind, item)
             if key not in merged:
                 ordered_keys.append(key)
                 merged[key] = item
                 added += 1
-            else:
-                if merged[key] != item:
-                    merged[key] = item
-                    updated += 1
+            elif not preserve_existing and merged[key] != item:
+                _validate_stable_fields(kind, key, merged[key], item)
+                merged[key] = item
+                updated += 1
 
         combined = [merged[key] for key in ordered_keys]
+        validate_reference_payload(kind, combined)
         self._write_reference(kind, combined)
         return ImportStats(
-            incoming=len(payload),
+            incoming=len(incoming),
             added=added,
             updated=updated,
             total=len(combined),
@@ -286,6 +366,27 @@ class LocalStore:
             ).fetchone()
         return json.loads(row["payload"]) if row else []
 
+
+    def catalog_source(self, kind: str) -> str | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT source FROM catalog_sources WHERE kind = ?", (kind,)
+            ).fetchone()
+        return str(row["source"]) if row else None
+
+    def _set_catalog_source(self, kind: str, source: str) -> None:
+        if source not in {BASELINE_CATALOG_SOURCE, USER_CATALOG_SOURCE}:
+            raise ValueError(f"Неизвестный источник справочника: {source}")
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO catalog_sources(kind, source) VALUES (?, ?)
+                ON CONFLICT(kind) DO UPDATE
+                SET source=excluded.source, updated_at=CURRENT_TIMESTAMP
+                """,
+                (kind, source),
+            )
+
     def save_manual_mapping(self, key: tuple[str, str, str, str], erp_code: str) -> None:
         encoded = json.dumps(key, ensure_ascii=False)
         with self._connect() as connection:
@@ -305,6 +406,47 @@ class LocalStore:
             ).fetchall()
         return {
             tuple(json.loads(row["mapping_key"])): row["erp_code"]
+            for row in rows
+        }
+
+    def save_source_cfo_mapping(
+        self, reporting_unit: str, source_cfo: str, intalev_source_key: str
+    ) -> None:
+        self.save_source_cfo_mappings(
+            {(reporting_unit, source_cfo): intalev_source_key}
+        )
+
+    def save_source_cfo_mappings(
+        self, mappings: dict[tuple[str, str], str]
+    ) -> None:
+        rows = [
+            (reporting_unit, source_cfo, intalev_source_key)
+            for (reporting_unit, source_cfo), intalev_source_key in mappings.items()
+            if reporting_unit and source_cfo and intalev_source_key
+        ]
+        if not rows:
+            return
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO source_cfo_mappings(
+                    reporting_unit, source_cfo, intalev_source_key
+                ) VALUES (?, ?, ?)
+                ON CONFLICT(reporting_unit, source_cfo) DO UPDATE
+                SET intalev_source_key=excluded.intalev_source_key,
+                    updated_at=CURRENT_TIMESTAMP
+                """,
+                rows,
+            )
+
+    def load_source_cfo_mappings(self) -> dict[tuple[str, str], str]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT reporting_unit, source_cfo, intalev_source_key "
+                "FROM source_cfo_mappings"
+            ).fetchall()
+        return {
+            (row["reporting_unit"], row["source_cfo"]): row["intalev_source_key"]
             for row in rows
         }
 
@@ -367,8 +509,57 @@ class LocalStore:
             )
 
 
-def _reference_key(item: dict[str, Any], field: str) -> str:
-    return str(item.get(field) or "").strip()
+def _validate_stable_fields(
+    kind: str,
+    key: str,
+    existing: dict[str, Any],
+    incoming: dict[str, Any],
+) -> None:
+    stable_fields = {
+        "organizations": ("node_id",),
+        "intalev_cfos": ("source_key",),
+    }.get(kind, ())
+    for field in stable_fields:
+        if str(existing.get(field) or "").strip() != str(
+            incoming.get(field) or ""
+        ).strip():
+            raise ValueError(
+                f"Конфликт exact key в справочнике {kind}: "
+                f"{key}, изменён стабильный {field}"
+            )
+
+
+def _validate_scenario_payload(
+    payload: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    validated: list[dict[str, Any]] = []
+    by_key: dict[tuple[str, int], dict[str, Any]] = {}
+    for position, raw_item in enumerate(payload, start=1):
+        if not isinstance(raw_item, dict):
+            raise ValueError(f"Справочник сценариев: некорректная запись №{position}")
+        year = int(raw_item.get("year") or 0)
+        name = canonical_scenario_name(str(raw_item.get("name") or ""), year)
+        if not name:
+            raise ValueError(
+                "Сценарий не имеет точного ключа: нужны точное имя и год"
+            )
+        item = {
+            "name": name,
+            "year": year,
+            "erp_code": str(raw_item.get("erp_code") or "").strip(),
+            "comment": str(raw_item.get("comment") or "").strip(),
+        }
+        key = (name, year)
+        previous = by_key.get(key)
+        if previous is None:
+            by_key[key] = item
+            validated.append(item)
+        elif previous != item:
+            raise ValueError(
+                "Конфликт exact key сценария: "
+                f"точное имя «{name}» и год {year} повторены с разными данными"
+            )
+    return validated
 
 
 def canonical_scenario_name(name: str, year: int) -> str:

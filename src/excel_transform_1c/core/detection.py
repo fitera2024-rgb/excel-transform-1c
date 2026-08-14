@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from datetime import date, datetime
 from typing import Any
 
 from openpyxl.utils import get_column_letter
@@ -35,6 +36,16 @@ MONTH_ALIASES: dict[int, set[str]] = {
     12: {"декабрь", "дек", "12"},
 }
 
+INTALEV_INDICATOR_ALIASES = {"показатели", "показатель"}
+INTALEV_METADATA_CFO = re.compile(r"(?im)^\s*цфо\s*:\s*(.+?)\s*$")
+INTALEV_PERIOD = re.compile(
+    r"^\s*(\d{2})\.(\d{2})\.(\d{4})\s*-\s*"
+    r"(\d{2})\.(\d{2})\.(\d{4})\s*$"
+)
+TECHNICAL_TOTAL = re.compile(r"(?:^|\s)итого(?:\s|$)", re.IGNORECASE)
+TECHNICAL_RATIO = re.compile(r"^(?:%|рентабельност)", re.IGNORECASE)
+EXPENSE_WORD = re.compile(r"расход", re.IGNORECASE)
+
 
 def normalize_header(value: Any) -> str:
     if value is None:
@@ -66,7 +77,7 @@ def detect_candidate_ranges(
     scan_rows: int = 100,
     scan_columns: int = 100,
 ) -> list[CandidateRange]:
-    raw: list[tuple[Any, int, dict[str, int]]] = []
+    raw: list[tuple[Any, int, dict[str, int], str, str, int | None]] = []
     for sheet in workbook.worksheets:
         max_row = min(sheet.max_row or scan_rows, scan_rows)
         max_column = min(sheet.max_column or scan_columns, scan_columns)
@@ -80,30 +91,240 @@ def detect_candidate_ranges(
         for row_number, values in enumerate(rows, start=1):
             schema = _column_schema(values)
             if schema:
-                raw.append((sheet, row_number, schema))
+                raw.append((sheet, row_number, schema, "prepared_budget", "", None))
+                continue
+            intalev = _intalev_schema(values)
+            if intalev:
+                source_cfo = _metadata_cfo(sheet, row_number)
+                source_year = _period_year(values, intalev)
+                raw.append(
+                    (
+                        sheet,
+                        row_number,
+                        intalev,
+                        "intalev_opiu",
+                        source_cfo,
+                        source_year,
+                    )
+                )
 
     candidates: list[CandidateRange] = []
-    for index, (sheet, header_row, columns) in enumerate(raw):
+    for index, (sheet, header_row, columns, source_kind, source_cfo, source_year) in enumerate(raw):
         later_headers = [
             other_row
-            for other_sheet, other_row, _ in raw
+            for other_sheet, other_row, *_ in raw
             if other_sheet.title == sheet.title and other_row > header_row
         ]
         upper_bound = min(later_headers) - 1 if later_headers else sheet.max_row
-        last_data_row = _last_data_row(sheet, header_row + 1, upper_bound, columns)
-        if last_data_row < header_row + 1:
+        if source_kind == "intalev_opiu":
+            if not _has_intalev_business_structure(
+                sheet, header_row + 1, upper_bound, columns["article"]
+            ):
+                continue
+            first_data_row, last_data_row = _intalev_data_bounds(
+                sheet, header_row + 1, upper_bound, columns["article"]
+            )
+        else:
+            first_data_row = header_row + 1
+            last_data_row = _last_data_row(sheet, first_data_row, upper_bound, columns)
+        if last_data_row < first_data_row:
             continue
         candidates.append(
             CandidateRange(
                 candidate_id=f"candidate-{index + 1}",
                 sheet=sheet.title,
                 header_row=header_row,
-                first_data_row=header_row + 1,
+                first_data_row=first_data_row,
                 last_data_row=last_data_row,
                 columns=columns,
+                source_kind=source_kind,
+                source_cfo=source_cfo,
+                source_year=source_year,
             )
         )
     return candidates
+
+
+def _intalev_schema(values: Iterable[Any]) -> dict[str, int] | None:
+    row = list(values)
+    indicators = [
+        index
+        for index, value in enumerate(row, start=1)
+        if normalize_header(value) in INTALEV_INDICATOR_ALIASES
+    ]
+    if len(indicators) != 1:
+        return None
+
+    months: dict[int, int] = {}
+    years: set[int] = set()
+    for index, value in enumerate(row, start=1):
+        period = _parse_period(value)
+        if period is None:
+            continue
+        year, month = period
+        if month in months:
+            return None
+        months[month] = index
+        years.add(year)
+    if set(months) != set(range(1, 13)) or len(years) != 1:
+        return None
+    return {
+        "article": indicators[0],
+        **{f"month_{month}": months[month] for month in range(1, 13)},
+    }
+
+
+def _parse_period(value: Any) -> tuple[int, int] | None:
+    if isinstance(value, datetime):
+        return value.year, value.month
+    if isinstance(value, date):
+        return value.year, value.month
+    match = INTALEV_PERIOD.match(str(value or ""))
+    if not match:
+        return None
+    start_day, start_month, start_year, _, end_month, end_year = map(int, match.groups())
+    if start_day != 1 or start_month != end_month or start_year != end_year:
+        return None
+    return start_year, start_month
+
+
+def _period_year(values: Iterable[Any], columns: dict[str, int]) -> int | None:
+    row = list(values)
+    period = _parse_period(row[columns["month_1"] - 1])
+    return period[0] if period else None
+
+
+def _metadata_cfo(sheet: Any, header_row: int) -> str:
+    for row in sheet.iter_rows(
+        min_row=1,
+        max_row=max(header_row - 1, 1),
+        min_col=1,
+        max_col=min(sheet.max_column or 1, 16),
+        values_only=True,
+    ):
+        for value in row:
+            match = INTALEV_METADATA_CFO.search(str(value or ""))
+            if match:
+                return match.group(1).strip()
+    return ""
+
+
+def _row_outline_level(sheet: Any, row_number: int) -> int:
+    row_dimensions = getattr(sheet, "row_dimensions", None)
+    if row_dimensions is None:
+        return 0
+    try:
+        return int(row_dimensions[row_number].outlineLevel or 0)
+    except (AttributeError, KeyError, TypeError):
+        return 0
+
+
+def _next_nonempty_label(
+    sheet: Any, row_number: int, last_row: int, label_column: int
+) -> tuple[int, str] | None:
+    for candidate_row in range(row_number + 1, last_row + 1):
+        value = str(sheet.cell(candidate_row, label_column).value or "").strip()
+        if value:
+            return candidate_row, value
+    return None
+
+
+def _is_flat_expense_type_row(
+    sheet: Any, row_number: int, last_row: int, label_column: int
+) -> bool:
+    cell = sheet.cell(row_number, label_column)
+    name = str(cell.value or "").strip()
+    if not name or not bool(cell.font.bold) or not EXPENSE_WORD.search(name):
+        return False
+    next_label = _next_nonempty_label(sheet, row_number, min(last_row, row_number + 3), label_column)
+    return bool(
+        next_label
+        and normalize_header(next_label[1]).startswith("% расходов")
+    )
+
+
+def _has_intalev_business_structure(
+    sheet: Any, first_row: int, upper_bound: int | None, label_column: int
+) -> bool:
+    """Reject generic 12-month metric tables that only resemble Intalev OPIU.
+
+    This scan must remain sequential: random ``sheet.cell`` access on an
+    ``openpyxl`` read-only worksheet reparses the XML stream and turns a
+    several-megabyte workbook into a multi-minute operation.
+    """
+
+    last_row = upper_bound if upper_bound is not None else sheet.max_row
+    labelled: list[tuple[int, Any, str]] = []
+    rows = sheet.iter_rows(
+        min_row=first_row,
+        max_row=last_row,
+        min_col=label_column,
+        max_col=label_column,
+        values_only=False,
+    )
+    for row_number, row in enumerate(rows, start=first_row):
+        cell = row[0]
+        name = str(cell.value or "").strip()
+        if name:
+            labelled.append((row_number, cell, name))
+
+    has_expense_label = False
+    has_hierarchy = False
+    for index, (row_number, cell, name) in enumerate(labelled):
+        if EXPENSE_WORD.search(name):
+            has_expense_label = True
+        indent = int(cell.alignment.indent or 0)
+        if indent > 0 or _row_outline_level(sheet, row_number) > 0:
+            has_hierarchy = True
+
+        if not bool(cell.font.bold) or not EXPENSE_WORD.search(name):
+            continue
+        # The real flat OPIU layout places ``% расходов`` immediately after
+        # an expense-section header. Allow intervening blank rows but not a
+        # distant, unrelated ratio line.
+        if index + 1 < len(labelled):
+            next_row, _, next_name = labelled[index + 1]
+            if (
+                next_row <= row_number + 3
+                and normalize_header(next_name).startswith("% расходов")
+            ):
+                return True
+    return has_expense_label and has_hierarchy
+
+
+def _intalev_data_bounds(
+    sheet: Any, first_row: int, upper_bound: int | None, label_column: int
+) -> tuple[int, int]:
+    last_row = upper_bound if upper_bound is not None else sheet.max_row
+    first_found: int | None = None
+    last_found: int | None = None
+    rows = sheet.iter_rows(
+        min_row=first_row,
+        max_row=last_row,
+        min_col=label_column,
+        max_col=label_column,
+        values_only=True,
+    )
+    for row_number, row in enumerate(rows, start=first_row):
+        if normalize_header(row[0]):
+            if first_found is None:
+                first_found = row_number
+            last_found = row_number
+    if first_found is None or last_found is None:
+        return last_row + 1, last_row
+    return first_found, last_found
+
+
+def _first_intalev_data_row(
+    sheet: Any, first_row: int, upper_bound: int | None, label_column: int
+) -> int:
+    return _intalev_data_bounds(sheet, first_row, upper_bound, label_column)[0]
+
+
+def _last_intalev_data_row(
+    sheet: Any, first_row: int, upper_bound: int | None, label_column: int
+) -> int:
+    return _intalev_data_bounds(sheet, first_row, upper_bound, label_column)[1]
 
 
 def _last_data_row(
@@ -139,6 +360,9 @@ def _last_data_row(
 
 
 def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str) -> list[SourceRow]:
+    if candidate.source_kind == "intalev_opiu":
+        return _read_intalev_source_rows(workbook, candidate, source_file)
+
     sheet = workbook[candidate.sheet]
     result: list[SourceRow] = []
     relevant = list(candidate.columns.values())
@@ -180,3 +404,222 @@ def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str)
             )
         )
     return result
+
+
+def _intalev_month_values(sheet: Any, candidate: CandidateRange, row_number: int) -> tuple[Any, ...]:
+    return tuple(
+        0
+        if sheet.cell(row_number, candidate.columns[f"month_{month}"]).value in (None, "")
+        else sheet.cell(row_number, candidate.columns[f"month_{month}"]).value
+        for month in range(1, 13)
+    )
+
+
+def _intalev_cells(
+    candidate: CandidateRange,
+    row_number: int,
+    *,
+    reporting_unit_column: int | None = None,
+) -> dict[str, str]:
+    label_column = candidate.columns["article"]
+    article_cell = f"{get_column_letter(label_column)}{row_number}"
+    reporting_cell = (
+        f"{get_column_letter(reporting_unit_column)}{row_number}"
+        if reporting_unit_column
+        else "A2"
+    )
+    cfo_cell = "A2" if candidate.source_cfo else article_cell
+    return {
+        "reporting_unit": reporting_cell,
+        "expense_type": article_cell,
+        "department": article_cell,
+        "organization_type": article_cell,
+        "cfo": cfo_cell,
+        "tax": article_cell,
+        "expense_group": article_cell,
+        "article": article_cell,
+        **{
+            f"month_{month}": (
+                f"{get_column_letter(candidate.columns[f'month_{month}'])}{row_number}"
+            )
+            for month in range(1, 13)
+        },
+    }
+
+
+def _read_hierarchical_intalev_rows(
+    sheet: Any, candidate: CandidateRange, source_file: str
+) -> list[SourceRow]:
+    label_column = candidate.columns["article"]
+    labelled: list[tuple[int, str, int]] = []
+    for row_number in range(candidate.first_data_row, candidate.last_data_row + 1):
+        cell = sheet.cell(row_number, label_column)
+        name = str(cell.value or "").strip()
+        if not name:
+            continue
+        indent = int(cell.alignment.indent or 0)
+        outline = _row_outline_level(sheet, row_number)
+        level = indent if indent else outline * 2
+        labelled.append((row_number, name, level))
+
+    stack: dict[int, str] = {}
+    result: list[SourceRow] = []
+    for index, (row_number, name, level) in enumerate(labelled):
+        stack[level] = name
+        for stale_level in [item for item in stack if item > level]:
+            del stack[stale_level]
+
+        next_level = labelled[index + 1][2] if index + 1 < len(labelled) else -1
+        is_leaf = next_level <= level
+        if not is_leaf or level == 0 or TECHNICAL_TOTAL.search(name):
+            continue
+
+        business_ancestors = [
+            stack[item]
+            for item in sorted(stack)
+            if 0 < item < level and not TECHNICAL_TOTAL.search(stack[item])
+        ]
+        expense_type = business_ancestors[0] if business_ancestors else ""
+        expense_group = business_ancestors[-1] if business_ancestors else ""
+        if normalize_header(expense_group) == "<пустое значение>":
+            expense_group = ""
+
+        result.append(
+            SourceRow(
+                source_file=source_file,
+                sheet=candidate.sheet,
+                row_number=row_number,
+                reporting_unit=None,
+                expense_type=expense_type,
+                department=None,
+                organization_type=None,
+                cfo=candidate.source_cfo,
+                tax=None,
+                expense_group=expense_group,
+                article=name,
+                months=_intalev_month_values(sheet, candidate, row_number),
+                cells=_intalev_cells(candidate, row_number),
+            )
+        )
+    return result
+
+
+def _flat_section_rows(
+    sheet: Any,
+    candidate: CandidateRange,
+) -> list[tuple[int, int, str]]:
+    label_column = candidate.columns["article"]
+    type_rows: list[tuple[int, str]] = []
+    for row_number in range(candidate.first_data_row, candidate.last_data_row + 1):
+        if _is_flat_expense_type_row(
+            sheet, row_number, candidate.last_data_row, label_column
+        ):
+            type_rows.append((row_number, str(sheet.cell(row_number, label_column).value).strip()))
+    result: list[tuple[int, int, str]] = []
+    for index, (row_number, name) in enumerate(type_rows):
+        end_row = (
+            type_rows[index + 1][0] - 1
+            if index + 1 < len(type_rows)
+            else candidate.last_data_row
+        )
+        result.append((row_number, end_row, name))
+    return result
+
+
+def _read_flat_intalev_rows(
+    sheet: Any, candidate: CandidateRange, source_file: str
+) -> list[SourceRow]:
+    """Read the real flat OPIU layout that encodes hierarchy by formatting.
+
+    The source repeats the expense type in the column immediately to the left
+    of ``Показатели``.  Bold rows are business groups; italic/regular rows are
+    their leaves.  A bold row without following leaves is retained as a
+    standalone business article so values are never silently lost.
+    """
+
+    label_column = candidate.columns["article"]
+    parent_column = label_column - 1 if label_column > 1 else None
+    reporting_unit_column = label_column - 2 if label_column > 2 else None
+    result: list[SourceRow] = []
+
+    for type_row, section_end, expense_type in _flat_section_rows(sheet, candidate):
+        type_norm = normalize_header(expense_type)
+        content: list[tuple[int, str, bool]] = []
+        for row_number in range(type_row + 1, section_end + 1):
+            cell = sheet.cell(row_number, label_column)
+            name = str(cell.value or "").strip()
+            if not name:
+                continue
+            parent_hint = (
+                normalize_header(sheet.cell(row_number, parent_column).value)
+                if parent_column
+                else type_norm
+            )
+            # Rows after the final expense section (EBITDA, profit, ratios)
+            # do not repeat the current expense type and are outside the
+            # business hierarchy even though they share the same table.
+            if parent_column and parent_hint != type_norm:
+                continue
+            normalized = normalize_header(name)
+            if (
+                normalized.startswith("% расходов")
+                or TECHNICAL_TOTAL.search(name)
+                or TECHNICAL_RATIO.search(normalized)
+                or normalized == type_norm
+            ):
+                continue
+            content.append((row_number, name, bool(cell.font.bold)))
+
+        current_group = ""
+        for index, (row_number, name, is_bold) in enumerate(content):
+            if is_bold:
+                has_leaf_children = False
+                for _, _, next_is_bold in content[index + 1 :]:
+                    if next_is_bold:
+                        break
+                    has_leaf_children = True
+                    break
+                if has_leaf_children:
+                    current_group = name
+                    continue
+                expense_group = name
+                article = name
+            else:
+                expense_group = current_group or name
+                article = name
+
+            reporting_unit = None
+            if reporting_unit_column:
+                reporting_unit = sheet.cell(row_number, reporting_unit_column).value
+            result.append(
+                SourceRow(
+                    source_file=source_file,
+                    sheet=candidate.sheet,
+                    row_number=row_number,
+                    reporting_unit=reporting_unit,
+                    expense_type=expense_type,
+                    department=None,
+                    organization_type=None,
+                    cfo=candidate.source_cfo,
+                    tax=None,
+                    expense_group=expense_group,
+                    article=article,
+                    months=_intalev_month_values(sheet, candidate, row_number),
+                    cells=_intalev_cells(
+                        candidate,
+                        row_number,
+                        reporting_unit_column=reporting_unit_column,
+                    ),
+                )
+            )
+    return result
+
+
+def _read_intalev_source_rows(
+    workbook: Any, candidate: CandidateRange, source_file: str
+) -> list[SourceRow]:
+    sheet = workbook[candidate.sheet]
+    hierarchical = _read_hierarchical_intalev_rows(sheet, candidate, source_file)
+    if hierarchical:
+        return hierarchical
+    return _read_flat_intalev_rows(sheet, candidate, source_file)
