@@ -1,0 +1,49 @@
+name: Build owner smoke wheel 20260814
+
+on:
+  push:
+    branches:
+      - qa/owner-smoke-wheel-20260814
+
+permissions:
+  contents: read
+
+jobs:
+  build-wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+      - name: Verify packaged baselines
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          wheels = list(Path('dist').glob('*.whl'))
+          assert len(wheels) == 1, wheels
+          with zipfile.ZipFile(wheels[0]) as zf:
+              names = set(zf.namelist())
+          required = {
+              'excel_transform_1c/baselines/erp_articles.json',
+              'excel_transform_1c/baselines/intalev_cfos.json',
+              'excel_transform_1c/baselines/manifest.json',
+              'excel_transform_1c/baselines/organizations.json',
+              'excel_transform_1c/baselines/scenarios.json',
+          }
+          missing = required - names
+          assert not missing, missing
+          print(wheels[0])
+          PY
+      - name: Upload wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: owner-smoke-wheel-20260814
+          path: dist/*.whl
+          if-no-files-found: error
+          retention-days: 3
