@@ -1,0 +1,117 @@
+name: Apply final FITERA owner-smoke implementation
+
+on:
+  push:
+    branches:
+      - feat/final-owner-smoke-fitera-v1
+    paths:
+      - "migration/final-owner-smoke/**"
+      - ".github/workflows/apply-final-owner-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-final-owner-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact work branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/final-owner-smoke-fitera-v1
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Reconstruct and verify exact implementation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          parts=(migration/final-owner-smoke/part-*.b64)
+          test ${#parts[@]} -eq 6
+          cat "${parts[@]}" | tr -d '\r\n' | base64 --decode > /tmp/final-owner-smoke.patch.gz
+          test "$(wc -c < /tmp/final-owner-smoke.patch.gz)" -eq 50647
+          echo "8dcec3226100b735043b553ff248b8c6a3919cd58790ea9781e6fadcb26f699d  /tmp/final-owner-smoke.patch.gz" | sha256sum --check --strict
+          gzip --decompress --stdout /tmp/final-owner-smoke.patch.gz > /tmp/final-owner-smoke.patch
+          test "$(wc -c < /tmp/final-owner-smoke.patch)" -eq 174450
+          echo "1c1aab0e56e9fe6941ed3de48e533622f3d6e5ac469fe8f0cd8920e128cf6dbe  /tmp/final-owner-smoke.patch" | sha256sum --check --strict
+          git apply --check --binary /tmp/final-owner-smoke.patch
+
+      - name: Apply implementation and remove one-time transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --binary /tmp/final-owner-smoke.patch
+          rm -rf migration/final-owner-smoke
+          rm -f .github/workflows/apply-final-owner-smoke.yml
+          git status --short
+
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel build
+          python -m pip install -e ".[test]"
+
+      - name: Verify full implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check 41e8b9b6847a1cc55d58e7e027dec771117b0cde
+          python -m compileall -q src tests scripts
+          python -m pytest tests/unit -q
+          python -m pytest tests/integration -q
+          python -m pytest tests/ui -q
+          python -m pytest -q
+          node --check src/excel_transform_1c/ui/static/run.js
+          tracked="$(git ls-files '*.xlsx' '*.xls' '*.xlsm' '*.xlsb')"
+          if [ -n "$tracked" ]; then
+            printf '%s\n' "$tracked"
+            exit 1
+          fi
+
+      - name: Build and inspect application wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m build --wheel --outdir /tmp/final-wheel
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          wheel = next(Path('/tmp/final-wheel').glob('*.whl'))
+          required = {
+              'excel_transform_1c/adapters/workbook_repair.py',
+              'excel_transform_1c/baselines/erp_articles.json',
+              'excel_transform_1c/baselines/organizations.json',
+              'excel_transform_1c/baselines/scenarios.json',
+              'excel_transform_1c/baselines/intalev_cfos.json',
+              'excel_transform_1c/ui/static/fitera-logo.png',
+          }
+          with ZipFile(wheel) as archive:
+              names = set(archive.namelist())
+          missing = sorted(required - names)
+          if missing:
+              raise SystemExit(f'Missing packaged resources: {missing}')
+          print(f'wheel={wheel.name}; resources PASS')
+          PY
+
+      - name: Commit and push verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "fitera2024-rgb"
+          git config user.email "fitera2024@gmail.com"
+          git add -A
+          git commit -m "feat: deliver FITERA owner-smoke package and real Excel repair"
+          git push origin HEAD:feat/final-owner-smoke-fitera-v1
