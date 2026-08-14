@@ -237,6 +237,55 @@ def real_reference_bytes(kind: str) -> bytes:
     return output.getvalue()
 
 
+def intalev_opiu_bytes(
+    *,
+    sheet_name: str = "TDSheet",
+    monthly_error: bool = False,
+) -> bytes:
+    """Build a fictional structural analogue of an Intalev annual OPIU export."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = sheet_name
+    sheet["A1"] = "ОТЧЕТ 'ОТЧЕТ О ПРИБЫЛЯХ И УБЫТКАХ 2025'"
+    sheet["A2"] = (
+        "СЦЕНАРИЙ 1: Факт\n"
+        "ПЕРИОДИЧНОСТЬ: месяц\n"
+        "ЦФО: ЦД/ЦЗ Фонд развития"
+    )
+    sheet["A4"] = "Показатели"
+    for month in range(1, 13):
+        column = 4 + month
+        sheet.cell(4, column, f"01.{month:02d}.2025 - 28.{month:02d}.2025")
+        sheet.cell(5, column, "Факт")
+        sheet.cell(6, column, "С НДС")
+
+    _intalev_row(sheet, 7, "Расходы по основной деятельности ИТОГО", 0, [100] * 12)
+    _intalev_row(sheet, 8, "Административные расходы", 2, [100] * 12)
+    _intalev_row(sheet, 9, "Связь", 4, [100] * 12)
+    first = [0] * 12
+    first[0] = -10
+    if monthly_error:
+        first[4] = "#REF!"
+    _intalev_row(sheet, 10, "Интернет", 6, first)
+    _intalev_row(sheet, 11, "Телефония", 6, [0] * 12)
+    _intalev_row(sheet, 12, "Маркетинг", 4, [0] * 12)
+    _intalev_row(sheet, 13, "Реклама", 6, [0] * 12)
+    _intalev_row(sheet, 14, "EBITDA", 0, [100] * 12)
+
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def _intalev_row(sheet, row: int, name: str, indent: int, months: list[object]) -> None:
+    cell = sheet.cell(row, 1, name)
+    cell.alignment = Alignment(indent=indent)
+    sheet.row_dimensions[row].outlineLevel = indent // 2
+    for month, value in enumerate(months, start=1):
+        sheet.cell(row, 4 + month, value)
+
+
 def _hierarchy_cell(sheet, row: int, value: str, level: int) -> None:
     cell = sheet.cell(row, 1, value)
     cell.alignment = Alignment(indent=level)

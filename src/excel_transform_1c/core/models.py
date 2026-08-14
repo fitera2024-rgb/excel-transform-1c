@@ -47,6 +47,9 @@ class CandidateRange:
     first_data_row: int
     last_data_row: int
     columns: dict[str, int]
+    source_kind: str = "prepared_budget"
+    source_cfo: str = ""
+    source_year: int | None = None
 
     @property
     def label(self) -> str:

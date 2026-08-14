@@ -6,8 +6,12 @@ from typing import Any
 import msoffcrypto
 from msoffcrypto import exceptions
 
+from excel_transform_1c.adapters.workbook_repair import (
+    OLE_COMPOUND_FILE_SIGNATURE,
+    WorkbookFormat,
+    detect_workbook_format,
+)
 
-OLE_COMPOUND_FILE_SIGNATURE = bytes.fromhex("D0CF11E0A1B11AE1")
 UNKNOWN_DECRYPTION_MESSAGE = (
     "Не удалось расшифровать защищённый файл; выберите файл повторно"
 )
@@ -26,8 +30,13 @@ class ProtectedWorkbookPasswordInvalid(ProtectedWorkbookError):
 
 
 def has_ole_signature(path: str | Path) -> bool:
-    with Path(path).open("rb") as source:
-        return source.read(len(OLE_COMPOUND_FILE_SIGNATURE)) == OLE_COMPOUND_FILE_SIGNATURE
+    """Compatibility name: true only for OLE-wrapped encrypted OOXML."""
+
+    return detect_workbook_format(path) is WorkbookFormat.ENCRYPTED_OOXML
+
+
+def is_encrypted_ooxml(path: str | Path) -> bool:
+    return has_ole_signature(path)
 
 
 def decrypt_protected_ooxml(

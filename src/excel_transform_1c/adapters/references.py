@@ -134,13 +134,118 @@ def parse_reference_workbook(content: bytes, kind: str) -> list[dict[str, Any]]:
 
 def intalev_cfo_source_key(code: str, name: str, full_path: str = "") -> str:
     code = code.strip()
-    name = name.strip()
     full_path = full_path.strip()
     if code:
         return f"code:{code}"
     if full_path:
         return f"path:{full_path}"
-    return f"name:{name}"
+    raise ValueError(
+        "ЦФО Инталев не имеет точного ключа: нужен код или полный путь; "
+        "одного наименования недостаточно"
+    )
+
+
+def reference_exact_key(kind: str, item: dict[str, Any]) -> str:
+    """Return the documented exact identity without display-name guessing."""
+
+    if kind == "erp_articles":
+        code = _clean_scalar(item.get("code"))
+        path = tuple(
+            _clean_scalar(item.get(field))
+            for field in ("expense_type", "expense_group", "source_article")
+        )
+        if not code or not path[-1]:
+            raise ValueError(
+                "ERP-статья не имеет точного ключа: нужны код и полный путь статьи"
+            )
+        return "erp_article:" + repr((code, *path))
+
+    if kind == "organizations":
+        code = _clean_scalar(item.get("code"))
+        full_path = _clean_scalar(item.get("full_path"))
+        if code:
+            return f"organization:code:{code}"
+        if full_path:
+            return f"organization:path:{full_path}"
+        raise ValueError(
+            "Узел организации не имеет точного ключа: нужен код или полный путь"
+        )
+
+    if kind == "intalev_cfos":
+        source_key = intalev_cfo_source_key(
+            _clean_scalar(item.get("code")),
+            _clean_scalar(item.get("name")),
+            _clean_scalar(item.get("full_path")),
+        )
+        supplied = _clean_scalar(item.get("source_key"))
+        if supplied and supplied != source_key:
+            raise ValueError(
+                "ЦФО Инталев содержит source_key, который не совпадает "
+                "с точным кодом или полным путём"
+            )
+        return f"intalev_cfo:{source_key}"
+
+    raise ValueError(f"Для справочника {kind} не определён точный ключ")
+
+
+def validate_reference_payload(
+    kind: str,
+    payload: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Validate all identities before persistence and collapse exact duplicates."""
+
+    if kind not in {"erp_articles", "organizations", "intalev_cfos"}:
+        raise ValueError(f"Неизвестный тип справочника: {kind}")
+
+    validated: list[dict[str, Any]] = []
+    by_key: dict[str, dict[str, Any]] = {}
+    article_codes: dict[str, str] = {}
+    organization_nodes: dict[str, str] = {}
+
+    for position, raw_item in enumerate(payload, start=1):
+        if not isinstance(raw_item, dict):
+            raise ValueError(
+                f"Справочник {kind} содержит некорректную запись №{position}"
+            )
+        item = dict(raw_item)
+        key = reference_exact_key(kind, item)
+
+        if kind == "erp_articles":
+            code = _clean_scalar(item.get("code"))
+            previous_key = article_codes.get(code)
+            if previous_key is not None and previous_key != key:
+                raise ValueError(
+                    "Конфликт exact key ERP-статьи: "
+                    f"код {code} указан для разных полных путей"
+                )
+            article_codes[code] = key
+        elif kind == "organizations":
+            node_id = _clean_scalar(item.get("node_id"))
+            if not node_id:
+                raise ValueError(
+                    "Узел организации не имеет стабильного node_id"
+                )
+            previous_key = organization_nodes.get(node_id)
+            if previous_key is not None and previous_key != key:
+                raise ValueError(
+                    "Конфликт exact key организации: "
+                    f"node_id {node_id} относится к разным записям"
+                )
+            organization_nodes[node_id] = key
+        else:
+            item["source_key"] = key.removeprefix("intalev_cfo:")
+
+        previous = by_key.get(key)
+        if previous is None:
+            by_key[key] = item
+            validated.append(item)
+            continue
+        if previous != item:
+            raise ValueError(
+                f"Конфликт exact key в справочнике {kind}: {key}"
+            )
+
+    return validated
 
 
 def _parse_intalev_cfos(workbook: Any) -> list[dict[str, Any]]:
@@ -211,7 +316,12 @@ def _parse_intalev_cfos(workbook: Any) -> list[dict[str, Any]]:
             raise ValueError(
                 f"Каталог ЦФО Инталев содержит запись без наименования: строка {row_number}"
             )
-        source_key = intalev_cfo_source_key(code, name, full_path)
+        try:
+            source_key = intalev_cfo_source_key(code, name, full_path)
+        except ValueError as exc:
+            raise ValueError(
+                f"Каталог ЦФО Инталев, строка {row_number}: {exc}"
+            ) from exc
         item = {
             "source_key": source_key,
             "code": code,
@@ -681,7 +791,7 @@ def _code_text(cell: Any) -> str:
 
 
 def erp_articles(payload: list[dict[str, Any]]) -> list[ERPArticle]:
-    return [ERPArticle(**item) for item in payload]
+    return [ERPArticle(**item) for item in validate_reference_payload("erp_articles", payload)]
 
 
 def organization_nodes(payload: list[dict[str, Any]]) -> list[OrganizationNode]:
@@ -693,9 +803,12 @@ def organization_nodes(payload: list[dict[str, Any]]) -> list[OrganizationNode]:
             parent_id=item["parent_id"] or None,
             full_path=item["full_path"],
         )
-        for item in payload
+        for item in validate_reference_payload("organizations", payload)
     ]
 
 
 def intalev_cfos(payload: list[dict[str, Any]]) -> list[IntalevCFO]:
-    return [IntalevCFO(**item) for item in payload]
+    return [
+        IntalevCFO(**item)
+        for item in validate_reference_payload("intalev_cfos", payload)
+    ]

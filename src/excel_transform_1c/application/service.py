@@ -83,14 +83,7 @@ class WorkflowService:
     def upload_reference(self, kind: str, content: bytes) -> int:
         payload = parse_reference_workbook(content, kind)
         if kind == "scenarios":
-            for item in payload:
-                self.store.add_scenario(
-                    name=item["name"],
-                    year=int(item["year"]),
-                    comment=item.get("comment", ""),
-                    erp_code=item.get("erp_code") or None,
-                    erp_confirmed=bool(item.get("erp_code")),
-                )
+            self.store.merge_scenarios(payload)
         else:
             self.store.replace_reference(kind, payload)
         return len(payload)

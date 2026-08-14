@@ -16,7 +16,7 @@ pytestmark = pytest.mark.ui
 def client(tmp_path):
     app = create_app(tmp_path / "runtime")
     test_client = TestClient(app)
-    for kind in ("erp_articles", "organizations", "scenarios"):
+    for kind in ("erp_articles", "organizations", "scenarios", "intalev_cfos"):
         response = test_client.post(
             "/references",
             data={"kind": kind},
@@ -30,6 +30,9 @@ def client(tmp_path):
             follow_redirects=True,
         )
         assert response.status_code == 200
+    test_client.app.state.workflow.store.save_cfo_mappings(
+        {"code:INT-CFO-1": "cfo", "code:INT-CFO-2": "other"}
+    )
     return test_client
 
 

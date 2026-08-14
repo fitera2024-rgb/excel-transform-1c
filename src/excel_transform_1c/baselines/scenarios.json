@@ -1,0 +1,74 @@
+[
+  {
+    "name": "Исполнение бюджета",
+    "year": "0",
+    "erp_code": "00001",
+    "comment": ""
+  },
+  {
+    "name": "План для лимитов",
+    "year": "0",
+    "erp_code": "00003",
+    "comment": ""
+  },
+  {
+    "name": "Резерв",
+    "year": "0",
+    "erp_code": "00002",
+    "comment": ""
+  },
+  {
+    "name": "Факт",
+    "year": "0",
+    "erp_code": "00001",
+    "comment": ""
+  },
+  {
+    "name": "Фактические данные",
+    "year": "0",
+    "erp_code": "00002",
+    "comment": ""
+  },
+  {
+    "name": "Сценарий отчетности КИК",
+    "year": "0",
+    "erp_code": "00004",
+    "comment": ""
+  },
+  {
+    "name": "Тест",
+    "year": "0",
+    "erp_code": "00005",
+    "comment": ""
+  },
+  {
+    "name": "План",
+    "year": "0",
+    "erp_code": "00006",
+    "comment": ""
+  },
+  {
+    "name": "2025",
+    "year": "2025",
+    "erp_code": "00007",
+    "comment": ""
+  },
+  {
+    "name": "Инталев 2025",
+    "year": "2025",
+    "erp_code": "00008",
+    "comment": ""
+  },
+  {
+    "name": "тст2",
+    "year": "0",
+    "erp_code": "00009",
+    "comment": ""
+  },
+  {
+    "name": "ПЛАН 2026",
+    "year": "2026",
+    "erp_code": "00010",
+    "comment": ""
+  }
+]
