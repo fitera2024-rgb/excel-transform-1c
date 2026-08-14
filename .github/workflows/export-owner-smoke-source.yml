@@ -1,0 +1,27 @@
+name: Export owner-smoke source
+
+on:
+  push:
+    branches:
+      - tmp/export-owner-smoke-source-20260814
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: tmp/export-owner-smoke-source-20260814
+      - name: Create exact source archive
+        shell: bash
+        run: |
+          git archive --format=zip --output=owner-smoke-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OWNER_SMOKE_EXACT_SOURCE
+          path: owner-smoke-source.zip
+          retention-days: 2
