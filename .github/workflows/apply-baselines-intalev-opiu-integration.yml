@@ -1,0 +1,68 @@
+name: Apply verified baselines Intalev legacy integration patch
+
+on:
+  push:
+    branches:
+      - integration/baselines-intalev-opiu-v1
+    paths:
+      - "migration/baselines-intalev-opiu-v1/**"
+      - ".github/workflows/apply-baselines-intalev-opiu-integration.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-integration-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip apply]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: integration/baselines-intalev-opiu-v1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Reconstruct and verify exact patch
+        shell: bash
+        run: |
+          cat migration/baselines-intalev-opiu-v1/change.patch.xz.b64.part-*.txt | base64 --decode > /tmp/change.patch.xz
+          echo "267ef0917de11b62e7b3237d704bc99fc6bb0a0727a65d066f440841b0a3f8d6  /tmp/change.patch.xz" | sha256sum --check --strict
+          xz --decompress --stdout /tmp/change.patch.xz > /tmp/change.patch
+
+      - name: Apply implementation commit
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git am --3way /tmp/change.patch
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[test]"
+
+      - name: Compile and run full regression
+        run: |
+          python -m compileall -q src tests
+          python -m pytest -q
+          test -z "$(git ls-files '*.xls' '*.xlsx' '*.xlsm' '*.xlsb')"
+
+      - name: Build wheel
+        run: |
+          mkdir -p /tmp/wheelhouse
+          python -m pip wheel . --no-deps --no-build-isolation -w /tmp/wheelhouse
+
+      - name: Remove migration payload and publish verified source
+        shell: bash
+        run: |
+          git rm -r "migration/baselines-intalev-opiu-v1"
+          git commit -m "chore: remove completed migration payload [skip apply]"
+          git push origin HEAD:integration/baselines-intalev-opiu-v1
