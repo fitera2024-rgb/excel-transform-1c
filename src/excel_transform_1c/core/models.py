@@ -159,6 +159,7 @@ class PreviewRecord:
     status: str = STATUS_OK
     reasons: list[str] = field(default_factory=list)
     pointers: dict[str, SourcePointer] = field(default_factory=dict)
+    source_reporting_unit: str = ""
     source_cfo: str = ""
     source_cfo_key: str = ""
     cfo_target_node_id: str = ""

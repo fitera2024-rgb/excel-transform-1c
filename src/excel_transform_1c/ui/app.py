@@ -260,6 +260,10 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             confirmed_erp_rows=confirmed_erp_rows,
             tax_not_required_rows=service.tax_not_required_source_rows(run_id),
             cfo_mapping_entries=service.cfo_mapping_entries(run_id),
+            intalev_cfo_options=[
+                {"source_key": item.source_key, "label": item.label}
+                for item in service.intalev_cfos()
+            ],
             message=message,
             error=error,
         )
@@ -330,41 +334,36 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
     def map_cfo(
         request: Request,
         run_id: str,
-        single_source_key: str = Form(""),
+        source_reporting_unit: str = Form(""),
+        source_cfo: str = Form(""),
+        intalev_source_key: str = Form(""),
         source_key: str = Form(""),
         target_node_id: str = Form(""),
-        source_keys: list[str] = Form(default=[]),
-        target_node_ids: list[str] = Form(default=[]),
-        confirmed_source_keys: list[str] = Form(default=[]),
         confirmed: str = Form(""),
     ):
         try:
-            selected_source_key = single_source_key or source_key
-            selected_target_node_id = target_node_id
-            if single_source_key:
-                if len(source_keys) != len(target_node_ids):
-                    raise ValueError("Список сопоставлений ЦФО заполнен некорректно")
-                by_source_key = dict(zip(source_keys, target_node_ids, strict=True))
-                selected_target_node_id = by_source_key.get(single_source_key, "")
-                confirmed = "1" if single_source_key in set(confirmed_source_keys) else ""
             if not confirmed:
                 raise ValueError("Поставьте галку «Подтверждаю соответствие ЦФО»")
-            if not selected_source_key or not selected_target_node_id:
-                raise ValueError("Выберите точный узел 1С для ЦФО")
-            _, count = service.confirm_cfo_mappings(
-                run_id,
-                [
+            selected_intalev_key = intalev_source_key or source_key
+            if not selected_intalev_key or not target_node_id:
+                raise ValueError("Выберите ЦФО Инталев и точный узел 1С")
+            selection = {
+                "intalev_source_key": selected_intalev_key,
+                "target_node_id": target_node_id,
+            }
+            if source_reporting_unit or source_cfo:
+                selection.update(
                     {
-                        "source_key": selected_source_key,
-                        "target_node_id": selected_target_node_id,
+                        "source_reporting_unit": source_reporting_unit,
+                        "source_cfo": source_cfo,
                     }
-                ],
-            )
+                )
+            _, count = service.confirm_cfo_mappings(run_id, [selection])
         except Exception as exc:
             return preview(request, run_id, error=str(exc))
         return RedirectResponse(
             f"/runs/{run_id}?message=Сопоставление ЦФО подтверждено. "
-            f"Обновлено новых соответствий: {count}",
+            f"Обновлено соответствий: {count}",
             status_code=303,
         )
 

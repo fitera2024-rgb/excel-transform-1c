@@ -245,6 +245,7 @@ def transform_rows(
                         erp_article_name=mapped.name if mapped else "",
                         tax=tax,
                         amount=None,
+                        source_reporting_unit=source_reporting_unit,
                         source_cfo=shared["cfo"],
                         status=STATUS_SKIPPED,
                         reasons=[
@@ -289,6 +290,7 @@ def transform_rows(
                     erp_article_name=mapped.name if mapped else "",
                     tax=tax,
                     amount=amount,
+                    source_reporting_unit=source_reporting_unit,
                     source_cfo=shared["cfo"],
                     status=STATUS_ATTENTION if reasons else STATUS_OK,
                     reasons=reasons,
