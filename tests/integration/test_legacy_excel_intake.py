@@ -62,6 +62,22 @@ def test_legacy_biff_disguised_as_xlsx_completes_intake_and_snapshot(tmp_path):
     assert len(run.records) == 24
 
 
+
+def test_true_xls_extension_completes_workflow_without_filename_heuristic(tmp_path):
+    service = configured_service(tmp_path)
+    original = _legacy_budget_bytes()
+
+    pending = service.prepare_upload(
+        "legacy-budget.xls",
+        original,
+        default_context(service),
+    )
+    run = service.process_upload(pending.upload_id, pending.candidates[0].candidate_id)
+
+    assert pending.original_path.suffix == ".xls"
+    assert pending.original_path.read_bytes() == original
+    assert len(run.records) == 24
+
 def test_plain_ooxml_intake_uses_exact_separate_working_copy(tmp_path):
     source = tmp_path / "plain.xlsx"
     original = workbook_bytes()

@@ -46,11 +46,9 @@ def test_known_real_erp_reference_exports_are_loaded_directly(tmp_path):
     assert service.upload_reference("organizations", real_reference_bytes("organizations")) == 5
     assert service.upload_reference("scenarios", real_reference_bytes("scenarios")) == 2
 
-    articles = service.erp_articles()
-    assert [(item.code, item.path) for item in articles[:2]] == [
-        ("ERP-001", ("Административные", "Связь", "Интернет")),
-        ("ERP-002", ("Коммерческие", "Маркетинг", "Реклама")),
-    ]
+    articles = {item.code: item.path for item in service.erp_articles()}
+    assert articles["ERP-001"] == ("Административные", "Связь", "Интернет")
+    assert articles["ERP-002"] == ("Коммерческие", "Маркетинг", "Реклама")
     organizations = service.organization_nodes()
     assert next(item for item in organizations if item.code == "ORG-3").parent_id == "ORG-2"
     assert any("!!!Удалить" in item.full_path for item in organizations)

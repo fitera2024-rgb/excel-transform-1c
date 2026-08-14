@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import re
-from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
-from openpyxl import load_workbook
-
+from excel_transform_1c.adapters.excel import load_cached_workbook
 from excel_transform_1c.core.detection import normalize_header
 from excel_transform_1c.core.models import ERPArticle, IntalevCFO, OrganizationNode
 
@@ -99,11 +99,22 @@ def parse_reference_workbook(content: bytes, kind: str) -> list[dict[str, Any]]:
     if kind not in {"erp_articles", "organizations", "scenarios", "intalev_cfos"}:
         raise ValueError("Неизвестный тип справочника")
 
+    # Reference books use the same content-based preparation path as budget
+    # books.  This accepts recoverable OOXML case defects and legacy BIFF/XML
+    # while keeping the uploaded bytes untouched in a temporary snapshot.
     try:
-        workbook = load_workbook(BytesIO(content), data_only=True, read_only=False)
+        with TemporaryDirectory(prefix="excel_transform_1c_reference_") as temp_dir:
+            source_path = Path(temp_dir) / "source-original.xlsx"
+            source_path.write_bytes(content)
+            with load_cached_workbook(source_path, read_only=False) as workbook:
+                return _parse_reference_workbook_object(workbook, kind)
+    except ValueError:
+        raise
     except Exception as exc:
         raise ValueError("Файл справочника не открывается или повреждён") from exc
 
+
+def _parse_reference_workbook_object(workbook: Any, kind: str) -> list[dict[str, Any]]:
     if kind == "intalev_cfos":
         result = _parse_intalev_cfos(workbook)
         if not result:

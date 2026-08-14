@@ -1,5 +1,5 @@
 {
-  "version": "baseline-catalogs-v1-20260814-001",
+  "version": "baseline-catalogs-v1-20260814-002",
   "catalogs": {
     "erp_articles": {
       "file": "erp_articles.json",
@@ -15,7 +15,7 @@
     },
     "intalev_cfos": {
       "file": "intalev_cfos.json",
-      "count": 15
+      "count": 16
     }
   },
   "source_evidence": {
@@ -32,8 +32,8 @@
       "sha256": "94364904a4ed9573ee058239d97b298096359de9dc4074017236546e8f6cd77f"
     },
     "intalev_cfos": {
-      "file_name": "ЦФО_Инталев.xlsx",
-      "sha256": "a6bf5723bf998de6b4e852dce908010202aa3573f2d31ca43046f391c2ec4c60"
+      "file_name": "ЦФО_ИнталевУправляющая.xlsx",
+      "sha256": "25838f2cf7f7d3ee628f5c79820dc160e6602b0eb8e20b643466312b8436176c"
     }
   }
 }

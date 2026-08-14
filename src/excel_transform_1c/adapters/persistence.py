@@ -91,34 +91,43 @@ class LocalStore:
             )
 
     def _bootstrap_baselines(self) -> None:
-        """Seed a brand-new store without overriding an existing user catalog.
+        """Keep packaged baselines present without overwriting user changes.
 
-        Packaged baselines are initial application data, not a previous user
-        upload.  The first explicit catalog upload therefore replaces the
-        corresponding baseline; later uploads supplement the user catalog.
-        ``catalog_sources`` records that distinction across restarts and also
-        treats pre-upgrade stores with existing data as user-owned.
+        A brand-new store receives all packaged catalogs automatically. Existing
+        user-owned stores are supplemented with baseline records that are still
+        missing, while exact user records remain authoritative. This makes the
+        baseline a permanent safe starting point and keeps ``Загрузить / дополнить``
+        additive and idempotent across restarts and package upgrades.
         """
 
         catalogs = load_baseline_catalogs()
         for kind in REFERENCE_KINDS:
             source = self.catalog_source(kind)
             existing = self.load_reference(kind)
-            if source is None and existing:
-                self._set_catalog_source(kind, USER_CATALOG_SOURCE)
-                continue
-            if source is None:
-                payload = validate_reference_payload(kind, catalogs[kind])
-                self._write_reference(kind, payload)
+            baseline = validate_reference_payload(kind, catalogs[kind])
+            if not existing:
+                self._write_reference(kind, baseline)
                 self._set_catalog_source(kind, BASELINE_CATALOG_SOURCE)
+                continue
+            if source == BASELINE_CATALOG_SOURCE:
+                # A pure packaged catalog follows the current packaged baseline.
+                self.merge_reference(kind, baseline, preserve_existing=False)
+            else:
+                # Existing/custom records win on the same exact key; missing
+                # packaged records are restored without fuzzy/name-only merging.
+                self.merge_reference(kind, baseline, preserve_existing=True)
+                self._set_catalog_source(kind, USER_CATALOG_SOURCE)
 
-        source = self.catalog_source(SCENARIO_KIND)
+        scenario_source = self.catalog_source(SCENARIO_KIND)
         existing_scenarios = self.list_scenarios()
-        if source is None and existing_scenarios:
-            self._set_catalog_source(SCENARIO_KIND, USER_CATALOG_SOURCE)
-        elif source is None:
+        if not existing_scenarios:
             self._merge_scenarios(catalogs[SCENARIO_KIND], preserve_existing=True)
             self._set_catalog_source(SCENARIO_KIND, BASELINE_CATALOG_SOURCE)
+        elif scenario_source == BASELINE_CATALOG_SOURCE:
+            self._merge_scenarios(catalogs[SCENARIO_KIND], preserve_existing=False)
+        else:
+            self._merge_scenarios(catalogs[SCENARIO_KIND], preserve_existing=True)
+            self._set_catalog_source(SCENARIO_KIND, USER_CATALOG_SOURCE)
 
     def list_scenarios(self) -> list[Scenario]:
         with self._connect() as connection:
@@ -241,13 +250,6 @@ class LocalStore:
         preserve_existing: bool = False,
     ) -> ImportStats:
         normalized = _validate_scenario_payload(payload)
-        if (
-            not preserve_existing
-            and self.catalog_source(SCENARIO_KIND) == BASELINE_CATALOG_SOURCE
-        ):
-            with self._connect() as connection:
-                connection.execute("DELETE FROM scenarios")
-
         stats = self._merge_scenarios(
             normalized, preserve_existing=preserve_existing
         )
@@ -288,17 +290,15 @@ class LocalStore:
         )
 
     def replace_reference(self, kind: str, payload: list[dict[str, Any]]) -> None:
-        """Persist one global local reference catalog.
+        """Add or update a global catalog by exact stable identity.
 
-        The packaged baseline is replaced by the first explicit upload. Later
-        uploads supplement/update that user catalog by exact stable identity.
+        The packaged baseline remains available. Explicit imports supplement it
+        and update only the same exact key; similar display names are never
+        merged automatically.
         """
 
         incoming = validate_reference_payload(kind, payload)
-        if self.catalog_source(kind) == BASELINE_CATALOG_SOURCE:
-            self._write_reference(kind, incoming)
-        else:
-            self.merge_reference(kind, incoming)
+        self.merge_reference(kind, incoming)
         self._set_catalog_source(kind, USER_CATALOG_SOURCE)
 
     def merge_reference(

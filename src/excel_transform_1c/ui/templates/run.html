@@ -1,22 +1,27 @@
 {% extends "base.html" %}
+{% block title %}Preview · Excel → OPIU Light{% endblock %}
 {% block content %}
-<section class="hero compact">
-  <div>
-    <p class="eyebrow">Preview готов</p>
+<section class="hero compact preview-hero">
+  <div class="hero-copy">
+    <div class="preview-title-row"><span class="status-badge ready">Preview готов</span><span class="preview-boundary">Локальный результат · без записи в 1С</span></div>
     <h1>{{ run.source_file }}</h1>
-    <p>{{ run.candidate.label }} · {{ run.context.organization_name }} · {{ run.context.scenario_name }}</p>
+    <p class="hero-lead">{{ run.candidate.label }} · {{ run.context.organization_name }} · {{ run.context.scenario_name }}</p>
   </div>
-  <div class="actions">
-    <a class="button" href="/runs/{{ run.run_id }}/export" data-testid="export-link">Экспортировать OPIU Light</a>
+  <div class="actions preview-actions">
+    <a class="button large" href="/runs/{{ run.run_id }}/export" data-testid="export-link">Экспортировать OPIU Light</a>
     <a class="button secondary" href="/">Новый файл</a>
   </div>
 </section>
 
+<section class="run-progress" aria-label="Этапы результата">
+  <span class="is-done">Файл принят</span><span class="is-done">Preview построен</span><span class="{% if unresolved %}is-current{% else %}is-done{% endif %}">{% if unresolved %}Требуются решения{% else %}Проверка завершена{% endif %}</span><span>Экспорт XLSX</span>
+</section>
+
 <section class="stats" data-testid="preview-stats">
-  <div><strong>{{ records|length }}</strong><span>записей в фильтре</span></div>
-  <div><strong>{{ run.records|length }}</strong><span>в полном 12-месячном результате</span></div>
-  <div><strong>{{ unresolved|length }}</strong><span>нерешённых проблем</span></div>
-  <div><strong>{{ run.rerun_count }}</strong><span>повторных запусков после правок</span></div>
+  <div><span>В текущем фильтре</span><strong>{{ records|length }}</strong><small>записей</small></div>
+  <div><span>Полный результат</span><strong>{{ run.records|length }}</strong><small>12-месячных записей</small></div>
+  <div><span>Требуют решения</span><strong>{{ unresolved|length }}</strong><small>проблем</small></div>
+  <div><span>Полных перезапусков</span><strong>{{ run.rerun_count }}</strong><small>после правок</small></div>
 </section>
 
 {% if run.cfo_mapping_enabled %}
@@ -298,5 +303,5 @@
   {"code": {{ article.code|tojson }}, "name": {{ article.name|tojson }}, "expenseType": {{ article.expense_type|tojson }}, "expenseGroup": {{ article.expense_group|tojson }}, "sourceArticle": {{ article.source_article|tojson }}}{% if not loop.last %},{% endif %}
 {% endfor -%}
 ]</script>
-<script src="/static/run.js" defer></script>
+<script src="/static/run.js?v={{ static_version|default('1') }}" defer></script>
 {% endblock %}

@@ -33,6 +33,8 @@ _UNESCAPED_AMPERSAND = re.compile(
 _OOXML_REQUIRED_PARTS = frozenset(
     {"[Content_Types].xml", "_rels/.rels", "xl/workbook.xml"}
 )
+_CANONICAL_SHARED_STRINGS = "xl/sharedStrings.xml"
+_SHARED_STRINGS_CASEFOLD = _CANONICAL_SHARED_STRINGS.casefold()
 _MAX_ARCHIVE_MEMBERS = 20_000
 _MAX_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
 
@@ -112,7 +114,9 @@ def prepare_workbook(
             result = repair_ooxml(source, target)
             return PreparedWorkbook(source, result.path, workbook_format, repaired=True)
         result = repair_ooxml(source, target)
-        return PreparedWorkbook(source, result.path, workbook_format)
+        return PreparedWorkbook(
+            source, result.path, workbook_format, repaired=result.changed
+        )
 
     target = _resolve_working_path(source, working_path)
     if workbook_format is WorkbookFormat.LEGACY_BIFF:
@@ -130,13 +134,11 @@ def repair_ooxml(source_path: str | Path, target_path: str | Path) -> RepairResu
     target = Path(target_path)
     _require_separate_paths(source, target)
 
+    source_valid = True
     try:
         _validate_ooxml(source)
     except WorkbookRepairError:
-        pass
-    else:
-        _atomic_copy(source, target)
-        return RepairResult(target, changed=False)
+        source_valid = False
 
     entries = _read_zip_entries(source)
     if not _OOXML_REQUIRED_PARTS.issubset(entries):
@@ -154,13 +156,26 @@ def repair_ooxml(source_path: str | Path, target_path: str | Path) -> RepairResu
                 repaired_parts.append(name)
         normalized_entries[name] = normalized
 
+    normalized_entries, compatibility_parts = _normalize_ooxml_compatibility(
+        normalized_entries
+    )
+    repaired_parts.extend(compatibility_parts)
+
+    if source_valid and not repaired_parts:
+        _atomic_copy(source, target)
+        return RepairResult(target, changed=False)
+
     _write_deterministic_zip(normalized_entries, target)
     try:
         _validate_ooxml(target)
     except WorkbookRepairError:
         target.unlink(missing_ok=True)
         raise
-    return RepairResult(target, changed=True, repaired_parts=tuple(repaired_parts))
+    return RepairResult(
+        target,
+        changed=True,
+        repaired_parts=tuple(dict.fromkeys(repaired_parts)),
+    )
 
 
 def default_working_path(source_path: str | Path) -> Path:
@@ -477,6 +492,64 @@ def _strip_illegal_xml_characters(payload: bytes) -> bytes:
         )
         return cleaned.encode(encoding)
     return _ILLEGAL_XML_BYTES.sub(b"", payload)
+
+
+def _normalize_ooxml_compatibility(
+    entries: dict[str, bytes],
+) -> tuple[dict[str, bytes], list[str]]:
+    """Canonicalize case-sensitive OOXML parts used by openpyxl/Excel."""
+
+    normalized: dict[str, bytes] = {}
+    changed_parts: list[str] = []
+    for original_name, payload in entries.items():
+        name = original_name
+        if original_name.casefold() == _SHARED_STRINGS_CASEFOLD:
+            name = _CANONICAL_SHARED_STRINGS
+            if name != original_name:
+                changed_parts.append(original_name)
+        if name in normalized and normalized[name] != payload:
+            raise WorkbookRepairError(
+                "Книга Excel содержит конфликтующие варианты sharedStrings.xml"
+            )
+        normalized[name] = payload
+
+    content_types_name = next(
+        (name for name in normalized if name.casefold() == "[content_types].xml".casefold()),
+        None,
+    )
+    if content_types_name is not None:
+        payload = normalized[content_types_name]
+        updated = re.sub(
+            rb'PartName="/xl/sharedstrings\.xml"',
+            b'PartName="/xl/sharedStrings.xml"',
+            payload,
+            flags=re.IGNORECASE,
+        )
+        if updated != payload:
+            normalized[content_types_name] = updated
+            changed_parts.append(content_types_name)
+
+    relations_name = next(
+        (
+            name
+            for name in normalized
+            if name.casefold() == "xl/_rels/workbook.xml.rels".casefold()
+        ),
+        None,
+    )
+    if relations_name is not None:
+        payload = normalized[relations_name]
+        updated = re.sub(
+            rb'Target="(?:[^"/]*/)?sharedstrings\.xml"',
+            b'Target="sharedStrings.xml"',
+            payload,
+            flags=re.IGNORECASE,
+        )
+        if updated != payload:
+            normalized[relations_name] = updated
+            changed_parts.append(relations_name)
+
+    return normalized, changed_parts
 
 
 def _write_deterministic_zip(entries: dict[str, bytes], target: Path) -> None:

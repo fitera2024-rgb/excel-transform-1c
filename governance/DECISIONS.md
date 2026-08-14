@@ -318,3 +318,34 @@ STATUS: `ACCEPTED`
 - ERP, налог и ЦФО имеют отдельные галки, счётчики и кнопки; одна галка не подтверждает три разных решения.
 - Master checkbox ничего не меняет до submit.
 - После подтверждения UI показывает бизнес-статус (`ERP-сопоставление подтверждено`, `Налогообложение: не требуется`, `Сопоставление ЦФО подтверждено`) и не предлагает тот же элемент повторно.
+
+## DEC-REF-004 — Packaged baselines remain and user imports supplement them
+
+STATUS: `ACCEPTED`
+
+Refines: `DEC-REF-003`, `DEC-PRODUCT-016`.
+
+- Чистый пакет автоматически содержит проверенные базовые каталоги ERP-статей, организаций/узлов, сценариев и ЦФО Инталев.
+- `Загрузить / дополнить` не удаляет baseline: новые записи добавляются, exact-key записи могут быть обновлены, похожие display names не объединяются.
+- При обновлении пакета недостающие baseline-записи восстанавливаются, но пользовательское значение того же exact key остаётся authoritative.
+- Каталоги и mappings сохраняются в локальной SQLite после restart.
+
+## DEC-INPUT-006 — Content-based Excel preparation and native Intalev OPIU
+
+STATUS: `ACCEPTED`
+
+Refines: `DEC-PRODUCT-001`, `DEC-PRODUCT-021`.
+
+- Формат определяется по bytes/internal structure, не по filename suffix.
+- V1 принимает обычный OOXML, защищённый OOXML, legacy BIFF/XLS, SpreadsheetML XML и узко восстанавливаемый OOXML.
+- Original RUN-local snapshot неизменяем; decrypt/convert/repair выполняется только в отдельной working copy.
+- Помимо подготовленного бюджетного диапазона принят годовой Инталев ОПИУ с отдельным structural parser и OPIU Light export.
+- Невосстанавливаемая или неоднозначная техническая структура fail closed; Excel COM и ручной SaveAs не являются пользовательским требованием.
+
+## DEC-UX-014 — FITERA visual shell
+
+STATUS: `ACCEPTED`
+
+- `FITERA_SERVICE_UI_STARTER_V2` используется как visual/UX reference, без переноса чужой backend-логики.
+- Сохраняются business forms, input names, endpoints, test hooks и отдельные explicit actions ERP/tax/CFO.
+- Normal UI использует фирменную бело-зелёную оболочку, понятные шаги и бизнес-статусы; SHA, paths и technical blocker codes не становятся обязательными полями.

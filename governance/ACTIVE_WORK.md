@@ -1,44 +1,39 @@
 # Active Work
 
-STATUS: `OWNER_REFINEMENT_IMPLEMENTED / TAX_CFO_QA_READY / PACKAGE_BUILD_REQUIRED / DRAFT / NO_LIVE_WRITE`
+STATUS: `INTEGRATED / REAL_OWNER_FILES_PASSED / WINDOWS_PACKAGE_CI_REQUIRED / DRAFT / NO_LIVE_WRITE`
 
 ## Current vertical slice
 
-`Excel → structural detection → protected intake → exact ERP mapping → tax/CFO decisions → 12-month preview → export`
+`Built-in references → content-based Excel preparation → prepared budget or Intalev OPIU → exact ERP/tax/CFO decisions → 12-month preview → OPIU Light export`
 
-## Exact base
+## Canonical implementation
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
-- Parent branch: `feat/bulk-confirm-filled-erp`.
-- Exact start head: `6f0631edcba732005a407e2147c5970890e96a26`.
-- Parent Draft PR: `#17`, not merged.
+- Base integration: `integration/baselines-intalev-opiu-v1@41e8b9b6847a1cc55d58e7e027dec771117b0cde`.
+- Draft PR: `#22`, not merged.
+- Final owner-smoke branch/head will add FITERA UI, additive baseline semantics, real-file repairs, packaging and final evidence.
 
-## Owner refinement implemented
+## Implemented
 
-- individual and bulk `Налогообложение неважно`;
-- business status `Налогообложение: не требуется`;
-- structural local catalog `ЦФО Инталев`;
-- exact `ЦФО Инталев → конкретный узел 1С`;
-- individual and bulk CFO confirmation;
-- already confirmed ERP/tax/CFO elements render as statuses and are excluded from counters;
-- all updates affect source rows and their months without full rerun;
-- ERP, tax and CFO remain separate explicit actions.
+- packaged baseline catalogs: ERP articles, organizations/nodes, scenarios and Intalev CFO;
+- `Загрузить / дополнить` preserves baseline and merges by exact stable identity;
+- content-based OOXML/encrypted OOXML/BIFF/XML detection;
+- immutable original snapshot and separate repair/conversion working copy;
+- native annual Intalev OPIU detection, preview and export;
+- protected AY/PV handling without Excel COM;
+- exact ERP mapping, tax-not-required and CFO confirmations, including bulk actions and restart persistence;
+- FITERA visual shell;
+- no ADO/ODBC/1C/live write.
 
-## Verification gate
+## Final gate before package delivery
 
-Required before owner package delivery:
-
-- compileall;
-- unit, integration, UI and full regression;
-- JavaScript syntax;
-- Git diff hygiene;
-- no tracked business Excel;
+- compile, full regression and JavaScript syntax;
+- real CFO, Intalev OPIU and protected AY/PV owner-smoke;
+- HTTP multipart smoke for full-size originals;
+- wheel/package-content checks;
 - Windows offline package build;
-- actual launcher/restart/port cleanup/STOP_SERVICE smoke.
-
-## Remaining owner gate
-
-Owner UX Smoke on the new exact Windows package, including original protected AY/PV files. No ADO/live write is implemented or permitted.
+- actual launcher start/restart/port cleanup/STOP_SERVICE smoke;
+- package artifact download and integrity check.
 
 ## Forbidden
 

@@ -197,8 +197,8 @@ class WorkflowService:
             raise
 
     def _new_upload_target(self, source_name: str) -> tuple[str, Path]:
-        if not source_name.lower().endswith((".xlsx", ".xlsm")):
-            raise ValueError("Поддерживаются файлы .xlsx и .xlsm")
+        if not source_name.lower().endswith((".xlsx", ".xlsm", ".xls")):
+            raise ValueError("Поддерживаются файлы .xlsx, .xlsm и .xls")
         upload_id = uuid4().hex
         upload_path = self.upload_dir / upload_id
         upload_path.mkdir(parents=True, exist_ok=False)

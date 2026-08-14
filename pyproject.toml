@@ -32,7 +32,7 @@ excel-transform-1c = "excel_transform_1c.main:run"
 where = ["src"]
 
 [tool.setuptools.package-data]
-excel_transform_1c = ["ui/templates/*.html", "ui/static/*.css", "ui/static/*.js", "baselines/*.json"]
+excel_transform_1c = ["ui/templates/*.html", "ui/static/*.css", "ui/static/*.js", "ui/static/*.png", "baselines/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
