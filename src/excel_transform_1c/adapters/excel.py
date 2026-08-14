@@ -16,6 +16,7 @@ from excel_transform_1c.core.detection import detect_candidate_ranges, read_sour
 from excel_transform_1c.core.models import CandidateRange, PreviewRecord
 
 
+# Legacy sheet: retained without schema changes for backward compatibility.
 EXPORT_HEADERS = (
     "Единица отчёта",
     "Организация",
@@ -36,6 +37,40 @@ EXPORT_HEADERS = (
     "Статус",
     "Комментарий",
     "Номер исходной строки",
+)
+
+# ADO-oriented sheet requested by the owner. Missing reference codes remain
+# empty until the corresponding catalogs are uploaded; business rows are not
+# dropped because a code is not available yet.
+ADO_OPIU_HEADERS = (
+    "Организация",
+    "Сценарий",
+    "Год",
+    "Месяц",
+    "Период",
+    "Организационные единицы",
+    "Код Организационных единиц",
+    "ЦФО",
+    "Код ЦФО",
+    "Тип расходов",
+    "Код статьи",
+    "Название статьи",
+    "Инт Номенклатура",
+    "Код номенклатуры",
+    "Регион продаж",
+    "Код региона продаж",
+    "Сумма",
+)
+
+ADO_INDICATOR_HEADERS = (
+    "Организация",
+    "Сценарий",
+    "Год",
+    "Месяц",
+    "Период",
+    "Канал сбыта",
+    "Тип расходов",
+    "Сумма",
 )
 
 
@@ -100,7 +135,7 @@ def _normalized_ooxml_copy(source: Path, target: Path) -> None:
             if name.lower() == "[content_types].xml":
                 text = data.decode("utf-8", errors="strict")
                 text = re.sub(
-                    r'PartName="/xl/SharedStrings\.xml"',
+                    r'PartName="/xl/SharedStrings\\.xml"',
                     'PartName="/xl/sharedStrings.xml"',
                     text,
                     flags=re.IGNORECASE,
@@ -123,56 +158,145 @@ def read_path(path: str | Path, candidate: CandidateRange, source_file: str):
         return read_source_rows(workbook, candidate, source_file)
 
 
+def _style_header(sheet, headers: tuple[str, ...], last_column: str) -> None:
+    sheet.append(headers)
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = f"A1:{last_column}1"
+    header_fill = PatternFill("solid", fgColor="1F4E78")
+    header_font = Font(color="FFFFFF", bold=True)
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+
+def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
+    sheet.title = "OPIU Light"
+    _style_header(sheet, EXPORT_HEADERS, "S")
+    for record in records:
+        sheet.append(
+            (
+                record.reporting_unit,
+                record.organization,
+                record.scenario,
+                record.year,
+                record.month,
+                f"{record.month:02d}.{record.year}",
+                record.department,
+                record.organization_type,
+                record.cfo,
+                record.expense_type,
+                record.expense_group,
+                record.source_article,
+                record.erp_code,
+                record.erp_article_name,
+                record.tax,
+                float(record.amount) if record.amount is not None else None,
+                record.status,
+                record.comment,
+                record.source_row,
+            )
+        )
+    sheet.auto_filter.ref = f"A1:S{max(len(records) + 1, 1)}"
+    sheet.column_dimensions["A"].width = 18
+    sheet.column_dimensions["B"].width = 28
+    sheet.column_dimensions["C"].width = 18
+    sheet.column_dimensions["F"].width = 12
+    for column in ("G", "H", "I", "J", "K", "L", "N", "O", "Q", "R"):
+        sheet.column_dimensions[column].width = 22
+    sheet.column_dimensions["M"].width = 18
+    sheet.column_dimensions["P"].width = 16
+    sheet.column_dimensions["S"].width = 18
+    sheet["P1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["P"][1:]:
+        cell.number_format = '#,##0.00;[Red](#,##0.00);-'
+
+
+def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
+    sheet.title = "ОПИУ"
+    _style_header(sheet, ADO_OPIU_HEADERS, "Q")
+    for record in records:
+        sheet.append(
+            (
+                record.organization,
+                record.scenario,
+                record.year,
+                record.month,
+                f"{record.month:02d}.{record.year}",
+                record.department or None,
+                None,  # Код организационной единицы будет дополнен справочником.
+                record.cfo or None,
+                None,  # Код ЦФО будет дополнен справочником.
+                record.expense_type,
+                record.erp_code or None,
+                record.erp_article_name or record.source_article,
+                None,  # Инт Номенклатура.
+                None,  # Код номенклатуры.
+                None,  # Регион продаж.
+                None,  # Код региона продаж.
+                float(record.amount) if record.amount is not None else None,
+            )
+        )
+    sheet.auto_filter.ref = f"A1:Q{max(len(records) + 1, 1)}"
+    widths = {
+        "A": 28,
+        "B": 18,
+        "C": 10,
+        "D": 10,
+        "E": 12,
+        "F": 28,
+        "G": 20,
+        "H": 28,
+        "I": 16,
+        "J": 24,
+        "K": 18,
+        "L": 30,
+        "M": 24,
+        "N": 18,
+        "O": 20,
+        "P": 18,
+        "Q": 16,
+    }
+    for column, width in widths.items():
+        sheet.column_dimensions[column].width = width
+    for column in ("G", "I", "K", "N", "P"):
+        for cell in sheet[column]:
+            cell.number_format = "@"
+    for cell in sheet["Q"][1:]:
+        cell.number_format = '#,##0.00;[Red](#,##0.00);-'
+
+
+def _write_ado_indicators_sheet(sheet) -> None:
+    # The current workflow has no source for channel/indicator rows.  Keep the
+    # exact ADO schema ready without inventing business values.  A later
+    # classifier/input can populate the sheet independently.
+    sheet.title = "Показатели"
+    _style_header(sheet, ADO_INDICATOR_HEADERS, "H")
+    widths = {
+        "A": 28,
+        "B": 18,
+        "C": 10,
+        "D": 10,
+        "E": 12,
+        "F": 26,
+        "G": 24,
+        "H": 16,
+    }
+    for column, width in widths.items():
+        sheet.column_dimensions[column].width = width
+    sheet["H1"].alignment = Alignment(horizontal="center", vertical="center")
+
+
 def export_opiu_light(records: list[PreviewRecord]) -> bytes:
+    """Export the legacy sheet plus the two-sheet ADO schema in one workbook."""
+
     workbook = Workbook()
     try:
-        sheet = workbook.active
-        sheet.title = "OPIU Light"
-        sheet.append(EXPORT_HEADERS)
-        sheet.freeze_panes = "A2"
-        sheet.auto_filter.ref = f"A1:S{max(len(records) + 1, 1)}"
-        header_fill = PatternFill("solid", fgColor="1F4E78")
-        header_font = Font(color="FFFFFF", bold=True)
-        for cell in sheet[1]:
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-        for record in records:
-            sheet.append(
-                (
-                    record.reporting_unit,
-                    record.organization,
-                    record.scenario,
-                    record.year,
-                    record.month,
-                    f"{record.month:02d}.{record.year}",
-                    record.department,
-                    record.organization_type,
-                    record.cfo,
-                    record.expense_type,
-                    record.expense_group,
-                    record.source_article,
-                    record.erp_code,
-                    record.erp_article_name,
-                    record.tax,
-                    float(record.amount) if record.amount is not None else None,
-                    record.status,
-                    record.comment,
-                    record.source_row,
-                )
-            )
-        sheet.column_dimensions["A"].width = 18
-        sheet.column_dimensions["B"].width = 28
-        sheet.column_dimensions["C"].width = 18
-        sheet.column_dimensions["F"].width = 12
-        for column in ("G", "H", "I", "J", "K", "L", "N", "O", "Q", "R"):
-            sheet.column_dimensions[column].width = 22
-        sheet.column_dimensions["M"].width = 18
-        sheet.column_dimensions["P"].width = 16
-        sheet.column_dimensions["S"].width = 18
-        sheet["P1"].alignment = Alignment(horizontal="center", vertical="center")
-        for cell in sheet["P"][1:]:
-            cell.number_format = '#,##0.00;[Red](#,##0.00);-'
+        legacy_sheet = workbook.active
+        _write_legacy_sheet(legacy_sheet, records)
+        _write_ado_opiu_sheet(workbook.create_sheet(), records)
+        _write_ado_indicators_sheet(workbook.create_sheet())
+
         output = BytesIO()
         workbook.save(output)
         return output.getvalue()
