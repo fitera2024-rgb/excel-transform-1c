@@ -1,0 +1,109 @@
+name: Apply verified final FITERA V3
+
+on:
+  push:
+    branches:
+      - feat/final-owner-smoke-fitera-v3
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-final-fitera-v3
+  cancel-in-progress: false
+
+jobs:
+  apply-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout exact work branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/final-owner-smoke-fitera-v3
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Reconstruct and verify exact implementation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="migration/final-fitera-v3"
+          test -f "$root/part-00.txt"
+          test -f "$root/part-01.txt"
+          test -f "$root/part-02.txt"
+          test -f "$root/part-03.txt"
+          test -f "$root/part-04.txt"
+          test -f "$root/part-05.txt"
+          test -f "$root/exact-06.txt"
+          test -f "$root/exact-07.txt"
+
+          echo "a3e52c684d05dac6c68e5b6f22d587393601a358589811d869fe58e8162b8e3f  $root/part-00.txt" | sha256sum --check --strict
+          echo "6a89d163548386a82c96eb03825383361d529bb247c3b2fda2d2508daf19f0c2  $root/part-01.txt" | sha256sum --check --strict
+          echo "9a534eb3cf2e2e2d2de2e15ea2eb1bfad2f64d2d46ee4ef1e39782b25b5642a0  $root/part-02.txt" | sha256sum --check --strict
+          echo "e1c3d45560247f25814e3d2889d654f2a13abff6b8db1563a9e559d3fcb4f014  $root/part-03.txt" | sha256sum --check --strict
+          echo "2ad4e713d40b93a35cf936a2dccf4aed4b8d22896efb60c39405bfd44f4afc80  $root/part-04.txt" | sha256sum --check --strict
+          echo "2c03fab2f54f7a6d1516f36a91fec718024d15fc8788e8678eca6ef65f98ffeb  $root/part-05.txt" | sha256sum --check --strict
+          echo "6cc1d3b7cfbfec8e619031acaf95eb239102f663315acb9a7895f207a1497f0f  $root/exact-06.txt" | sha256sum --check --strict
+          echo "ce517954a8c08f25359a29f6182b14f52a8f9c0b7446425778263722a4bc0664  $root/exact-07.txt" | sha256sum --check --strict
+
+          cat \
+            "$root/part-00.txt" \
+            "$root/part-01.txt" \
+            "$root/part-02.txt" \
+            "$root/part-03.txt" \
+            "$root/part-04.txt" \
+            "$root/part-05.txt" \
+            "$root/exact-06.txt" \
+            "$root/exact-07.txt" \
+            | tr -d '[:space:]' | base64 --decode > /tmp/final-v3.patch.xz
+
+          test "$(wc -c < /tmp/final-v3.patch.xz)" -eq 23688
+          echo "ff01522175ac22aa7bf6a467e37dbba2cf69a47ca4928c64dfe5b0434093778e  /tmp/final-v3.patch.xz" | sha256sum --check --strict
+          xz --decompress --stdout /tmp/final-v3.patch.xz > /tmp/final-v3.patch
+          test "$(wc -c < /tmp/final-v3.patch)" -eq 194289
+          echo "76b13c5e07e8326b47c76f93f75e132a1ab4af5b311d87b4ad8890d95f5ad4c3  /tmp/final-v3.patch" | sha256sum --check --strict
+
+          git apply --check --binary /tmp/final-v3.patch
+          git apply --binary /tmp/final-v3.patch
+          rm -rf migration/final-fitera-v3
+          git status --short
+
+      - name: Install application and test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip setuptools wheel build
+          python -m pip install -e ".[test]"
+
+      - name: Verify final implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q src tests scripts
+          python -m pytest tests/unit -q
+          python -m pytest tests/integration -q
+          python -m pytest tests/ui -q
+          python -m pytest -q
+          node --check src/excel_transform_1c/ui/static/run.js
+          git diff --check 1b56211630bbc8d3a5ad094b32bb8f9481529c6c...HEAD
+          test -z "$(git ls-files '*.xls' '*.xlsx' '*.xlsm' '*.xlsb')"
+          python -m build --wheel --outdir /tmp/final-v3-wheel
+
+      - name: Commit and publish verified implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-final-fitera-v3.yml
+          git config user.name "fitera2024-rgb"
+          git config user.email "fitera2024@gmail.com"
+          git add -A
+          git commit -m "feat: publish final FITERA owner-smoke package v3"
+          git push origin HEAD:feat/final-owner-smoke-fitera-v3
