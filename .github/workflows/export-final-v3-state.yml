@@ -1,0 +1,22 @@
+name: Export current final V3 state
+
+on:
+  push:
+    branches:
+      - tmp/export-final-v3-state-20260814
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create exact archive
+        run: git archive --format=zip --output=final-v3-state.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FINAL_V3_STATE
+          path: final-v3-state.zip
+          retention-days: 2
