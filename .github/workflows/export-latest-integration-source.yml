@@ -1,0 +1,24 @@
+name: Export latest integration source
+
+on:
+  push:
+    branches:
+      - tmp/export-latest-integration-20260814
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create exact source archive
+        shell: bash
+        run: |
+          git archive --format=zip --output=latest-integration-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LATEST_INTEGRATION_EXACT_SOURCE
+          path: latest-integration-source.zip
+          retention-days: 2
