@@ -12,6 +12,7 @@ from typing import Any, BinaryIO
 from uuid import uuid4
 
 from excel_transform_1c.adapters.excel import detect_path, export_opiu_light, read_path
+from excel_transform_1c.adapters.opiu_sources import build_catalog_from_source_bytes
 from excel_transform_1c.adapters.persistence import LocalStore
 from excel_transform_1c.adapters.protected_ooxml import (
     ProtectedWorkbookError,
@@ -31,8 +32,20 @@ from excel_transform_1c.core.indicator_matching import (
     INDICATOR_INCOMPLETE,
     INDICATOR_MATCHED,
     INDICATOR_MISSING,
-    ExactArticleIndicatorMatcher,
-    apply_indicator_match,
+)
+from excel_transform_1c.core.opiu_rules.opiu_indicator_resolver import OPIUIndicatorResolver
+from excel_transform_1c.core.opiu_rules.opiu_rule_builder import (
+    expand_group_rules,
+    legacy_rules_to_opiu,
+)
+from excel_transform_1c.core.opiu_rules.opiu_rule_models import (
+    AMBIGUOUS as OPIU_AMBIGUOUS,
+    AUTO_MATCH,
+    NOT_FOUND as OPIU_NOT_FOUND,
+    OPIURule,
+    OPIURuleCatalog,
+    opiu_rule_from_payload,
+    opiu_rule_to_payload,
 )
 from excel_transform_1c.core.models import (
     ArticleIndicatorRule,
@@ -111,6 +124,42 @@ class WorkflowService:
         return article_indicator_rules(
             self.store.load_reference("article_indicators")
         )
+
+    def opiu_rules(self) -> tuple[OPIURule, ...]:
+        stored = tuple(
+            opiu_rule_from_payload(item) for item in self.store.load_opiu_rules()
+        )
+        base_rules = stored or legacy_rules_to_opiu(self.article_indicator_rules())
+        return expand_group_rules(base_rules, self.erp_articles())
+
+    def upload_opiu_rule_sources(
+        self,
+        *,
+        formulas_xlsx: bytes,
+        analytics_xlsx: bytes,
+        indicators_xlsx: bytes,
+        sources_mxl: bytes,
+        regions_xlsx: bytes,
+        networks_xlsx: bytes,
+        run_id: str | None = None,
+    ) -> OPIURuleCatalog:
+        """Build the internal catalog without exposing formula details to UI."""
+
+        run = self.get_run(run_id) if run_id is not None else None
+        catalog = build_catalog_from_source_bytes(
+            formulas_xlsx=formulas_xlsx,
+            analytics_xlsx=analytics_xlsx,
+            indicators_xlsx=indicators_xlsx,
+            sources_mxl=sources_mxl,
+            regions_xlsx=regions_xlsx,
+            networks_xlsx=networks_xlsx,
+        )
+        self.store.save_opiu_rules(
+            [opiu_rule_to_payload(rule) for rule in catalog.rules]
+        )
+        if run is not None:
+            self._apply_indicator_matches(run)
+        return catalog
 
     def upload_indicator_classifier(self, content: bytes, run_id: str | None = None) -> int:
         run = self.get_run(run_id) if run_id is not None else None
@@ -305,7 +354,7 @@ class WorkflowService:
             issues=issues,
             created_at=datetime.now(UTC).isoformat(),
             cfo_mapping_enabled=bool(self.intalev_cfos()),
-            indicator_classifier_loaded=bool(self.article_indicator_rules()),
+            indicator_classifier_loaded=bool(self.opiu_rules()),
         )
         if run.cfo_mapping_enabled:
             self._initialize_cfo_mappings(run)
@@ -332,19 +381,30 @@ class WorkflowService:
         run: ProcessedRun,
         source_rows: set[int] | None = None,
     ) -> None:
-        rules = self.article_indicator_rules()
-        matcher = ExactArticleIndicatorMatcher(rules)
+        rules = self.opiu_rules()
+        matcher = OPIUIndicatorResolver(rules)
         run.indicator_classifier_loaded = bool(rules)
         for record in run.records:
             if source_rows is not None and record.source_row not in source_rows:
                 continue
             match = matcher.resolve(
-                erp_code=record.erp_code,
-                expense_type=record.expense_type,
-                expense_group=record.expense_group,
-                article_name=record.source_article,
+                disclosure_group=record.expense_type,
+                article=record.source_article,
+                article_code=record.erp_code,
+                organization=record.organization,
+                cfo=record.cfo,
+                region=record.region,
+                network=record.network,
+                nomenclature=record.nomenclature,
             )
-            apply_indicator_match(record, match)
+            record.indicator_match_status = match.status
+            record.indicator_match_reason = match.reason
+            if match.status == AUTO_MATCH and match.rule is not None:
+                record.indicator = match.rule.report_indicator
+                record.sales_channel = match.rule.sales_channel or record.network
+            else:
+                record.indicator = ""
+                record.sales_channel = ""
 
     def indicator_counts(self, run_id: str) -> dict[str, int]:
         run = self.get_run(run_id)
@@ -353,17 +413,41 @@ class WorkflowService:
             for record in run.records
         }
         return {
-            "automatic": sum(status == INDICATOR_MATCHED for status in statuses.values()),
+            "automatic": sum(
+                status in {INDICATOR_MATCHED, AUTO_MATCH}
+                for status in statuses.values()
+            ),
             "attention": sum(
                 status in {
                     INDICATOR_AMBIGUOUS,
                     INDICATOR_INCOMPLETE,
                     INDICATOR_MISSING,
+                    OPIU_AMBIGUOUS,
+                    OPIU_NOT_FOUND,
                 }
                 for status in statuses.values()
             ),
-            "not_found": sum(status == INDICATOR_MISSING for status in statuses.values()),
+            "not_found": sum(
+                status in {INDICATOR_MISSING, OPIU_NOT_FOUND}
+                for status in statuses.values()
+            ),
         }
+
+    def indicator_attention_reasons(self, run_id: str) -> tuple[str, ...]:
+        run = self.get_run(run_id)
+        reasons = {
+            record.source_row: record.indicator_match_reason
+            for record in run.records
+            if record.indicator_match_status in {
+                INDICATOR_AMBIGUOUS,
+                INDICATOR_INCOMPLETE,
+                INDICATOR_MISSING,
+                OPIU_AMBIGUOUS,
+                OPIU_NOT_FOUND,
+            }
+            and record.indicator_match_reason
+        }
+        return tuple(dict.fromkeys(reasons.values()))
 
     @staticmethod
     def _issue_is_inline_editable(issue: Issue) -> bool:

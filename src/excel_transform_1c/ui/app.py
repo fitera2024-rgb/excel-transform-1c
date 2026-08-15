@@ -261,6 +261,7 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             tax_not_required_rows=service.tax_not_required_source_rows(run_id),
             cfo_mapping_entries=service.cfo_mapping_entries(run_id),
             indicator_counts=service.indicator_counts(run_id),
+            indicator_attention_reasons=service.indicator_attention_reasons(run_id),
             message=message,
             error=error,
         )
