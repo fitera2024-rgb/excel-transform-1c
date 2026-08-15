@@ -100,7 +100,7 @@ jobs:
             --wheel-dir wheelhouse `
             --output-dir dist `
             --build-sha $env:GITHUB_SHA
-      - name: Smoke packaged launcher, baselines, transform, restart and stop
+      - name: Smoke packaged launcher, HTTP owner flow, baselines, transform, restart and stop
         shell: pwsh
         run: |
           $package = Join-Path $PWD "dist\EXCEL_TO_OPIU_LIGHT_USER"
@@ -130,6 +130,9 @@ jobs:
           $venvPython = Join-Path $package ".venv\Scripts\python.exe"
           & $venvPython -c "import excel_transform_1c,fastapi,openpyxl,msoffcrypto,olefile,xlrd"
           if ($LASTEXITCODE -ne 0) { throw "Installed component import failed" }
+
+          & $venvPython scripts/owner_smoke_http.py --base-url $url --phase initial
+          if ($LASTEXITCODE -ne 0) { throw "HTTP owner smoke initial phase failed" }
 
           $script = Join-Path $env:RUNNER_TEMP "fitera_package_functional_smoke.py"
           @'
@@ -198,6 +201,9 @@ jobs:
           $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
           if ($health.status -ne "ok") { throw "Restarted health check failed" }
 
+          & $venvPython scripts/owner_smoke_http.py --base-url $url --phase post-restart
+          if ($LASTEXITCODE -ne 0) { throw "HTTP owner smoke post-restart phase failed" }
+
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopPs
           if ($LASTEXITCODE -ne 0) { throw "STOP_SERVICE failed" }
           Start-Sleep -Milliseconds 800
@@ -207,6 +213,7 @@ jobs:
           } catch {
             if ($_.Exception.Message -eq "Service still responds after STOP_SERVICE") { throw }
           }
+          Write-Host "OWNER_SMOKE_AUTO_PASS"
       - name: ZIP integrity and checksum
         shell: pwsh
         run: |
