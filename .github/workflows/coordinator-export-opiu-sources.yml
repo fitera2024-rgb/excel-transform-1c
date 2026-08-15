@@ -1,0 +1,42 @@
+name: Coordinator export OPIU sources
+
+on:
+  push:
+    branches:
+      - coord/opiu-rules-source-export-20260815
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout latest product head
+        uses: actions/checkout@v4
+        with:
+          ref: b712cadba6d035108c56dcc9746ff42443c3b07c
+          path: latest
+          fetch-depth: 0
+      - name: Checkout CODEX-03 recovery
+        uses: actions/checkout@v4
+        with:
+          ref: 63d2e35244ae3fccc82bdef4fd1d702979219ad0
+          path: recovery
+          fetch-depth: 0
+      - name: Create exact source archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf latest/.git recovery/.git export
+          mkdir -p export
+          (cd latest && zip -qr ../export/latest-b712cad.zip .)
+          (cd recovery && zip -qr ../export/recovery-63d2e35.zip .)
+          sha256sum export/*.zip > export/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: COORDINATOR_OPIU_SOURCE_TREES
+          path: export
+          if-no-files-found: error
+          retention-days: 3
