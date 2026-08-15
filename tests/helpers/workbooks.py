@@ -49,6 +49,8 @@ def workbook_bytes(
     reporting_unit: str = "ПС",
     tax_error: bool = False,
     second_cfo: str = "ЦФО 2",
+    first_department: str = "Департамент 1",
+    first_cfo: str = "ЦФО 1",
 ) -> bytes:
     workbook = Workbook()
     first = workbook.active
@@ -68,10 +70,25 @@ def workbook_bytes(
             reporting_unit,
             tax_error,
             second_cfo,
+            first_department,
+            first_cfo,
         )
         if two_candidates:
             second = workbook.create_sheet("Второй диапазон")
-            _append_candidate(second, False, False, False, False, False, False, reporting_unit, False, second_cfo)
+            _append_candidate(
+                second,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                reporting_unit,
+                False,
+                second_cfo,
+                first_department,
+                first_cfo,
+            )
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
@@ -120,6 +137,8 @@ def _append_candidate(
     reporting_unit: str,
     tax_error: bool = False,
     second_cfo: str = "ЦФО 2",
+    first_department: str = "Департамент 1",
+    first_cfo: str = "ЦФО 1",
 ) -> None:
     sheet.append(["Синтетический fixture: вымышленные данные"])
     sheet.append(HEADERS)
@@ -131,9 +150,9 @@ def _append_candidate(
         [
             reporting_unit,
             "Административные",
-            "" if department_error else "Департамент 1",
+            "" if department_error else first_department,
             "ТК",
-            "" if cfo_error else "ЦФО 1",
+            "" if cfo_error else first_cfo,
             "?" if tax_error else 0.2,
             "Связь",
             "Интернет" if not missing_mapping else "Нет в ERP",
@@ -281,6 +300,38 @@ def real_reference_bytes(kind: str) -> bytes:
 
     output = BytesIO()
     workbook.save(output)
+    return output.getvalue()
+
+
+def erp_organization_hierarchy_bytes(*, cfo_code: str = "000000173") -> bytes:
+    """Synthetic structural analogue of the ERP organization hierarchy export."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Лист_1"
+    sheet.cell(7, 1, "Организация")
+    sheet.cell(8, 7, "Головная организация")
+    sheet.cell(8, 32, "Верхний уровень иерархии")
+    sheet.cell(8, 39, "Код")
+
+    sheet.cell(9, 1, 'ООО "Айс Юнион"')
+    sheet.cell(10, 1, "АЮ Административный Отдел")
+    sheet.cell(11, 1, "Административный департамент")
+    sheet.cell(11, 7, "АЮ Административный Отдел")
+    sheet.cell(11, 32, 'ООО "Айс Юнион"')
+    sheet.cell(11, 39, cfo_code)
+
+    # The real export may list the coded organization element after its
+    # subordinate CFO rows. The explicit parent column, not row order, is the
+    # relationship authority for enrichment.
+    sheet.cell(12, 1, 'ООО "Айс Юнион"')
+    sheet.cell(13, 7, 'ООО "Айс Юнион"')
+    sheet.cell(13, 32, "4 Владивосток")
+    sheet.cell(13, 39, "000000001")
+
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
     return output.getvalue()
 
 

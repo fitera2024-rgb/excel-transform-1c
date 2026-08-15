@@ -224,6 +224,29 @@ def test_attention_path_with_manual_erp_correction(client):
     assert "ERP-001" in corrected.text
 
 
+def test_bulk_confirm_tax(client):
+    response = upload(client, workbook_bytes(tax_error=True))
+    run_id = run_id_from(response)
+
+    confirmed = client.post(
+        f"/runs/{run_id}/confirm-tax-not-required",
+        data={"confirmed": "1", "source_rows": "[3]"},
+        follow_redirects=True,
+    )
+    run = client.app.state.workflow.get_run(run_id)
+    row_records = [record for record in run.records if record.source_row == 3]
+
+    assert confirmed.status_code == 200
+    assert "Налогообложение отмечено как не требующееся: 1 строк" in confirmed.text
+    assert len(row_records) == 12
+    assert {record.tax for record in row_records} == {"Не требуется"}
+    assert not any(
+        issue.kind == "tax" and issue.pointer.row == 3
+        for issue in run.unresolved_issues
+    )
+    assert run.rerun_count == 0
+
+
 def test_attention_editor_is_grouped_by_source_row_and_shows_business_context(client):
     response = upload(
         client,

@@ -227,10 +227,10 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
                 record.year,
                 record.month,
                 f"{record.month:02d}.{record.year}",
-                record.department or None,
-                None,  # Код организационной единицы будет дополнен справочником.
-                record.cfo or None,
-                None,  # Код ЦФО будет дополнен справочником.
+                record.organization_unit or record.department or None,
+                record.organization_unit_code or None,
+                record.erp_department or record.cfo or None,
+                record.cfo_code or None,
                 record.expense_type,
                 record.erp_code or None,
                 record.erp_article_name or record.source_article,

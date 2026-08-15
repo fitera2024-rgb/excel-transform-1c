@@ -107,6 +107,8 @@ REAL_EXPORT_HEADERS = {
 }
 
 PATH_ALIASES = {"полный путь", "путь", "полное наименование"}
+ORG_CFO_NAME_ALIASES = {"головная организация"}
+ORG_UNIT_NAME_ALIASES = {"верхний уровень иерархии"}
 MAX_HEADER_SCAN_ROWS = 120
 ERP_INDENT_UNITS_PER_LEVEL = 2
 
@@ -590,6 +592,16 @@ def _parse_real_organizations(workbook: Any) -> list[dict[str, Any]]:
         PATH_ALIASES,
         excluded_columns={name_col, code_col},
     )
+    cfo_name_col = _find_exact_header_column(
+        sheet,
+        ORG_CFO_NAME_ALIASES,
+        excluded_columns={name_col, code_col},
+    )
+    organization_unit_col = _find_exact_header_column(
+        sheet,
+        ORG_UNIT_NAME_ALIASES,
+        excluded_columns={name_col, code_col},
+    )
 
     stack: list[str] = []
     coded_stack: dict[int, str] = {}
@@ -613,16 +625,33 @@ def _parse_real_organizations(workbook: Any) -> list[dict[str, Any]]:
         else:
             continue
 
-        code = _code_text(code_cell)
-        if not code or _looks_like_header(code, REAL_EXPORT_HEADERS["organizations"]["code"]):
-            continue
-        if code in seen_codes:
-            raise ValueError(f"Справочник организаций содержит повторяющийся код: {code}")
-
         explicit_path = ""
         if path_col is not None:
             explicit_path = _clean_scalar(sheet.cell(row_number, path_col).value)
         full_path = explicit_path or " → ".join(stack)
+        source_department = _clean_scalar(raw_name)
+        cfo_name = (
+            _clean_scalar(sheet.cell(row_number, cfo_name_col).value)
+            if cfo_name_col is not None
+            else ""
+        )
+        organization_unit_name = (
+            _clean_scalar(sheet.cell(row_number, organization_unit_col).value)
+            if organization_unit_col is not None
+            else ""
+        )
+        code = _code_text(code_cell)
+        if _looks_like_header(code, REAL_EXPORT_HEADERS["organizations"]["code"]):
+            continue
+        if not code and not (source_department and cfo_name and organization_unit_name):
+            continue
+        if code and code in seen_codes:
+            raise ValueError(f"Справочник организаций содержит повторяющийся код: {code}")
+        if not code:
+            full_path = " → ".join(
+                (organization_unit_name, cfo_name, source_department)
+            )
+        node_id = code or f"organization:path:{full_path}"
 
         parent_id = None
         for parent_level in range(level - 1, -1, -1):
@@ -632,17 +661,21 @@ def _parse_real_organizations(workbook: Any) -> list[dict[str, Any]]:
 
         raw_nodes.append(
             {
-                "node_id": code,
+                "node_id": node_id,
                 "code": code,
                 "name": name,
                 "parent_id": parent_id,
                 "full_path": full_path,
+                "source_department": source_department,
+                "cfo_name": cfo_name,
+                "organization_unit_name": organization_unit_name,
             }
         )
-        seen_codes.add(code)
-        coded_stack[level] = code
-        for deeper in [item for item in coded_stack if item > level]:
-            del coded_stack[deeper]
+        if code:
+            seen_codes.add(code)
+            coded_stack[level] = code
+            for deeper in [item for item in coded_stack if item > level]:
+                del coded_stack[deeper]
 
     if path_col is not None:
         by_path = {node["full_path"]: node["node_id"] for node in raw_nodes}
@@ -824,6 +857,24 @@ def _find_optional_column(
     return next(iter(best_columns)) if len(best_columns) == 1 else None
 
 
+def _find_exact_header_column(
+    sheet: Any,
+    aliases: set[str],
+    *,
+    excluded_columns: set[int] | None = None,
+) -> int | None:
+    normalized_aliases = {normalize_header(alias) for alias in aliases}
+    excluded = excluded_columns or set()
+    matches: set[int] = set()
+    for row_number in range(1, min(sheet.max_row, MAX_HEADER_SCAN_ROWS) + 1):
+        for column_number, cell in enumerate(sheet[row_number], start=1):
+            if column_number in excluded:
+                continue
+            if normalize_header(cell.value) in normalized_aliases:
+                matches.add(column_number)
+    return next(iter(matches)) if len(matches) == 1 else None
+
+
 def _row_level(sheet: Any, row_number: int, name_col: int, value: Any) -> int:
     cell = sheet.cell(row_number, name_col)
     indent = int(cell.alignment.indent or 0)
@@ -953,6 +1004,9 @@ def organization_nodes(payload: list[dict[str, Any]]) -> list[OrganizationNode]:
             name=item["name"],
             parent_id=item["parent_id"] or None,
             full_path=item["full_path"],
+            source_department=_clean_scalar(item.get("source_department")),
+            cfo_name=_clean_scalar(item.get("cfo_name")),
+            organization_unit_name=_clean_scalar(item.get("organization_unit_name")),
         )
         for item in validate_reference_payload("organizations", payload)
     ]

@@ -49,6 +49,10 @@ from excel_transform_1c.core.models import (
     STATUS_SKIPPED,
     TAX_NOT_REQUIRED,
 )
+from excel_transform_1c.core.organization_hierarchy import (
+    MISSING_ERP_ELEMENT_CODE_REASON,
+    ExactOrganizationHierarchyResolver,
+)
 from excel_transform_1c.core.transform import ExactERPMapper, normalize_tax, transform_rows
 
 
@@ -309,6 +313,7 @@ class WorkflowService:
         )
         if run.cfo_mapping_enabled:
             self._initialize_cfo_mappings(run)
+        self._apply_organization_reference_enrichment(run)
         self._apply_indicator_matches(run)
         self.runs[run_id] = run
         self.run_keys[run_key] = run_id
@@ -962,7 +967,66 @@ class WorkflowService:
                 record.status = STATUS_ATTENTION if reasons else STATUS_OK
             record.reasons = list(dict.fromkeys(reasons))
 
+        self._apply_organization_reference_enrichment(run, {source_row})
         self._apply_indicator_matches(run, {source_row})
+
+    def _apply_organization_reference_enrichment(
+        self,
+        run: ProcessedRun,
+        source_rows: set[int] | None = None,
+    ) -> None:
+        nodes = self.organization_nodes()
+        resolver = ExactOrganizationHierarchyResolver(nodes)
+        selected_rows = source_rows or {record.source_row for record in run.records}
+
+        for source_row in sorted(selected_rows):
+            row_records = [
+                record for record in run.records if record.source_row == source_row
+            ]
+            if not row_records:
+                continue
+            for issue in run.issues:
+                if (
+                    not issue.resolved
+                    and issue.kind == "organization-reference"
+                    and issue.pointer.row == source_row
+                ):
+                    issue.resolved = True
+
+            base = row_records[0]
+            resolution = resolver.resolve(
+                run.context.organization_node_id,
+                base.department,
+                base.source_cfo or base.cfo,
+            )
+            reason = resolution.reason if resolution else None
+            for record in row_records:
+                record.organization_unit = resolution.organization_unit if resolution else ""
+                record.organization_unit_code = (
+                    resolution.organization_unit_code if resolution else ""
+                )
+                record.erp_department = resolution.department if resolution else ""
+                record.cfo_code = resolution.cfo_code if resolution else ""
+                record.reasons = [
+                    item
+                    for item in record.reasons
+                    if item != MISSING_ERP_ELEMENT_CODE_REASON
+                ]
+                if reason:
+                    record.reasons.append(reason)
+                if record.status != STATUS_SKIPPED:
+                    record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
+
+            if reason:
+                run.issues.append(
+                    self._issue_from_record(
+                        base,
+                        "organization-reference",
+                        reason,
+                        "department",
+                        base.department,
+                    )
+                )
 
     @staticmethod
     def _issue_from_record(

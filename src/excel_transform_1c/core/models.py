@@ -93,6 +93,9 @@ class OrganizationNode:
     name: str
     parent_id: str | None
     full_path: str
+    source_department: str = ""
+    cfo_name: str = ""
+    organization_unit_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -177,6 +180,10 @@ class PreviewRecord:
     sales_channel: str = ""
     indicator_match_status: str = ""
     indicator_match_reason: str = ""
+    organization_unit: str = ""
+    organization_unit_code: str = ""
+    erp_department: str = ""
+    cfo_code: str = ""
 
     @property
     def comment(self) -> str:

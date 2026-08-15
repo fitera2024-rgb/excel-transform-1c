@@ -111,7 +111,7 @@ def test_bulk_control_counts_source_rows_not_months_and_keeps_individual_editor(
     assert "Сначала поставьте галку" in script
 
 
-def test_bulk_apply_updates_all_months_preserves_other_issue_and_is_idempotent(client):
+def test_bulk_confirm_erp(client):
     response = upload(
         client,
         workbook_bytes(missing_mapping=True, department_error=True),
