@@ -37,7 +37,7 @@ jobs:
           test = test_path.read_text(encoding='utf-8')
           addition = '''\n\ndef test_opiu_not_found_rows_are_visible_in_business_unresolved_list(tmp_path):\n    service = configured_service(tmp_path)\n    run = process_run(service)\n\n    rows = service.indicator_unresolved_rows(run.run_id)\n\n    assert len(rows) == 2\n    assert {row["status"] for row in rows} == {"Не найдено"}\n    assert all(row["action"] == "Загрузить / дополнить классификатор" for row in rows)\n'''
           if 'test_opiu_not_found_rows_are_visible_in_business_unresolved_list' not in test:
-              test_path.write_text(test.rstrip() + addition + '\n', encoding='utf-8')
+              test_path.write_text(test.rstrip() + addition, encoding='utf-8')
           PY
           git diff --check
           test -z "$(git diff --name-only | grep -E '\.(xls|xlsx|xlsm|xlsb|mxl|zip)$|(^|/)runtime/' || true)"
