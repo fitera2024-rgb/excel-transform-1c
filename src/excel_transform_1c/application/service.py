@@ -19,13 +19,23 @@ from excel_transform_1c.adapters.protected_ooxml import (
     has_ole_signature,
 )
 from excel_transform_1c.adapters.references import (
+    article_indicator_rules,
     erp_articles,
     intalev_cfos,
     organization_nodes,
     parse_reference_workbook,
 )
 from excel_transform_1c.core.access import effective_organization_nodes
+from excel_transform_1c.core.indicator_matching import (
+    INDICATOR_AMBIGUOUS,
+    INDICATOR_INCOMPLETE,
+    INDICATOR_MATCHED,
+    INDICATOR_MISSING,
+    ExactArticleIndicatorMatcher,
+    apply_indicator_match,
+)
 from excel_transform_1c.core.models import (
+    ArticleIndicatorRule,
     CandidateRange,
     ERPArticle,
     IntalevCFO,
@@ -96,6 +106,19 @@ class WorkflowService:
 
     def intalev_cfos(self) -> list[IntalevCFO]:
         return intalev_cfos(self.store.load_reference("intalev_cfos"))
+
+    def article_indicator_rules(self) -> list[ArticleIndicatorRule]:
+        return article_indicator_rules(
+            self.store.load_reference("article_indicators")
+        )
+
+    def upload_indicator_classifier(self, content: bytes, run_id: str | None = None) -> int:
+        run = self.get_run(run_id) if run_id is not None else None
+        payload = parse_reference_workbook(content, "article_indicators")
+        self.store.replace_reference("article_indicators", payload)
+        if run is not None:
+            self._apply_indicator_matches(run)
+        return len(payload)
 
     def allowed_organization_nodes(self, user_key: str = "local") -> list[OrganizationNode]:
         nodes = self.organization_nodes()
@@ -282,9 +305,11 @@ class WorkflowService:
             issues=issues,
             created_at=datetime.now(UTC).isoformat(),
             cfo_mapping_enabled=bool(self.intalev_cfos()),
+            indicator_classifier_loaded=bool(self.article_indicator_rules()),
         )
         if run.cfo_mapping_enabled:
             self._initialize_cfo_mappings(run)
+        self._apply_indicator_matches(run)
         self.runs[run_id] = run
         self.run_keys[run_key] = run_id
         return run
@@ -301,6 +326,44 @@ class WorkflowService:
         if run_id not in self.runs:
             raise KeyError(run_id)
         return self.runs[run_id]
+
+    def _apply_indicator_matches(
+        self,
+        run: ProcessedRun,
+        source_rows: set[int] | None = None,
+    ) -> None:
+        rules = self.article_indicator_rules()
+        matcher = ExactArticleIndicatorMatcher(rules)
+        run.indicator_classifier_loaded = bool(rules)
+        for record in run.records:
+            if source_rows is not None and record.source_row not in source_rows:
+                continue
+            match = matcher.resolve(
+                erp_code=record.erp_code,
+                expense_type=record.expense_type,
+                expense_group=record.expense_group,
+                article_name=record.source_article,
+            )
+            apply_indicator_match(record, match)
+
+    def indicator_counts(self, run_id: str) -> dict[str, int]:
+        run = self.get_run(run_id)
+        statuses = {
+            record.source_row: record.indicator_match_status
+            for record in run.records
+        }
+        return {
+            "automatic": sum(status == INDICATOR_MATCHED for status in statuses.values()),
+            "attention": sum(
+                status in {
+                    INDICATOR_AMBIGUOUS,
+                    INDICATOR_INCOMPLETE,
+                    INDICATOR_MISSING,
+                }
+                for status in statuses.values()
+            ),
+            "not_found": sum(status == INDICATOR_MISSING for status in statuses.values()),
+        }
 
     @staticmethod
     def _issue_is_inline_editable(issue: Issue) -> bool:
@@ -858,6 +921,8 @@ class WorkflowService:
                     reasons.append("Отрицательная сумма")
                 record.status = STATUS_ATTENTION if reasons else STATUS_OK
             record.reasons = list(dict.fromkeys(reasons))
+
+        self._apply_indicator_matches(run, {source_row})
 
     @staticmethod
     def _issue_from_record(

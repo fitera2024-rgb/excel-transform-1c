@@ -52,6 +52,7 @@ jobs:
           wheel = next(Path('dist-wheel').glob('*.whl'))
           required = {
               'excel_transform_1c/adapters/workbook_repair.py',
+              'excel_transform_1c/core/indicator_matching.py',
               'excel_transform_1c/baselines/erp_articles.json',
               'excel_transform_1c/baselines/organizations.json',
               'excel_transform_1c/baselines/scenarios.json',
@@ -165,10 +166,24 @@ jobs:
           pending = service.prepare_upload("package-smoke.xlsx", payload.getvalue(), context)
           run = service.process_upload(pending.upload_id, pending.candidates[0].candidate_id)
           assert len(run.records) == 12
+
+          classifier = Workbook()
+          classifier_sheet = classifier.active
+          classifier_sheet.append(["Полный путь статьи", "Статья", "Показатель", "Канал сбыта"])
+          classifier_sheet.append(["Административные → Связь → Интернет", "Интернет", "Услуги связи", "Основной канал"])
+          classifier_payload = BytesIO(); classifier.save(classifier_payload); classifier.close()
+          service.upload_indicator_classifier(classifier_payload.getvalue(), run.run_id)
+          assert service.indicator_counts(run.run_id) == {"automatic": 1, "attention": 0, "not_found": 0}
+
           exported = service.export_run(run.run_id)
           check = load_workbook(BytesIO(exported), read_only=True, data_only=True)
           try:
+              assert check.sheetnames == ["OPIU Light", "ОПИУ", "Показатели"]
               assert check["OPIU Light"].max_row == 13
+              assert check["ОПИУ"].max_row == 13
+              assert check["Показатели"].max_row == 13
+              assert check["Показатели"]["G2"].value == "Услуги связи"
+              assert check["Показатели"]["H2"].value == 100
           finally:
               check.close()
           print("package functional smoke PASS")

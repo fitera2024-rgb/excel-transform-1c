@@ -13,6 +13,10 @@ from openpyxl.styles import Alignment, Font, PatternFill
 
 from excel_transform_1c.adapters.workbook_repair import prepare_workbook
 from excel_transform_1c.core.detection import detect_candidate_ranges, read_source_rows
+from excel_transform_1c.core.indicator_matching import (
+    IndicatorExportRow,
+    aggregate_indicator_rows,
+)
 from excel_transform_1c.core.models import CandidateRange, PreviewRecord
 
 
@@ -266,12 +270,26 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
-def _write_ado_indicators_sheet(sheet) -> None:
-    # The current workflow has no source for channel/indicator rows.  Keep the
-    # exact ADO schema ready without inventing business values.  A later
-    # classifier/input can populate the sheet independently.
+def _write_ado_indicators_sheet(
+    sheet,
+    rows: list[IndicatorExportRow],
+) -> None:
     sheet.title = "Показатели"
     _style_header(sheet, ADO_INDICATOR_HEADERS, "H")
+    for row in rows:
+        sheet.append(
+            (
+                row.organization,
+                row.scenario,
+                row.year,
+                row.month,
+                row.period,
+                row.sales_channel,
+                row.indicator,
+                float(row.amount),
+            )
+        )
+    sheet.auto_filter.ref = f"A1:H{max(len(rows) + 1, 1)}"
     widths = {
         "A": 28,
         "B": 18,
@@ -285,6 +303,8 @@ def _write_ado_indicators_sheet(sheet) -> None:
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
     sheet["H1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["H"][1:]:
+        cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
 def export_opiu_light(records: list[PreviewRecord]) -> bytes:
@@ -295,7 +315,10 @@ def export_opiu_light(records: list[PreviewRecord]) -> bytes:
         legacy_sheet = workbook.active
         _write_legacy_sheet(legacy_sheet, records)
         _write_ado_opiu_sheet(workbook.create_sheet(), records)
-        _write_ado_indicators_sheet(workbook.create_sheet())
+        _write_ado_indicators_sheet(
+            workbook.create_sheet(),
+            aggregate_indicator_rows(records),
+        )
 
         output = BytesIO()
         workbook.save(output)

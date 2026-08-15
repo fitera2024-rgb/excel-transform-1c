@@ -11,6 +11,7 @@ from excel_transform_1c.adapters import protected_ooxml as protected_adapter
 from excel_transform_1c.application import service as service_module
 from excel_transform_1c.ui.app import create_app
 from tests.helpers.workbooks import (
+    indicator_classifier_bytes,
     large_workbook_bytes,
     protected_workbook_bytes,
     reference_bytes,
@@ -110,6 +111,39 @@ def test_budget_form_shows_processing_state_and_blocks_duplicate_submit(client):
     assert 'processForm.dataset.submitting === "true"' in response.text
     assert "event.preventDefault()" in response.text
     assert "processButton.disabled = true" in response.text
+
+
+def test_preview_shows_compact_indicator_counts_without_rules_workflow(client):
+    response = upload(client, workbook_bytes())
+    run_id = run_id_from(response)
+
+    assert 'data-testid="indicator-classifier-summary"' in response.text
+    assert "Найдено автоматически:" in response.text
+    assert "Требует внимания:" in response.text
+    assert "Не найдено:" in response.text
+    assert "Классификатор:" in response.text
+    assert "не загружен" in response.text
+    assert 'data-testid="indicator-classifier-form"' in response.text
+    assert "Rules" not in response.text
+
+    response = client.post(
+        f"/runs/{run_id}/indicator-classifier",
+        files={
+            "classifier_file": (
+                "classifier.xlsx",
+                indicator_classifier_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "Автоматический поиск повторён в текущем RUN" in response.text
+    assert re.search(r"Найдено автоматически:</dt><dd>2</dd>", response.text)
+    assert re.search(r"Требует внимания:</dt><dd>0</dd>", response.text)
+    assert re.search(r"Не найдено:</dt><dd>0</dd>", response.text)
+    assert re.search(r"Классификатор:</dt><dd>загружен</dd>", response.text)
 
 
 def test_legacy_delegation_is_cleared_and_all_nodes_remain_available(tmp_path):

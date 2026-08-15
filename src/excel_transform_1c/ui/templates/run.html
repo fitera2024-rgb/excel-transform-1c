@@ -24,6 +24,29 @@
   <div><span>Полных перезапусков</span><strong>{{ run.rerun_count }}</strong><small>после правок</small></div>
 </section>
 
+<section class="card reference-card" data-testid="indicator-classifier-summary">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow ink">Статья → показатель</p>
+      <h2>Автоматические соответствия</h2>
+    </div>
+    <p>Сервис применяет только один точный кандидат. Остальные строки не угадываются.</p>
+  </div>
+  <dl class="catalog-stats" data-testid="indicator-counts">
+    <div><dt>Найдено автоматически:</dt><dd>{{ indicator_counts.automatic }}</dd></div>
+    <div><dt>Требует внимания:</dt><dd>{{ indicator_counts.attention }}</dd></div>
+    <div><dt>Не найдено:</dt><dd>{{ indicator_counts.not_found }}</dd></div>
+    <div><dt>Классификатор:</dt><dd>{{ 'загружен' if run.indicator_classifier_loaded else 'не загружен' }}</dd></div>
+  </dl>
+  <form method="post" action="/runs/{{ run.run_id }}/indicator-classifier" enctype="multipart/form-data" class="reference-form" data-testid="indicator-classifier-form">
+    <label>
+      Загрузить / дополнить классификатор
+      <input type="file" name="classifier_file" accept=".xlsx,.xls,.xlsm" required>
+    </label>
+    <button type="submit">Повторить автоматический поиск</button>
+  </form>
+</section>
+
 {% if run.cfo_mapping_enabled %}
 <section class="card cfo-mapping-section" data-testid="cfo-mapping-section">
   <div class="section-heading">

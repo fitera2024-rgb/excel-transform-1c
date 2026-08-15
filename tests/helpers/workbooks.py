@@ -191,6 +191,53 @@ def reference_bytes(kind: str) -> bytes:
     return output.getvalue()
 
 
+def indicator_classifier_bytes(
+    rows: list[dict[str, object]] | None = None,
+) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Классификатор"
+    sheet.append(
+        [
+            "ERP-код статьи",
+            "Полный путь статьи",
+            "Статья",
+            "Показатель",
+            "Канал сбыта",
+        ]
+    )
+    source_rows = rows or [
+        {
+            "erp_code": "ERP-001",
+            "article_path": "Административные → Связь → Интернет",
+            "article_name": "Интернет",
+            "indicator": "Услуги связи",
+            "sales_channel": "Основной канал",
+        },
+        {
+            "erp_code": "ERP-002",
+            "article_path": "Коммерческие → Маркетинг → Реклама",
+            "article_name": "Реклама",
+            "indicator": "Маркетинговые расходы",
+            "sales_channel": "Основной канал",
+        },
+    ]
+    for row in source_rows:
+        sheet.append(
+            [
+                row.get("erp_code", ""),
+                row.get("article_path", ""),
+                row.get("article_name", ""),
+                row.get("indicator", ""),
+                row.get("sales_channel", ""),
+            ]
+        )
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
 def real_reference_bytes(kind: str) -> bytes:
     workbook = Workbook()
     sheet = workbook.active

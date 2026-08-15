@@ -111,6 +111,15 @@ class IntalevCFO:
 
 
 @dataclass(frozen=True)
+class ArticleIndicatorRule:
+    erp_code: str
+    article_path: str
+    article_name: str
+    indicator: str
+    sales_channel: str
+
+
+@dataclass(frozen=True)
 class Scenario:
     scenario_id: str
     name: str
@@ -163,6 +172,10 @@ class PreviewRecord:
     source_cfo_key: str = ""
     cfo_target_node_id: str = ""
     cfo_mapping_confirmed: bool = False
+    indicator: str = ""
+    sales_channel: str = ""
+    indicator_match_status: str = ""
+    indicator_match_reason: str = ""
 
     @property
     def comment(self) -> str:
@@ -208,6 +221,7 @@ class ProcessedRun:
     created_at: str
     rerun_count: int = 0
     cfo_mapping_enabled: bool = False
+    indicator_classifier_loaded: bool = False
 
     def visible_records(self) -> list[PreviewRecord]:
         if not self.context.selected_months:

@@ -260,6 +260,7 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             confirmed_erp_rows=confirmed_erp_rows,
             tax_not_required_rows=service.tax_not_required_source_rows(run_id),
             cfo_mapping_entries=service.cfo_mapping_entries(run_id),
+            indicator_counts=service.indicator_counts(run_id),
             message=message,
             error=error,
         )
@@ -431,6 +432,27 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             return preview(request, run_id, error=str(exc))
         return RedirectResponse(
             f"/runs/{run_id}?message=Подтверждено ERP-сопоставлений: {count}. Остальные причины сохранены",
+            status_code=303,
+        )
+
+    @app.post("/runs/{run_id}/indicator-classifier")
+    async def upload_indicator_classifier(
+        request: Request,
+        run_id: str,
+        classifier_file: UploadFile = File(...),
+    ):
+        try:
+            count = service.upload_indicator_classifier(
+                await classifier_file.read(),
+                run_id,
+            )
+        except KeyError:
+            return home(request, error="RUN не найден; выберите файл повторно")
+        except Exception as exc:
+            return preview(request, run_id, error=str(exc))
+        return RedirectResponse(
+            f"/runs/{run_id}?message=Классификатор дополнен: {count}. "
+            "Автоматический поиск повторён в текущем RUN",
             status_code=303,
         )
 
