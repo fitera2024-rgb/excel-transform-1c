@@ -464,7 +464,13 @@ class WorkflowService:
         by_row: dict[int, PreviewRecord] = {}
         for record in run.records:
             by_row.setdefault(record.source_row, record)
-        labels = {INDICATOR_MISSING: "Не найдено", INDICATOR_AMBIGUOUS: "Неоднозначно", INDICATOR_INCOMPLETE: "Правило заполнено не полностью"}
+        labels = {
+            INDICATOR_MISSING: "Не найдено",
+            INDICATOR_AMBIGUOUS: "Неоднозначно",
+            INDICATOR_INCOMPLETE: "Правило заполнено не полностью",
+            OPIU_NOT_FOUND: "Не найдено",
+            OPIU_AMBIGUOUS: "Неоднозначно",
+        }
         result: list[dict[str, Any]] = []
         for source_row, record in sorted(by_row.items()):
             status = record.indicator_match_status
