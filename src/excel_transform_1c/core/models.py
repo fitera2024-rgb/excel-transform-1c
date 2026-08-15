@@ -165,6 +165,9 @@ class PreviewRecord:
     erp_article_name: str
     tax: str
     amount: Decimal | None
+    region: str = ""
+    network: str = ""
+    nomenclature: str = ""
     status: str = STATUS_OK
     reasons: list[str] = field(default_factory=list)
     pointers: dict[str, SourcePointer] = field(default_factory=dict)

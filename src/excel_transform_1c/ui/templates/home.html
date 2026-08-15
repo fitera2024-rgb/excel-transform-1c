@@ -65,6 +65,27 @@
   </article>
 </section>
 
+<section class="card reference-card opiu-rule-source-card" data-testid="opiu-rule-source-card">
+  <div class="card-heading">
+    <div><p class="eyebrow ink">Автоматические показатели</p><h3>Источники правил ОПИУ ERP</h3></div>
+    <span class="status-badge {{ 'ready' if opiu_rule_count else 'neutral' }}" data-testid="opiu-rule-status">{{ opiu_rule_count }} правил</span>
+  </div>
+  <p>Загрузите комплект ERP-настроек один раз. Сервис сохранит построенные точные правила локально и будет определять показатель по группе раскрытия, статье внутри группы и условиям формулы.</p>
+  <details>
+    <summary>Загрузить / обновить комплект источников ОПИУ</summary>
+    <form method="post" action="/opiu-rule-sources" enctype="multipart/form-data" class="reference-form opiu-rule-source-form" data-testid="opiu-rule-source-form">
+      <label>ОПИУ ФОРМУЛЫ<input type="file" name="formulas_file" accept=".xlsx" required></label>
+      <label>ОПИУ АНАЛИТИКИ<input type="file" name="analytics_file" accept=".xlsx" required></label>
+      <label>Показатели отчётов ERP<input type="file" name="indicators_file" accept=".xlsx" required></label>
+      <label>Источники ОПИУ ERP<input type="file" name="sources_file" accept=".mxl" required></label>
+      <label>Регионы<input type="file" name="regions_file" accept=".xlsx" required></label>
+      <label>Сети<input type="file" name="networks_file" accept=".xlsx" required></label>
+      <p class="hint">Автоматически применяется только одно точное соответствие. Неоднозначные и непокрытые связи останутся в preview как «Требует внимания».</p>
+      <button type="submit">Построить и сохранить правила</button>
+    </form>
+  </details>
+</section>
+
 <section class="section-heading page-section-heading">
   <div class="section-title-block"><span class="section-step">2</span><div><p class="eyebrow ink">Новый запуск</p><h2>Контекст обработки и исходный Excel</h2></div></div>
   <p>Выберите только бизнес-понятные параметры. Техническая рабочая копия создаётся внутри локального RUN.</p>

@@ -123,7 +123,8 @@ def test_ambiguous_and_missing_classifier_results_remain_unapplied(tmp_path):
     assert service.indicator_counts(run.run_id) == {
         "automatic": 0,
         "attention": 2,
-        "not_found": 1,
+        # Name-only rows have no disclosure group and are both fail-closed.
+        "not_found": 2,
     }
     internet = next(record for record in run.records if record.source_article == "Интернет")
     assert internet.indicator == ""

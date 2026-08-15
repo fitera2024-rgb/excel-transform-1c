@@ -565,3 +565,35 @@ def test_unknown_decrypt_error_cannot_reveal_password_in_http_or_runtime(
         assert synthetic_password not in path.name
         if path.is_file():
             assert password_bytes not in path.read_bytes()
+
+
+def test_home_uploads_formula_rule_sources_once_and_persists(client, tmp_path):
+    from tests.integration.test_opiu_rule_catalog import source_bundle
+
+    home = client.get("/")
+    assert 'data-testid="opiu-rule-source-card"' in home.text
+    assert 'data-testid="opiu-rule-source-form"' in home.text
+    assert ">0 правил<" in home.text
+
+    payloads = source_bundle()
+    response = client.post(
+        "/opiu-rule-sources",
+        files={
+            "formulas_file": ("ОПИУ ФОРМУЛЫ.xlsx", payloads["formulas_xlsx"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            "analytics_file": ("ОПИУ аНАЛИТИКИ.xlsx", payloads["analytics_xlsx"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            "indicators_file": ("Показатели.xlsx", payloads["indicators_xlsx"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            "sources_file": ("Источники.mxl", payloads["sources_mxl"], "application/octet-stream"),
+            "regions_file": ("Регионы.xlsx", payloads["regions_xlsx"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            "networks_file": ("СЕТИ.xlsx", payloads["networks_xlsx"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        },
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert "Правила ОПИУ обновлены" in response.text
+    assert client.app.state.workflow.opiu_rule_source_count() == 2
+
+    runtime = client.app.state.workflow.runtime_dir
+    restarted = TestClient(create_app(runtime))
+    assert restarted.app.state.workflow.opiu_rule_source_count() == 2
+    assert ">2 правил<" in restarted.get("/").text

@@ -136,6 +136,7 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             request,
             "home.html",
             counts=service.reference_counts(),
+            opiu_rule_count=service.opiu_rule_source_count(),
             scenarios=service.store.list_scenarios(),
             organization_roots=organization_roots,
             organization_options=organization_options,
@@ -158,6 +159,43 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
         except Exception as exc:
             return RedirectResponse(f"/?error={str(exc)}", status_code=303)
         return RedirectResponse(f"/?message=Загружено записей: {count}", status_code=303)
+
+    @app.post("/opiu-rule-sources")
+    async def upload_opiu_rule_sources(
+        request: Request,
+        formulas_file: UploadFile = File(...),
+        analytics_file: UploadFile = File(...),
+        indicators_file: UploadFile = File(...),
+        sources_file: UploadFile = File(...),
+        regions_file: UploadFile = File(...),
+        networks_file: UploadFile = File(...),
+    ):
+        try:
+            payloads = await asyncio.gather(
+                formulas_file.read(),
+                analytics_file.read(),
+                indicators_file.read(),
+                sources_file.read(),
+                regions_file.read(),
+                networks_file.read(),
+            )
+            catalog = await asyncio.to_thread(
+                service.upload_opiu_rule_sources,
+                formulas_xlsx=payloads[0],
+                analytics_xlsx=payloads[1],
+                indicators_xlsx=payloads[2],
+                sources_mxl=payloads[3],
+                regions_xlsx=payloads[4],
+                networks_xlsx=payloads[5],
+            )
+        except Exception as exc:
+            return home(request, error=str(exc))
+        return RedirectResponse(
+            "/?message="
+            f"Правила ОПИУ обновлены: {len(catalog.rules)}; "
+            f"требуют внимания: {len(catalog.unresolved)}",
+            status_code=303,
+        )
 
     @app.post("/scenarios")
     def add_scenario(name: str = Form(...), year: int = Form(...), comment: str = Form("")):
@@ -263,6 +301,7 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             intalev_cfo_options=[{"source_key": item.source_key, "label": item.label} for item in service.intalev_cfos()],
             indicator_counts=service.indicator_counts(run_id),
             indicator_unresolved_rows=service.indicator_unresolved_rows(run_id),
+            indicator_attention_reasons=service.indicator_attention_reasons(run_id),
             message=message,
             error=error,
         )
