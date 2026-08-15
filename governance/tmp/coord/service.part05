@@ -1,0 +1,4 @@
+         reporting_unit=record.source_reporting_unit or record.reporting_unit,
+             department=record.department,
+             cfo=record.cfo,
+             expense_type=record.expense_type,
