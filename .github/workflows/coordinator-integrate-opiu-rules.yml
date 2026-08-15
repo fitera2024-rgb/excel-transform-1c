@@ -34,7 +34,6 @@ jobs:
         run: |
           set -euo pipefail
           cat payload/governance/integration_payload/opiu-rules-6k/part-*.b64 > patch.gz.b64
-          echo 'e25ba81de402207d3216badb6b981cb68da92fd188ca54ee43eb72fad7a7a0a6  patch.gz.b64' | sha256sum -c -
           base64 -d patch.gz.b64 > patch.gz
           echo '14df4a074e6b4a161a731824fe6d83ffc5484f0f63b9fab9b948b2dfa54e0606  patch.gz' | sha256sum -c -
           gzip -dc patch.gz > integration.patch
