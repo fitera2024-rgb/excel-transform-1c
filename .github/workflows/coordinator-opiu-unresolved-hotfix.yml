@@ -1,0 +1,64 @@
+name: Coordinator OPIU unresolved hotfix
+
+on:
+  push:
+    branches:
+      - coord/opiu-rules-unresolved-hotfix-20260815
+
+permissions:
+  contents: write
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: integration/opiu-erp-rules-v1
+          fetch-depth: 0
+      - name: Apply regression fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '623681f0bd3c148e442294072222f8b141c24755'
+          python - <<'PY'
+          from pathlib import Path
+
+          service_path = Path('src/excel_transform_1c/application/service.py')
+          service = service_path.read_text(encoding='utf-8')
+          old = '''        labels = {INDICATOR_MISSING: "Не найдено", INDICATOR_AMBIGUOUS: "Неоднозначно", INDICATOR_INCOMPLETE: "Правило заполнено не полностью"}\n'''
+          new = '''        labels = {\n            INDICATOR_MISSING: "Не найдено",\n            INDICATOR_AMBIGUOUS: "Неоднозначно",\n            INDICATOR_INCOMPLETE: "Правило заполнено не полностью",\n            OPIU_NOT_FOUND: "Не найдено",\n            OPIU_AMBIGUOUS: "Неоднозначно",\n        }\n'''
+          if old not in service:
+              raise SystemExit('Expected unresolved label block not found')
+          service_path.write_text(service.replace(old, new, 1), encoding='utf-8')
+
+          test_path = Path('tests/integration/test_article_indicator_workflow.py')
+          test = test_path.read_text(encoding='utf-8')
+          addition = '''\n\ndef test_opiu_not_found_rows_are_visible_in_business_unresolved_list(tmp_path):\n    service = configured_service(tmp_path)\n    run = process_run(service)\n\n    rows = service.indicator_unresolved_rows(run.run_id)\n\n    assert len(rows) == 2\n    assert {row["status"] for row in rows} == {"Не найдено"}\n    assert all(row["action"] == "Загрузить / дополнить классификатор" for row in rows)\n'''
+          if 'test_opiu_not_found_rows_are_visible_in_business_unresolved_list' not in test:
+              test_path.write_text(test.rstrip() + addition + '\n', encoding='utf-8')
+          PY
+          git diff --check
+          test -z "$(git diff --name-only | grep -E '\.(xls|xlsx|xlsm|xlsb|mxl|zip)$|(^|/)runtime/' || true)"
+      - name: Verify focused and full regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e '.[test]'
+          python -m compileall -q src tests scripts
+          python -m pytest tests/integration/test_article_indicator_workflow.py -q
+          python -m pytest tests/ui/test_ui_smoke.py -q
+          python -m pytest -q
+          node --check src/excel_transform_1c/ui/static/run.js
+      - name: Commit and publish hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'OpenAI Coordinator'
+          git config user.email 'coordinator@users.noreply.github.com'
+          git add src/excel_transform_1c/application/service.py tests/integration/test_article_indicator_workflow.py
+          git diff --cached --check
+          git commit -m 'fix: show unresolved OPIU indicator rows'
+          git push origin HEAD:refs/heads/integration/opiu-erp-rules-v1
