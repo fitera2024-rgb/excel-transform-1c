@@ -260,10 +260,9 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             confirmed_erp_rows=confirmed_erp_rows,
             tax_not_required_rows=service.tax_not_required_source_rows(run_id),
             cfo_mapping_entries=service.cfo_mapping_entries(run_id),
-            intalev_cfo_options=[
-                {"source_key": item.source_key, "label": item.label}
-                for item in service.intalev_cfos()
-            ],
+            intalev_cfo_options=[{"source_key": item.source_key, "label": item.label} for item in service.intalev_cfos()],
+            indicator_counts=service.indicator_counts(run_id),
+            indicator_unresolved_rows=service.indicator_unresolved_rows(run_id),
             message=message,
             error=error,
         )
@@ -331,41 +330,20 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
         )
 
     @app.post("/runs/{run_id}/map-cfo")
-    def map_cfo(
-        request: Request,
-        run_id: str,
-        source_reporting_unit: str = Form(""),
-        source_cfo: str = Form(""),
-        intalev_source_key: str = Form(""),
-        source_key: str = Form(""),
-        target_node_id: str = Form(""),
-        confirmed: str = Form(""),
-    ):
+    def map_cfo(request: Request, run_id: str, source_reporting_unit: str = Form(""), source_cfo: str = Form(""), intalev_source_key: str = Form(""), source_key: str = Form(""), target_node_id: str = Form(""), confirmed: str = Form("")):
         try:
             if not confirmed:
                 raise ValueError("Поставьте галку «Подтверждаю соответствие ЦФО»")
-            selected_intalev_key = intalev_source_key or source_key
-            if not selected_intalev_key or not target_node_id:
+            selected = intalev_source_key or source_key
+            if not selected or not target_node_id:
                 raise ValueError("Выберите ЦФО Инталев и точный узел 1С")
-            selection = {
-                "intalev_source_key": selected_intalev_key,
-                "target_node_id": target_node_id,
-            }
+            selection = {"intalev_source_key": selected, "target_node_id": target_node_id}
             if source_reporting_unit or source_cfo:
-                selection.update(
-                    {
-                        "source_reporting_unit": source_reporting_unit,
-                        "source_cfo": source_cfo,
-                    }
-                )
+                selection.update({"source_reporting_unit": source_reporting_unit, "source_cfo": source_cfo})
             _, count = service.confirm_cfo_mappings(run_id, [selection])
         except Exception as exc:
             return preview(request, run_id, error=str(exc))
-        return RedirectResponse(
-            f"/runs/{run_id}?message=Сопоставление ЦФО подтверждено. "
-            f"Обновлено соответствий: {count}",
-            status_code=303,
-        )
+        return RedirectResponse(f"/runs/{run_id}?message=Сопоставление ЦФО подтверждено. Обновлено соответствий: {count}", status_code=303)
 
     @app.post("/runs/{run_id}/confirm-filled-cfo")
     def confirm_filled_cfo(
@@ -430,6 +408,27 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             return preview(request, run_id, error=str(exc))
         return RedirectResponse(
             f"/runs/{run_id}?message=Подтверждено ERP-сопоставлений: {count}. Остальные причины сохранены",
+            status_code=303,
+        )
+
+    @app.post("/runs/{run_id}/indicator-classifier")
+    async def upload_indicator_classifier(
+        request: Request,
+        run_id: str,
+        classifier_file: UploadFile = File(...),
+    ):
+        try:
+            count = service.upload_indicator_classifier(
+                await classifier_file.read(),
+                run_id,
+            )
+        except KeyError:
+            return home(request, error="RUN не найден; выберите файл повторно")
+        except Exception as exc:
+            return preview(request, run_id, error=str(exc))
+        return RedirectResponse(
+            f"/runs/{run_id}?message=Классификатор дополнен: {count}. "
+            "Автоматический поиск повторён в текущем RUN",
             status_code=303,
         )
 

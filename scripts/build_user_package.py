@@ -60,7 +60,7 @@ def main() -> None:
     (package_dir / "PACKAGE_BUILD.txt").write_text(build_text, encoding="utf-8")
     (package_dir / "runtime").mkdir()
     (package_dir / "runtime" / "README.txt").write_text(
-        "Справочники, сценарии и локальные запуски сохраняются в этой папке.\n",
+        "Встроенные справочники, пользовательские дополнения, mappings и локальные запуски сохраняются в этой папке.\n",
         encoding="utf-8",
     )
 

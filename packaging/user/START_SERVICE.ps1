@@ -309,7 +309,7 @@ try {
         Copy-Item -LiteralPath $packageMarker -Destination $venvMarker -Force
     }
 
-    & $venvPython -c "import excel_transform_1c, fastapi, openpyxl, msoffcrypto"
+    & $venvPython -c "import excel_transform_1c, fastapi, openpyxl, msoffcrypto, olefile, xlrd"
     if ($LASTEXITCODE -ne 0) {
         throw "Проверка установленных компонентов завершилась ошибкой. Удалите .venv и повторите запуск."
     }

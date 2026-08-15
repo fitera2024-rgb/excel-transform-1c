@@ -3,18 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#217346">
   <title>{% block title %}Excel → OPIU Light{% endblock %}</title>
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/app.css?v={{ static_version|default('1') }}">
 </head>
 <body>
-  <header>
-    <a href="/" class="brand">Excel → OPIU Light</a>
-    <span class="boundary">Локальный preview и экспорт · без записи в ERP</span>
+  <div class="top-line" aria-hidden="true"></div>
+  <header class="topbar">
+    <a href="/" class="brand-block" aria-label="Excel → OPIU Light — главная">
+      <img class="brand-logo" src="/static/fitera-logo.png" alt="ФИТЭРА">
+      <span class="brand-copy">
+        <span class="company-name">ООО «ФИТЭРА»</span>
+        <strong class="service-name">Excel → OPIU Light</strong>
+        <span class="brand-subtitle">Локальная подготовка бюджета для 1С</span>
+      </span>
+    </a>
+    <div class="safety-badge" aria-label="Граница безопасности">
+      <span class="safety-dot" aria-hidden="true"></span>
+      <span class="safety-copy"><strong>LOCAL PREVIEW</strong><span>Запись в ERP и 1С отключена</span></span>
+    </div>
   </header>
-  <main>
-    {% if message %}<div class="notice success" data-testid="message">{{ message }}</div>{% endif %}
-    {% if error %}<div class="notice error" data-testid="error">{{ error }}</div>{% endif %}
+  <main class="app-shell">
+    {% if message %}<div class="notice success" data-testid="message" role="status">{{ message }}</div>{% endif %}
+    {% if error %}<div class="notice error" data-testid="error" role="alert">{{ error }}</div>{% endif %}
     {% block content %}{% endblock %}
   </main>
+  <footer class="app-footer"><span>ООО «ФИТЭРА»</span><span>Локальный preview и экспорт · без записи в ERP</span></footer>
 </body>
 </html>

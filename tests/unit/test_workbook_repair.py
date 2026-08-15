@@ -79,6 +79,43 @@ def _without_central_directory(content: bytes) -> bytes:
     return content[:central_directory]
 
 
+
+def _shared_strings_case_mismatch_bytes() -> bytes:
+    parts = {
+        "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>
+</Types>""",
+        "_rels/.rels": """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>""",
+        "xl/workbook.xml": """<?xml version="1.0" encoding="UTF-8"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="TDSheet" sheetId="1" r:id="rId1"/></sheets>
+</workbook>""",
+        "xl/_rels/workbook.xml.rels": """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>
+</Relationships>""",
+        "xl/worksheets/sheet1.xml": """<?xml version="1.0" encoding="UTF-8"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row></sheetData>
+</worksheet>""",
+        "xl/SharedStrings.xml": """<?xml version="1.0" encoding="UTF-8"?>
+<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="1" uniqueCount="1"><si><t>Значение</t></si></sst>""",
+    }
+    output = BytesIO()
+    with ZipFile(output, "w", compression=ZIP_DEFLATED) as archive:
+        for name, payload in parts.items():
+            archive.writestr(name, payload)
+    return output.getvalue()
+
 def test_format_is_detected_from_signature_not_suffix(tmp_path):
     ooxml = tmp_path / "ordinary.xls"
     ooxml.write_bytes(workbook_bytes())
@@ -117,6 +154,24 @@ def test_legacy_spreadsheetml_uses_content_not_xlsx_suffix(tmp_path):
     finally:
         workbook.close()
 
+
+
+def test_shared_strings_case_mismatch_is_repaired_into_openable_copy(tmp_path):
+    source = tmp_path / "legacy-case.xlsx"
+    original = _shared_strings_case_mismatch_bytes()
+    source.write_bytes(original)
+
+    prepared = prepare_workbook(source)
+
+    assert prepared.format is WorkbookFormat.OOXML
+    assert prepared.repaired is True
+    assert source.read_bytes() == original
+    assert prepared.working_path != source
+    workbook = load_workbook(prepared.working_path, read_only=True, data_only=True)
+    try:
+        assert workbook["TDSheet"]["A1"].value == "Значение"
+    finally:
+        workbook.close()
 
 def test_plain_ooxml_passes_without_change(tmp_path):
     source = tmp_path / "plain.xlsx"

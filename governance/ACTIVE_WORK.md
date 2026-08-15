@@ -1,49 +1,57 @@
 # Active Work
 
-STATUS: `OWNER_REFINEMENT_IMPLEMENTED / TAX_CFO_QA_READY / PACKAGE_BUILD_REQUIRED / DRAFT / NO_LIVE_WRITE`
+STATUS: `THREE_SHEET_EXPORT_READY / AUTO_ARTICLE_INDICATOR_MATCHING_READY_FOR_CODEX / DRAFT / NO_MERGE / NO_LIVE_WRITE`
 
 ## Current vertical slice
 
-`Excel → structural detection → protected intake → exact ERP mapping → tax/CFO decisions → 12-month preview → export`
+`Built-in references → content-based Excel preparation → prepared budget or Intalev OPIU → exact ERP/tax/CFO decisions → automatic direct article-to-indicator matching → 12-month preview → three-sheet XLSX export`
 
-## Exact base
+## Canonical implementation
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
-- Parent branch: `feat/bulk-confirm-filled-erp`.
-- Exact start head: `6f0631edcba732005a407e2147c5970890e96a26`.
-- Parent Draft PR: `#17`, not merged.
+- Working branch: `feat/final-owner-smoke-fitera-v2`.
+- Draft PR: `#23`, not merged.
+- Exact implementation start is the commit that adds `governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
+- Three-sheet export already preserves `OPIU Light` and adds `ОПИУ` plus `Показатели`.
 
-## Owner refinement implemented
+## Current owner decision
 
-- individual and bulk `Налогообложение неважно`;
-- business status `Налогообложение: не требуется`;
-- structural local catalog `ЦФО Инталев`;
-- exact `ЦФО Инталев → конкретный узел 1С`;
-- individual and bulk CFO confirmation;
-- already confirmed ERP/tax/CFO elements render as statuses and are excluded from counters;
-- all updates affect source rows and their months without full rerun;
-- ERP, tax and CFO remain separate explicit actions.
+Normal user must not manage technical Rules manually.
 
-## Verification gate
+When a loaded classifier contains a direct correspondence `статья → показатель`, the service must find and apply one unique exact match automatically. Missing or ambiguous matches stay visible as `Требует внимания`; fuzzy, typo and case-only matching remain forbidden.
 
-Required before owner package delivery:
+## Active registry
 
-- compileall;
-- unit, integration, UI and full regression;
-- JavaScript syntax;
-- Git diff hygiene;
-- no tracked business Excel;
-- Windows offline package build;
-- actual launcher/restart/port cleanup/STOP_SERVICE smoke.
+- Work registry: `governance/tasks/WORK-REGISTRY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
+- Codex implementation task: `governance/tasks/CODEX-TASK-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
+- Coordinator QA task: `governance/tasks/COORDINATOR-QA-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
+- Exact task marker: `governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
 
-## Remaining owner gate
+## Responsibility split
 
-Owner UX Smoke on the new exact Windows package, including original protected AY/PV files. No ADO/live write is implemented or permitted.
+### Codex
+
+- direct classifier import and persistence;
+- exact matcher `article → indicator`;
+- automatic filling and aggregation of `Показатели`;
+- simplified UI without required Rules workflow;
+- tests, handoff and green CI;
+- final marker `READY_FOR_COORDINATOR_QA_AUTO_INDICATORS`.
+
+### ChatGPT coordinator
+
+- Product Contract and acceptance boundaries;
+- Git/PR/diff/tests/handoff review;
+- ambiguity and financial-semantics audit;
+- example ADO verification;
+- Windows package smoke;
+- Owner UX Smoke and final package delivery.
 
 ## Forbidden
 
 - merge without owner acceptance;
 - ADO/ODBC/1C/live write;
-- fuzzy ERP or CFO assignment;
+- fuzzy, typo, case-only or contains matching;
+- invented indicators, channels or reference codes;
 - real Excel, passwords or runtime databases in Git;
-- mixing organization-of-run selection with source CFO mapping.
+- removal of the legacy `OPIU Light` sheet.

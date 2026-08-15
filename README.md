@@ -14,9 +14,9 @@ ADO и фактическая запись в 1С являются отдель�
 
 ## Current status
 
-`V1 IMPLEMENTATION / DRAFT REVIEW / NO LIVE WRITE`
+`V1 INTEGRATED / OWNER-SMOKE PACKAGE PREPARATION / DRAFT / NO LIVE WRITE`
 
-Владелец принял User Flow первой vertical slice. Разрешена подготовка реализации `Excel → validation → ERP mapping → user corrections → 12-month normalization → preview → export`.
+Владелец принял User Flow первой vertical slice и расширил входы: встроенные базовые справочники, подготовленные бюджетные книги, legacy/repairable Excel и годовой Инталев ОПИУ. Реализация формирует preview и OPIU Light export; ADO/live write отсутствуют.
 
 ## Start here
 
@@ -79,6 +79,12 @@ Product Contract:
 Бюджетный диапазон определяется структурно по восьми бизнес-колонкам и всем
 12 месяцам, а не по имени листа. Формулы читаются через сохранённые calculated
 values; приложение не пересчитывает Excel.
+
+После чистого запуска уже доступны packaged baselines: `271` ERP-статья, `357` организаций/узлов, `12` сценариев и `16` ЦФО Инталев. Пользовательский `Загрузить / дополнить` сохраняет baseline и объединяет данные только по exact stable identity.
+
+Фактический Excel-контейнер определяется по содержимому. Поддерживаются обычный OOXML, encrypted OOXML, legacy BIFF/XLS, SpreadsheetML XML и узко восстанавливаемый OOXML. Оригинал сохраняется неизменным; обработка использует отдельную working copy и не требует Excel COM.
+
+Наряду с подготовленным бюджетным диапазоном структурно поддерживается годовой Инталев ОПИУ: период, иерархия статей, исходный ЦФО, preview и OPIU Light export.
 
 Excel-ошибка конкретного месяца остаётся видимой в основном preview и экспорте
 как `Пропущено`: сумма пуста, причина и точный адрес ячейки находятся в Реестре

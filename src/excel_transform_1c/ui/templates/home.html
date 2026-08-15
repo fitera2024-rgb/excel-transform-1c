@@ -1,23 +1,41 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="hero">
-  <div>
-    <p class="eyebrow">V1 · локальный конвертер</p>
-    <h1>Подготовьте максимально полный OPIU Light результат</h1>
-    <p>Структурное обнаружение Excel, точное ERP-сопоставление, понятный реестр внимания и экспорт.</p>
+<section class="hero home-hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Локальный конвертер · OPIU Light</p>
+    <h1>Подготовьте Excel к проверке и экспорту</h1>
+    <p class="hero-lead">Сервис структурно распознаёт исходную книгу, применяет точные справочники, показывает строки, требующие решения, и формирует итоговый Excel — без записи в 1С.</p>
+    <div class="hero-tags" aria-label="Возможности сервиса"><span>Структурное распознавание</span><span>Максимально полный preview</span><span>Экспорт XLSX</span></div>
   </div>
-  <div class="fixed-context">
-    <span>Вид отчёта</span>
+  <aside class="fixed-context" aria-label="Текущий вид результата">
+    <span class="context-label">Вид результата</span>
     <strong>{{ report_type_name }}</strong>
     <small>{{ report_type_code }}</small>
-  </div>
+    <span class="context-note">Сначала preview, затем выгрузка. Live write отключён.</span>
+  </aside>
 </section>
 
-<section class="grid two">
-  <article class="card">
-    <h2>1. Справочники</h2>
-    <p>ERP-статьи: <strong>{{ counts.erp_articles }}</strong><br>Организации и узлы: <strong>{{ counts.organizations }}</strong><br>Сценарии: <strong>{{ counts.scenarios }}</strong><br>ЦФО Инталев: <strong>{{ counts.intalev_cfos }}</strong></p>
-    <form method="post" action="/references" enctype="multipart/form-data" data-testid="reference-form">
+<section class="workflow-overview" aria-label="Порядок работы">
+  <article class="workflow-step is-ready"><span class="step-number">1</span><div><strong>Проверьте справочники</strong><span>Базовые данные доступны; новые можно дополнить.</span></div></article>
+  <article class="workflow-step"><span class="step-number">2</span><div><strong>Выберите контекст и файл</strong><span>Организация, сценарий, период и исходный Excel.</span></div></article>
+  <article class="workflow-step"><span class="step-number">3</span><div><strong>Получите preview и экспорт</strong><span>Исправьте нужные строки и скачайте результат.</span></div></article>
+</section>
+
+<section class="section-heading page-section-heading">
+  <div class="section-title-block"><span class="section-step">1</span><div><p class="eyebrow ink">Подготовка</p><h2>Справочники и сценарии</h2></div></div>
+  <p>Базовые каталоги используются сразу. Загрузка нового файла дополняет данные по точному ключу и не удаляет ранее сохранённые записи.</p>
+</section>
+
+<section class="grid two setup-grid">
+  <article class="card reference-card">
+    <div class="card-heading"><div><p class="eyebrow ink">Базовые данные</p><h3>Справочники</h3></div><span class="status-badge ready">Готовы</span></div>
+    <dl class="catalog-stats" data-testid="reference-counts">
+      <div><dt>ERP-статьи</dt><dd>{{ counts.erp_articles }}</dd></div>
+      <div><dt>Организации и узлы</dt><dd>{{ counts.organizations }}</dd></div>
+      <div><dt>Сценарии</dt><dd>{{ counts.scenarios }}</dd></div>
+      <div><dt>ЦФО Инталев</dt><dd>{{ counts.intalev_cfos }}</dd></div>
+    </dl>
+    <form method="post" action="/references" enctype="multipart/form-data" data-testid="reference-form" class="reference-form">
       <label>Тип справочника
         <select name="kind">
           <option value="erp_articles">ERP-статьи</option>
@@ -26,79 +44,82 @@
           <option value="intalev_cfos">Классификатор ЦФО Инталев</option>
         </select>
       </label>
-      <label>Файл справочника .xlsx<input type="file" name="reference_file" accept=".xlsx" required></label>
-      <p class="hint">Загрузите ERP-справочники и классификатор ЦФО Инталев один раз. Они сохраняются локально и используются для всех организаций и следующих запусков. Повторная загрузка дополняет список и обновляет записи по точному коду, не удаляя ранее загруженные.</p>
-      <button>Загрузить / дополнить</button>
+      <label class="file-drop">Файл справочника
+        <input type="file" name="reference_file" accept=".xlsx,.xls,.xlsm" required>
+        <span>Выберите Excel, чтобы дополнить базовый каталог</span>
+      </label>
+      <p class="hint">Справочники хранятся локально и используются для всех организаций и следующих запусков. Повторная загрузка дополняет список и обновляет записи по точному коду.</p>
+      <button type="submit">Загрузить / дополнить</button>
     </form>
   </article>
 
-  <article class="card">
-    <h2>2. Новый сценарий</h2>
+  <article class="card scenario-card">
+    <div class="card-heading"><div><p class="eyebrow ink">Дополнительно</p><h3>Новый сценарий</h3></div><span class="status-badge neutral">Локально</span></div>
     <form method="post" action="/scenarios" data-testid="scenario-form">
       <label>Наименование<input name="name" required placeholder="ПЛАН 2027"></label>
-      <label>Год<input name="year" type="number" min="2000" max="2200" required></label>
-      <label>Комментарий<input name="comment"></label>
-      <button>Сохранить сценарий</button>
+      <label>Год<input name="year" type="number" min="2000" max="2200" required placeholder="2027"></label>
+      <label>Комментарий<input name="comment" placeholder="Необязательно"></label>
+      <button type="submit">Сохранить сценарий</button>
     </form>
-    <p class="hint">Полный список сценариев загружается один раз и сохраняется локально. При необходимости новые сценарии можно догрузить файлом или добавить вручную. Новый локальный сценарий помечается «Не подтверждён справочником ERP».</p>
+    <p class="hint">Полный список сценариев загружается один раз и сохраняется локально. Новый локальный сценарий помечается «Не подтверждён справочником ERP».</p>
   </article>
 </section>
 
-<section class="card primary-card">
-  <h2>3. Обработать бюджетный Excel</h2>
-  <form method="post" action="/uploads" enctype="multipart/form-data" class="process-form" data-testid="process-form" data-processing-form>
-    <label>Единица отчёта<input name="reporting_unit" required placeholder="ПС"></label>
+<section class="section-heading page-section-heading">
+  <div class="section-title-block"><span class="section-step">2</span><div><p class="eyebrow ink">Новый запуск</p><h2>Контекст обработки и исходный Excel</h2></div></div>
+  <p>Выберите только бизнес-понятные параметры. Техническая рабочая копия создаётся внутри локального RUN.</p>
+</section>
 
+<section class="card primary-card processing-card">
+  <form method="post" action="/uploads" enctype="multipart/form-data" class="process-form" data-testid="process-form" data-processing-form>
+    <div class="form-section-title"><span class="form-section-index">2.1</span><div><strong>Контекст</strong><span>Организация, сценарий и период результата</span></div></div>
+
+    <label>Единица отчёта<input name="reporting_unit" required placeholder="ПС"></label>
     <label>Верхняя ветка организаций
       <select id="organization-root" required data-testid="organization-root">
         <option value="">Выберите верхнюю ветку</option>
-        {% for root in organization_roots %}
-        <option value="{{ root.node_id }}">{{ root.label }}</option>
-        {% endfor %}
+        {% for root in organization_roots %}<option value="{{ root.node_id }}">{{ root.label }}</option>{% endfor %}
       </select>
     </label>
-
     <label>Организация или нижний узел
       <select id="organization-node" name="organization_node_id" required data-testid="organization-node" disabled>
         <option value="">Сначала выберите верхнюю ветку</option>
-        {% for item in organization_options %}
-        <option value="{{ item.node_id }}" data-root-id="{{ item.root_id }}" data-depth="{{ item.depth }}" title="{{ item.full_path }}" hidden disabled>{{ item.label }}</option>
-        {% endfor %}
+        {% for item in organization_options %}<option value="{{ item.node_id }}" data-root-id="{{ item.root_id }}" data-depth="{{ item.depth }}" title="{{ item.full_path }}" hidden disabled>{{ item.label }}</option>{% endfor %}
       </select>
       <span class="hint">После выбора верхней ветки доступны сам верхний узел и все его дочерние организации, подразделения и ЦФО. Можно оставить верхний узел либо выбрать любой нижний.</span>
     </label>
-
     <label>Сценарий
       <select name="scenario_id" required data-testid="scenario-select">
         <option value="">Выберите из общего списка</option>
         {% for scenario in scenarios %}<option value="{{ scenario.scenario_id }}">{{ scenario.name }}{% if scenario.year %} · {{ scenario.year }}{% else %} · год выбирается отдельно{% endif %}{% if scenario.marker %} · {{ scenario.marker }}{% endif %}</option>{% endfor %}
       </select>
     </label>
-
     <label>Год<input name="year" type="number" min="2000" max="2200" placeholder="из сценария"></label>
 
     <fieldset class="period-selector">
       <legend>Период</legend>
       <input type="hidden" name="period_selector_present" value="1">
-      <label class="all-year-choice">
-        <input id="all-year" name="all_year" value="1" type="checkbox" checked data-testid="all-year">
-        <span>Весь год</span>
-      </label>
-      <div class="months" id="month-options">
-        {% for month in range(1, 13) %}<label><input type="checkbox" name="months" value="{{ month }}" disabled>{{ month }}</label>{% endfor %}
-      </div>
+      <label class="all-year-choice"><input id="all-year" name="all_year" value="1" type="checkbox" checked data-testid="all-year"><span>Весь год</span></label>
+      <div class="months" id="month-options">{% for month in range(1, 13) %}<label><input type="checkbox" name="months" value="{{ month }}" disabled><span>{{ month }}</span></label>{% endfor %}</div>
       <p class="hint">Снимите галочку «Весь год», чтобы выбрать один или несколько месяцев. Полный внутренний результат всё равно формируется по всем 12 месяцам.</p>
     </fieldset>
 
-    <label class="budget-file">Бюджетный Excel<input type="file" name="budget_file" accept=".xlsx,.xlsm" required></label>
+    <div class="form-section-title file-section-title"><span class="form-section-index">2.2</span><div><strong>Исходный файл</strong><span>Обычный, защищённый или поддерживаемый старый Excel</span></div></div>
+    <label class="budget-file file-drop prominent">Бюджетный Excel
+      <input type="file" name="budget_file" accept=".xlsx,.xls,.xlsm" required>
+      <span>Выберите исходный файл для локального анализа</span>
+    </label>
     <label class="budget-password">Пароль защищённой книги — необязательно
-      <input type="password" name="workbook_password" autocomplete="off">
+      <input type="password" name="workbook_password" autocomplete="off" placeholder="Вводится только для текущего файла">
       <span class="hint">Пароль используется только для текущей локальной обработки и не сохраняется.</span>
     </label>
-    <p class="processing-state" data-testid="processing-state" aria-live="polite" hidden>Файл загружается и анализируется; не закрывайте страницу</p>
-    <button class="primary" type="submit" data-testid="process-submit">Построить preview</button>
+
+    <div class="launch-panel"><div><span class="section-step">3</span><div><strong>Построить preview</strong><span>Сервис покажет максимально полный результат и отдельные строки, требующие решения.</span></div></div><button class="primary launch-button" type="submit" data-testid="process-submit">Построить preview</button></div>
+    <p class="processing-state" data-testid="processing-state" aria-live="polite" hidden><span class="spinner" aria-hidden="true"></span>Файл загружается и анализируется; не закрывайте страницу</p>
   </form>
 </section>
+
+<section class="safety-note" aria-label="Граница безопасности"><strong>Безопасная граница V1</strong><span>Сервис создаёт preview и Excel-экспорт локально. ADO и запись в 1С не выполняются.</span></section>
 
 <script>
 (() => {
@@ -114,37 +135,28 @@
       option.hidden = !visible;
       option.disabled = !visible;
     });
-
     if (!rootId) {
       nodeSelect.value = "";
       nodeSelect.disabled = true;
       placeholder.textContent = "Сначала выберите верхнюю ветку";
       return;
     }
-
     nodeSelect.disabled = false;
     placeholder.textContent = "Выберите верхний или дочерний узел";
-    const upperNode = nodeOptions.find(
-      (option) => option.value === rootId && !option.disabled
-    );
+    const upperNode = nodeOptions.find((option) => option.value === rootId && !option.disabled);
     nodeSelect.value = upperNode ? upperNode.value : "";
   }
-
   rootSelect.addEventListener("change", refreshOrganizationTree);
   refreshOrganizationTree();
 
   const allYear = document.getElementById("all-year");
-  const monthBoxes = Array.from(
-    document.querySelectorAll('#month-options input[name="months"]')
-  );
-
+  const monthBoxes = Array.from(document.querySelectorAll('#month-options input[name="months"]'));
   function refreshMonths() {
     monthBoxes.forEach((checkbox) => {
       checkbox.disabled = allYear.checked;
       if (allYear.checked) checkbox.checked = false;
     });
   }
-
   allYear.addEventListener("change", refreshMonths);
   refreshMonths();
 

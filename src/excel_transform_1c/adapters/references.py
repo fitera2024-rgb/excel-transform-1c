@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import re
-from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
-from openpyxl import load_workbook
-
+from excel_transform_1c.adapters.excel import load_cached_workbook
 from excel_transform_1c.core.detection import normalize_header
-from excel_transform_1c.core.models import ERPArticle, IntalevCFO, OrganizationNode
+from excel_transform_1c.core.indicator_matching import full_article_path
+from excel_transform_1c.core.models import (
+    ArticleIndicatorRule,
+    ERPArticle,
+    IntalevCFO,
+    OrganizationNode,
+)
 
 
 ERP_HEADERS = {
@@ -60,6 +66,16 @@ SCENARIO_HEADERS = {
     "comment": {"комментарий"},
 }
 
+ARTICLE_INDICATOR_HEADERS = {
+    "erp_code": {"erp-код статьи", "код erp-статьи", "код статьи"},
+    "article_path": {"полный путь статьи", "полный бизнес-путь статьи"},
+    "expense_type": {"тип расходов источника", "тип расходов"},
+    "expense_group": {"группа расходов источника", "группа расходов"},
+    "article_name": {"статья", "исходная статья", "наименование статьи"},
+    "indicator": {"показатель", "тип расходов / показатель"},
+    "sales_channel": {"канал сбыта"},
+}
+
 REAL_EXPORT_HEADERS = {
     "erp_articles": {
         "name": {
@@ -96,13 +112,40 @@ ERP_INDENT_UNITS_PER_LEVEL = 2
 
 
 def parse_reference_workbook(content: bytes, kind: str) -> list[dict[str, Any]]:
-    if kind not in {"erp_articles", "organizations", "scenarios", "intalev_cfos"}:
+    if kind not in {
+        "erp_articles",
+        "organizations",
+        "scenarios",
+        "intalev_cfos",
+        "article_indicators",
+    }:
         raise ValueError("Неизвестный тип справочника")
 
+    # Reference books use the same content-based preparation path as budget
+    # books.  This accepts recoverable OOXML case defects and legacy BIFF/XML
+    # while keeping the uploaded bytes untouched in a temporary snapshot.
     try:
-        workbook = load_workbook(BytesIO(content), data_only=True, read_only=False)
+        with TemporaryDirectory(prefix="excel_transform_1c_reference_") as temp_dir:
+            source_path = Path(temp_dir) / "source-original.xlsx"
+            source_path.write_bytes(content)
+            with load_cached_workbook(source_path, read_only=False) as workbook:
+                return _parse_reference_workbook_object(workbook, kind)
+    except ValueError:
+        raise
     except Exception as exc:
         raise ValueError("Файл справочника не открывается или повреждён") from exc
+
+
+def _parse_reference_workbook_object(workbook: Any, kind: str) -> list[dict[str, Any]]:
+    if kind == "article_indicators":
+        result = _parse_article_indicators(workbook)
+        if not result:
+            raise ValueError(
+                "Не найден классификатор статья → показатель. Нужны колонки "
+                "«Показатель», «Канал сбыта» и хотя бы один точный ключ: "
+                "«ERP-код статьи», «Полный путь статьи» или «Статья»."
+            )
+        return validate_reference_payload(kind, result)
 
     if kind == "intalev_cfos":
         result = _parse_intalev_cfos(workbook)
@@ -185,6 +228,21 @@ def reference_exact_key(kind: str, item: dict[str, Any]) -> str:
             )
         return f"intalev_cfo:{source_key}"
 
+    if kind == "article_indicators":
+        code = _clean_scalar(item.get("erp_code"))
+        path = _clean_scalar(item.get("article_path"))
+        name = _clean_scalar(item.get("article_name"))
+        if code:
+            return f"article_indicator:code:{code}"
+        if path:
+            return f"article_indicator:path:{path}"
+        if name:
+            return f"article_indicator:name:{name}"
+        raise ValueError(
+            "Соответствие статья → показатель не имеет точного ключа: "
+            "нужен ERP-код, полный путь или точное имя статьи"
+        )
+
     raise ValueError(f"Для справочника {kind} не определён точный ключ")
 
 
@@ -194,7 +252,12 @@ def validate_reference_payload(
 ) -> list[dict[str, Any]]:
     """Validate all identities before persistence and collapse exact duplicates."""
 
-    if kind not in {"erp_articles", "organizations", "intalev_cfos"}:
+    if kind not in {
+        "erp_articles",
+        "organizations",
+        "intalev_cfos",
+        "article_indicators",
+    }:
         raise ValueError(f"Неизвестный тип справочника: {kind}")
 
     validated: list[dict[str, Any]] = []
@@ -232,8 +295,20 @@ def validate_reference_payload(
                     f"node_id {node_id} относится к разным записям"
                 )
             organization_nodes[node_id] = key
-        else:
+        elif kind == "intalev_cfos":
             item["source_key"] = key.removeprefix("intalev_cfo:")
+        else:
+            item = {
+                field: _clean_scalar(item.get(field))
+                for field in (
+                    "erp_code",
+                    "article_path",
+                    "article_name",
+                    "indicator",
+                    "sales_channel",
+                )
+            }
+            key = reference_exact_key(kind, item)
 
         previous = by_key.get(key)
         if previous is None:
@@ -246,6 +321,82 @@ def validate_reference_payload(
             )
 
     return validated
+
+
+def _parse_article_indicators(workbook: Any) -> list[dict[str, Any]]:
+    candidates: list[tuple[Any, int, dict[str, int]]] = []
+    for sheet in workbook.worksheets:
+        for row_number in range(1, min(sheet.max_row, 80) + 1):
+            columns = _match_article_indicator_headers(
+                [cell.value for cell in sheet[row_number]]
+            )
+            if columns:
+                candidates.append((sheet, row_number, columns))
+    if not candidates:
+        return []
+    if len(candidates) != 1:
+        raise ValueError(
+            "Классификатор содержит несколько структурно подходящих диапазонов "
+            "статья → показатель"
+        )
+
+    sheet, header_row, columns = candidates[0]
+    result: list[dict[str, Any]] = []
+    for row_number in range(header_row + 1, sheet.max_row + 1):
+        values = {
+            field: sheet.cell(row_number, column)
+            for field, column in columns.items()
+        }
+        if all(_is_blank(cell.value) for cell in values.values()):
+            continue
+
+        article_name = _clean_scalar(values["article_name"].value) if "article_name" in values else ""
+        article_path = _clean_scalar(values["article_path"].value) if "article_path" in values else ""
+        if not article_path and all(
+            field in values for field in ("expense_type", "expense_group", "article_name")
+        ):
+            article_path = full_article_path(
+                _clean_scalar(values["expense_type"].value),
+                _clean_scalar(values["expense_group"].value),
+                article_name,
+            )
+
+        item = {
+            "erp_code": _code_text(values["erp_code"]) if "erp_code" in values else "",
+            "article_path": article_path,
+            "article_name": article_name,
+            "indicator": _clean_scalar(values["indicator"].value),
+            "sales_channel": _clean_scalar(values["sales_channel"].value),
+        }
+        try:
+            reference_exact_key("article_indicators", item)
+        except ValueError as exc:
+            raise ValueError(
+                f"Классификатор статья → показатель, строка {row_number}: {exc}"
+            ) from exc
+        result.append(item)
+    return result
+
+
+def _match_article_indicator_headers(values: list[Any]) -> dict[str, int] | None:
+    normalized = {
+        index: normalize_header(value)
+        for index, value in enumerate(values, start=1)
+    }
+    columns: dict[str, int] = {}
+    for field, aliases in ARTICLE_INDICATOR_HEADERS.items():
+        normalized_aliases = {normalize_header(alias) for alias in aliases}
+        matches = [index for index, value in normalized.items() if value in normalized_aliases]
+        if len(matches) > 1:
+            return None
+        if matches:
+            columns[field] = matches[0]
+
+    if not {"indicator", "sales_channel"}.issubset(columns):
+        return None
+    if not {"erp_code", "article_path", "article_name"}.intersection(columns):
+        return None
+    return columns
 
 
 def _parse_intalev_cfos(workbook: Any) -> list[dict[str, Any]]:
@@ -811,4 +962,13 @@ def intalev_cfos(payload: list[dict[str, Any]]) -> list[IntalevCFO]:
     return [
         IntalevCFO(**item)
         for item in validate_reference_payload("intalev_cfos", payload)
+    ]
+
+
+def article_indicator_rules(
+    payload: list[dict[str, Any]],
+) -> list[ArticleIndicatorRule]:
+    return [
+        ArticleIndicatorRule(**item)
+        for item in validate_reference_payload("article_indicators", payload)
     ]

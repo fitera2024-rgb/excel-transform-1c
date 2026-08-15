@@ -57,16 +57,19 @@ Business Core не зависит от UI, ADO connection objects и абсол�
 
 ### Excel adapter
 
-- определяет источник по структуре/schema, не по имени листа;
+- определяет фактический контейнер по bytes/internal parts, не по filename suffix;
+- сохраняет immutable original snapshot и подготавливает отдельную working copy;
+- локально расшифровывает поддерживаемый encrypted OOXML, конвертирует legacy BIFF/SpreadsheetML и консервативно ремонтирует однозначный OOXML;
+- определяет business source по структуре/schema, не по имени листа;
+- поддерживает подготовленный budget range и отдельный structural parser годового Инталев ОПИУ;
 - читает formula cells по сохранённым calculated values;
-- не является Excel Calculation Engine;
+- не является Excel Calculation Engine и не требует Excel COM;
 - сохраняет точные source pointers: файл, лист, строка, ячейка, поле/месяц;
 - экспортирует OPIU Light результат.
 
 ### Reference adapter
 
-Структурно читает локально загруженные справочники в документированных форматах
-ERP без ручной перестройки в промежуточный шаблон:
+Загружает packaged baseline catalogs при первом старте и структурно читает пользовательские дополнения в документированных форматах ERP без ручной перестройки в промежуточный шаблон. Merge выполняется только по exact stable identity:
 
 - ERP-статьи;
 - организационное дерево;

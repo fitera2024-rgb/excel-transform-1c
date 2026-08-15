@@ -1,4 +1,6 @@
 from io import BytesIO
+import os
+from pathlib import Path
 
 import pytest
 from openpyxl import load_workbook
@@ -82,13 +84,17 @@ def test_existing_ayu_and_pv_prepared_budget_inputs_do_not_regress(tmp_path):
 
 
 def test_real_intalev_file_when_available(tmp_path):
-    candidates = [
-        path
-        for root in tmp_path.parents
-        for path in root.glob(
-            "**/intalev-owner-evidence/*_Отчет_ОПИУ_ЗаПериод_20250101_20251231.xlsx"
-        )
-    ]
+    configured = os.environ.get("EXCEL_INTAKE_REAL_OPIU_FILE")
+    candidates = [Path(configured)] if configured else []
+    if not candidates:
+        candidates = [
+            path
+            for root in tmp_path.parents
+            for path in root.glob(
+                "**/intalev-owner-evidence/*_Отчет_ОПИУ_ЗаПериод_20250101_20251231.xlsx"
+            )
+        ]
+    candidates = [path for path in candidates if path.is_file()]
     if not candidates:
         pytest.skip("Реальный файл Инталев недоступен в рабочем окружении")
 

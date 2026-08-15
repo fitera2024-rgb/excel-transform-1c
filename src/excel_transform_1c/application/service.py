@@ -19,13 +19,23 @@ from excel_transform_1c.adapters.protected_ooxml import (
     has_ole_signature,
 )
 from excel_transform_1c.adapters.references import (
+    article_indicator_rules,
     erp_articles,
     intalev_cfos,
     organization_nodes,
     parse_reference_workbook,
 )
 from excel_transform_1c.core.access import effective_organization_nodes
+from excel_transform_1c.core.indicator_matching import (
+    INDICATOR_AMBIGUOUS,
+    INDICATOR_INCOMPLETE,
+    INDICATOR_MATCHED,
+    INDICATOR_MISSING,
+    ExactArticleIndicatorMatcher,
+    apply_indicator_match,
+)
 from excel_transform_1c.core.models import (
+    ArticleIndicatorRule,
     CandidateRange,
     ERPArticle,
     IntalevCFO,
@@ -96,6 +106,19 @@ class WorkflowService:
 
     def intalev_cfos(self) -> list[IntalevCFO]:
         return intalev_cfos(self.store.load_reference("intalev_cfos"))
+
+    def article_indicator_rules(self) -> list[ArticleIndicatorRule]:
+        return article_indicator_rules(
+            self.store.load_reference("article_indicators")
+        )
+
+    def upload_indicator_classifier(self, content: bytes, run_id: str | None = None) -> int:
+        run = self.get_run(run_id) if run_id is not None else None
+        payload = parse_reference_workbook(content, "article_indicators")
+        self.store.replace_reference("article_indicators", payload)
+        if run is not None:
+            self._apply_indicator_matches(run)
+        return len(payload)
 
     def allowed_organization_nodes(self, user_key: str = "local") -> list[OrganizationNode]:
         nodes = self.organization_nodes()
@@ -197,8 +220,8 @@ class WorkflowService:
             raise
 
     def _new_upload_target(self, source_name: str) -> tuple[str, Path]:
-        if not source_name.lower().endswith((".xlsx", ".xlsm")):
-            raise ValueError("Поддерживаются файлы .xlsx и .xlsm")
+        if not source_name.lower().endswith((".xlsx", ".xlsm", ".xls")):
+            raise ValueError("Поддерживаются файлы .xlsx, .xlsm и .xls")
         upload_id = uuid4().hex
         upload_path = self.upload_dir / upload_id
         upload_path.mkdir(parents=True, exist_ok=False)
@@ -282,9 +305,11 @@ class WorkflowService:
             issues=issues,
             created_at=datetime.now(UTC).isoformat(),
             cfo_mapping_enabled=bool(self.intalev_cfos()),
+            indicator_classifier_loaded=bool(self.article_indicator_rules()),
         )
         if run.cfo_mapping_enabled:
             self._initialize_cfo_mappings(run)
+        self._apply_indicator_matches(run)
         self.runs[run_id] = run
         self.run_keys[run_key] = run_id
         return run
@@ -301,6 +326,69 @@ class WorkflowService:
         if run_id not in self.runs:
             raise KeyError(run_id)
         return self.runs[run_id]
+
+    def _apply_indicator_matches(
+        self,
+        run: ProcessedRun,
+        source_rows: set[int] | None = None,
+    ) -> None:
+        rules = self.article_indicator_rules()
+        matcher = ExactArticleIndicatorMatcher(rules)
+        run.indicator_classifier_loaded = bool(rules)
+        for record in run.records:
+            if source_rows is not None and record.source_row not in source_rows:
+                continue
+            match = matcher.resolve(
+                erp_code=record.erp_code,
+                expense_type=record.expense_type,
+                expense_group=record.expense_group,
+                article_name=record.source_article,
+            )
+            apply_indicator_match(record, match)
+
+    def indicator_counts(self, run_id: str) -> dict[str, int]:
+        run = self.get_run(run_id)
+        statuses = {
+            record.source_row: record.indicator_match_status
+            for record in run.records
+        }
+        return {
+            "automatic": sum(status == INDICATOR_MATCHED for status in statuses.values()),
+            "attention": sum(
+                status in {
+                    INDICATOR_AMBIGUOUS,
+                    INDICATOR_INCOMPLETE,
+                    INDICATOR_MISSING,
+                }
+                for status in statuses.values()
+            ),
+            "not_found": sum(status == INDICATOR_MISSING for status in statuses.values()),
+        }
+
+    def indicator_unresolved_rows(self, run_id: str) -> list[dict[str, Any]]:
+        run = self.get_run(run_id)
+        by_row: dict[int, PreviewRecord] = {}
+        for record in run.records:
+            by_row.setdefault(record.source_row, record)
+        labels = {INDICATOR_MISSING: "Не найдено", INDICATOR_AMBIGUOUS: "Неоднозначно", INDICATOR_INCOMPLETE: "Правило заполнено не полностью"}
+        result: list[dict[str, Any]] = []
+        for source_row, record in sorted(by_row.items()):
+            status = record.indicator_match_status
+            if status not in labels:
+                continue
+            pointer = record.pointers.get("source_article")
+            result.append({
+                "source_row": source_row,
+                "source_line": f"{pointer.sheet if pointer else run.candidate.sheet}!{source_row}",
+                "expense_type": record.expense_type or "Без типа",
+                "expense_group": record.expense_group or "Без группы",
+                "source_article": record.source_article or "Без статьи",
+                "erp_code": record.erp_code,
+                "status": labels[status],
+                "reason": record.indicator_match_reason,
+                "action": "Загрузить / дополнить классификатор",
+            })
+        return result
 
     @staticmethod
     def _issue_is_inline_editable(issue: Issue) -> bool:
@@ -407,42 +495,24 @@ class WorkflowService:
             return None, "ЦФО Инталев неоднозначен в загруженном классификаторе"
         return None, None
 
-    def _resolve_intalev_cfo(
-        self,
-        reporting_unit: str,
-        raw_value: str,
-    ) -> tuple[IntalevCFO | None, str | None]:
-        """Resolve only an exact catalog value or an explicit saved owner choice."""
-
+    def _resolve_intalev_cfo(self, reporting_unit: str, raw_value: str) -> tuple[IntalevCFO | None, str | None]:
         direct, direct_reason = self._match_intalev_cfo(raw_value)
         if direct or direct_reason:
             return direct, direct_reason
         if not raw_value:
             return None, None
-
         catalog = {item.source_key: item for item in self.intalev_cfos()}
-        saved_key = self.store.load_source_cfo_mappings().get(
-            (reporting_unit, raw_value), ""
-        )
+        saved_key = self.store.load_source_cfo_mappings().get((reporting_unit, raw_value), "")
         if saved_key:
             saved = catalog.get(saved_key)
             if saved:
                 return saved, None
-            return (
-                None,
-                "Сохранённый ЦФО Инталев отсутствует в текущем классификаторе",
-            )
+            return None, "Сохранённый ЦФО Инталев отсутствует в текущем классификаторе"
         return None, "Исходный ЦФО не сопоставлен с ЦФО Инталев"
 
     @staticmethod
-    def _record_source_cfo_identity(
-        run: ProcessedRun,
-        record: PreviewRecord,
-    ) -> tuple[str, str]:
-        return (
-            record.source_reporting_unit or run.context.reporting_unit,
-            record.source_cfo,
-        )
+    def _record_source_cfo_identity(run: ProcessedRun, record: PreviewRecord) -> tuple[str, str]:
+        return (record.source_reporting_unit or run.context.reporting_unit, record.source_cfo)
 
     def _initialize_cfo_mappings(self, run: ProcessedRun) -> None:
         for source_row in sorted({record.source_row for record in run.records}):
@@ -454,10 +524,6 @@ class WorkflowService:
             if not raw_value:
                 for record in row_records:
                     record.source_reporting_unit = reporting_unit
-                # The transform already exposes the missing CFO as a shared
-                # field issue. Rebuilding every row would only duplicate that
-                # state and is prohibitively expensive for large Intalev OPIU
-                # reports that do not carry CFO metadata.
                 continue
             matched, _ = self._resolve_intalev_cfo(reporting_unit, raw_value)
             source_key = matched.source_key if matched else ""
@@ -473,21 +539,16 @@ class WorkflowService:
             return []
         mappings = self.store.load_cfo_mappings()
         nodes = {node.node_id: node for node in self.organization_nodes()}
-
         grouped: dict[tuple[str, str], set[int]] = {}
         for record in run.records:
             reporting_unit, raw_value = self._record_source_cfo_identity(run, record)
-            if not raw_value:
-                continue
-            grouped.setdefault((reporting_unit, raw_value), set()).add(record.source_row)
-
+            if raw_value:
+                grouped.setdefault((reporting_unit, raw_value), set()).add(record.source_row)
         result: list[dict[str, Any]] = []
         for (reporting_unit, raw_value), source_rows in grouped.items():
-            matched, match_reason = self._resolve_intalev_cfo(
-                reporting_unit, raw_value
-            )
-            intalev_source_key = matched.source_key if matched else ""
-            target_node_id = mappings.get(intalev_source_key, "") if matched else ""
+            matched, match_reason = self._resolve_intalev_cfo(reporting_unit, raw_value)
+            key = matched.source_key if matched else ""
+            target_node_id = mappings.get(key, "") if matched else ""
             target = nodes.get(target_node_id)
             if matched and target_node_id and target is None:
                 status = "Сохранённый узел 1С отсутствует в текущем справочнике"
@@ -497,134 +558,82 @@ class WorkflowService:
                 status = "ЦФО Инталев выбран; требуется выбрать узел 1С"
             else:
                 status = match_reason or "Выберите ЦФО Инталев"
-            entry_identity = f"{reporting_unit}\0{raw_value}"
-            result.append(
-                {
-                    "entry_key": hashlib.sha256(
-                        entry_identity.encode("utf-8")
-                    ).hexdigest()[:20],
-                    # Compatibility field used by the pre-existing direct-CFO UI/tests.
-                    "source_key": intalev_source_key,
-                    "intalev_source_key": intalev_source_key,
-                    "source_reporting_unit": reporting_unit,
-                    "source_cfo": raw_value,
-                    "source_label": (
-                        f"{reporting_unit} · {raw_value}"
-                        if reporting_unit
-                        else raw_value
-                    ),
-                    "intalev_label": matched.label if matched else "",
-                    "source_rows": sorted(source_rows),
-                    "row_count": len(source_rows),
-                    "target_node_id": target.node_id if target else "",
-                    "target_label": (
-                        f"{target.full_path} ({target.code})" if target else ""
-                    ),
-                    "confirmed": target is not None,
-                    "intalev_confirmed": matched is not None,
-                    "eligible": True,
-                    "status": status,
-                }
-            )
+            identity = f"{reporting_unit}\0{raw_value}"
+            result.append({
+                "entry_key": hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20],
+                "source_key": key,
+                "intalev_source_key": key,
+                "source_reporting_unit": reporting_unit,
+                "source_cfo": raw_value,
+                "source_label": f"{reporting_unit} · {raw_value}" if reporting_unit else raw_value,
+                "intalev_label": matched.label if matched else "",
+                "source_rows": sorted(source_rows),
+                "row_count": len(source_rows),
+                "target_node_id": target.node_id if target else "",
+                "target_label": f"{target.full_path} ({target.code})" if target else "",
+                "confirmed": target is not None,
+                "intalev_confirmed": matched is not None,
+                "eligible": True,
+                "status": status,
+            })
         return sorted(result, key=lambda item: item["source_label"].casefold())
 
-    def confirm_cfo_mappings(
-        self,
-        run_id: str,
-        selections: list[dict[str, Any]],
-    ) -> tuple[ProcessedRun, int]:
+    def confirm_cfo_mappings(self, run_id: str, selections: list[dict[str, Any]]) -> tuple[ProcessedRun, int]:
         run = self.get_run(run_id)
         if not run.cfo_mapping_enabled:
             raise ValueError("Сначала загрузите классификатор ЦФО Инталев")
         if not isinstance(selections, list) or not selections:
             raise ValueError("Нет заполненных сопоставлений ЦФО для подтверждения")
-
         catalog = {item.source_key: item for item in self.intalev_cfos()}
         nodes = {node.node_id: node for node in self.organization_nodes()}
-        entries = {
-            (item["source_reporting_unit"], item["source_cfo"]): item
-            for item in self.cfo_mapping_entries(run_id)
-        }
-
+        entries = {(item["source_reporting_unit"], item["source_cfo"]): item for item in self.cfo_mapping_entries(run_id)}
         source_changes: dict[tuple[str, str], str] = {}
         target_changes: dict[str, str] = {}
-        affected_identities: set[tuple[str, str]] = set()
-        old_direct_keys: set[str] = set()
-
+        affected: set[tuple[str, str]] = set()
+        old_direct: set[str] = set()
         for item in selections:
             if not isinstance(item, dict):
                 raise ValueError("Список сопоставлений ЦФО заполнен некорректно")
-
-            reporting_unit = str(item.get("source_reporting_unit") or "")
-            raw_source_cfo = str(item.get("source_cfo") or "")
-            intalev_source_key = str(
-                item.get("intalev_source_key") or item.get("source_key") or ""
-            )
-            target_node_id = str(item.get("target_node_id") or "")
-
-            # Backward-compatible direct Intalev-CFO confirmation: the old UI
-            # submitted only source_key + target_node_id.
-            if not reporting_unit and not raw_source_cfo:
-                if not intalev_source_key or not target_node_id:
+            ru = str(item.get("source_reporting_unit") or "")
+            raw = str(item.get("source_cfo") or "")
+            key = str(item.get("intalev_source_key") or item.get("source_key") or "")
+            target = str(item.get("target_node_id") or "")
+            if not ru and not raw:
+                if not key or not target:
                     raise ValueError("Одно из сопоставлений ЦФО заполнено не полностью")
-                if intalev_source_key not in catalog:
+                if key not in catalog:
                     raise ValueError("ЦФО Инталев отсутствует в текущем классификаторе")
-                if target_node_id not in nodes:
+                if target not in nodes:
                     raise ValueError("Выбранный узел 1С отсутствует в текущем справочнике")
-                previous = target_changes.get(intalev_source_key)
-                if previous is not None and previous != target_node_id:
+                if key in target_changes and target_changes[key] != target:
                     raise ValueError("Один ЦФО Инталев нельзя сопоставить с двумя узлами 1С")
-                target_changes[intalev_source_key] = target_node_id
-                old_direct_keys.add(intalev_source_key)
+                target_changes[key] = target
+                old_direct.add(key)
                 continue
-
-            if not reporting_unit or not raw_source_cfo:
+            if not ru or not raw:
                 raise ValueError("Не указан исходный ЦФО и единица отчёта")
-            if (reporting_unit, raw_source_cfo) not in entries:
+            if (ru, raw) not in entries:
                 raise ValueError("Исходный ЦФО отсутствует в текущем preview")
-            if intalev_source_key not in catalog:
+            if key not in catalog:
                 raise ValueError("Выберите ЦФО Инталев из текущего классификатора")
-            if target_node_id not in nodes:
+            if target not in nodes:
                 raise ValueError("Выберите точный узел 1С из текущего дерева")
-
-            identity = (reporting_unit, raw_source_cfo)
-            previous_source = source_changes.get(identity)
-            if previous_source is not None and previous_source != intalev_source_key:
-                raise ValueError(
-                    "Один исходный ЦФО нельзя сопоставить с двумя ЦФО Инталев"
-                )
-            previous_target = target_changes.get(intalev_source_key)
-            if previous_target is not None and previous_target != target_node_id:
+            identity = (ru, raw)
+            if identity in source_changes and source_changes[identity] != key:
+                raise ValueError("Один исходный ЦФО нельзя сопоставить с двумя ЦФО Инталев")
+            if key in target_changes and target_changes[key] != target:
                 raise ValueError("Один ЦФО Инталев нельзя сопоставить с двумя узлами 1С")
-            source_changes[identity] = intalev_source_key
-            target_changes[intalev_source_key] = target_node_id
-            affected_identities.add(identity)
-
+            source_changes[identity] = key
+            target_changes[key] = target
+            affected.add(identity)
         current_source = self.store.load_source_cfo_mappings()
         current_targets = self.store.load_cfo_mappings()
-        self.store.save_source_cfo_mappings(
-            {
-                identity: source_key
-                for identity, source_key in source_changes.items()
-                if current_source.get(identity) != source_key
-            }
-        )
-        self.store.save_cfo_mappings(
-            {
-                source_key: target
-                for source_key, target in target_changes.items()
-                if current_targets.get(source_key) != target
-            }
-        )
-
-        affected_rows: set[int] = set()
-        for record in run.records:
-            identity = self._record_source_cfo_identity(run, record)
-            if identity in affected_identities or record.source_cfo_key in old_direct_keys:
-                affected_rows.add(record.source_row)
+        self.store.save_source_cfo_mappings({i: k for i, k in source_changes.items() if current_source.get(i) != k})
+        self.store.save_cfo_mappings({k: v for k, v in target_changes.items() if current_targets.get(k) != v})
+        affected_rows = {record.source_row for record in run.records if self._record_source_cfo_identity(run, record) in affected or record.source_cfo_key in old_direct}
         for source_row in sorted(affected_rows):
             self._rebuild_row_state(run, source_row)
-        return run, len(affected_identities or old_direct_keys)
+        return run, len(affected or old_direct)
 
     def confirm_filled_erp(
         self,
@@ -870,12 +879,8 @@ class WorkflowService:
             )
 
         if run.cfo_mapping_enabled and source_cfo_value:
-            source_reporting_unit = (
-                base.source_reporting_unit or run.context.reporting_unit
-            )
-            matched, match_reason = self._resolve_intalev_cfo(
-                source_reporting_unit, source_cfo_value
-            )
+            source_reporting_unit = base.source_reporting_unit or run.context.reporting_unit
+            matched, match_reason = self._resolve_intalev_cfo(source_reporting_unit, source_cfo_value)
             if matched:
                 for record in row_records:
                     record.source_reporting_unit = source_reporting_unit
@@ -957,6 +962,8 @@ class WorkflowService:
                 record.status = STATUS_ATTENTION if reasons else STATUS_OK
             record.reasons = list(dict.fromkeys(reasons))
 
+        self._apply_indicator_matches(run, {source_row})
+
     @staticmethod
     def _issue_from_record(
         record: PreviewRecord,
@@ -970,7 +977,7 @@ class WorkflowService:
             kind=kind,
             description=description,
             pointer=record.pointers[field],
-            reporting_unit=record.source_reporting_unit or record.reporting_unit,
+             reporting_unit=record.source_reporting_unit or record.reporting_unit,
             department=record.department,
             cfo=record.cfo,
             expense_type=record.expense_type,

@@ -1,0 +1,233 @@
+name: Final FITERA Owner Package V2
+
+on:
+  push:
+    branches:
+      - feat/final-owner-smoke-fitera-v2
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-fitera-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install project and tests
+        run: |
+          python -m pip install --upgrade pip setuptools wheel build
+          python -m pip install -e ".[test]"
+      - name: Verify source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q src tests scripts
+          python -m pytest tests/unit -q
+          python -m pytest tests/integration -q
+          python -m pytest tests/ui -q
+          python -m pytest -q
+          node --check src/excel_transform_1c/ui/static/run.js
+          git diff --check 41e8b9b6847a1cc55d58e7e027dec771117b0cde...HEAD
+          test -z "$(git ls-files '*.xls' '*.xlsx' '*.xlsm' '*.xlsb')"
+      - name: Verify wheel resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m build --wheel --outdir dist-wheel
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          wheel = next(Path('dist-wheel').glob('*.whl'))
+          required = {
+              'excel_transform_1c/adapters/workbook_repair.py',
+              'excel_transform_1c/core/indicator_matching.py',
+              'excel_transform_1c/baselines/erp_articles.json',
+              'excel_transform_1c/baselines/organizations.json',
+              'excel_transform_1c/baselines/scenarios.json',
+              'excel_transform_1c/baselines/intalev_cfos.json',
+              'excel_transform_1c/ui/static/fitera-logo.png',
+          }
+          with ZipFile(wheel) as archive:
+              missing = required - set(archive.namelist())
+          assert not missing, missing
+          print(wheel.name)
+          PY
+
+  windows-package:
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+          cache: pip
+      - name: Build application wheel
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir wheelhouse
+      - name: Download complete offline runtime
+        shell: pwsh
+        run: |
+          python -m pip download --dest wheelhouse --only-binary=:all: `
+            "fastapi>=0.116,<1" `
+            "jinja2>=3.1,<4" `
+            "msoffcrypto-tool>=6,<7" `
+            "olefile>=0.47,<1" `
+            "openpyxl>=3.1,<4" `
+            "python-multipart>=0.0.20,<1" `
+            "xlrd>=2.0.2,<3" `
+            "uvicorn>=0.35,<1"
+      - name: Build user ZIP
+        shell: pwsh
+        run: |
+          python scripts/build_user_package.py `
+            --wheel-dir wheelhouse `
+            --output-dir dist `
+            --build-sha $env:GITHUB_SHA
+      - name: Smoke packaged launcher, HTTP owner flow, baselines, transform, restart and stop
+        shell: pwsh
+        run: |
+          $package = Join-Path $PWD "dist\EXCEL_TO_OPIU_LIGHT_USER"
+          $startPs = Join-Path $package "START_SERVICE.ps1"
+          $stopPs = Join-Path $package "STOP_SERVICE.ps1"
+          foreach ($required in @($startPs, $stopPs, (Join-Path $package "README_USER_RU.md"))) {
+            if (-not (Test-Path -LiteralPath $required)) { throw "Missing package file: $required" }
+          }
+
+          $runtime = Join-Path $env:RUNNER_TEMP "fitera-final-v2-runtime"
+          Remove-Item -LiteralPath $runtime -Recurse -Force -ErrorAction SilentlyContinue
+          $env:OPIU_PORT = "8765"
+          $env:OPIU_RUNTIME_DIR = $runtime
+          $env:OPIU_NONINTERACTIVE = "1"
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
+          if ($LASTEXITCODE -ne 0) { throw "First launcher run failed" }
+          $url = (Get-Content -LiteralPath (Join-Path $runtime "service.url") -Raw).Trim()
+          $firstPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
+          $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
+          if ($health.status -ne "ok") { throw "Health check failed" }
+          $homeResponse = Invoke-WebRequest -UseBasicParsing -Uri "$url/" -TimeoutSec 10
+          foreach ($marker in @("ООО «ФИТЭРА»", "ERP-статьи", "ЦФО Инталев", "Загрузить / дополнить")) {
+            if ($homeResponse.Content -notmatch [regex]::Escape($marker)) { throw "Home marker missing: $marker" }
+          }
+
+          $venvPython = Join-Path $package ".venv\Scripts\python.exe"
+          & $venvPython -c "import excel_transform_1c,fastapi,openpyxl,msoffcrypto,olefile,xlrd"
+          if ($LASTEXITCODE -ne 0) { throw "Installed component import failed" }
+
+          & $venvPython scripts/owner_smoke_http.py --base-url $url --phase initial
+          if ($LASTEXITCODE -ne 0) { throw "HTTP owner smoke initial phase failed" }
+
+          $script = Join-Path $env:RUNNER_TEMP "fitera_package_functional_smoke.py"
+          @'
+          from io import BytesIO
+          from pathlib import Path
+          import os
+          from openpyxl import Workbook, load_workbook
+          from excel_transform_1c.application.service import WorkflowService
+
+          runtime = Path(os.environ["OPIU_RUNTIME_DIR"])
+          service = WorkflowService(runtime)
+          assert service.reference_counts() == {
+              "erp_articles": 271,
+              "organizations": 357,
+              "scenarios": 12,
+              "intalev_cfos": 16,
+          }
+          scenario = next(item for item in service.store.list_scenarios() if item.name == "ПЛАН 2026" and item.year == 2026)
+          node = service.organization_nodes()[0]
+          context = service.build_context("ТЕСТ", node.node_id, scenario.scenario_id, 2026, [])
+          headers = [
+              "ПОДРАЗДЕЛЕНИЕ (ЦФО 1)", "ТИП РАСХОДОВ", "ДЕПАРТАМЕНТ (ЦФО 2)",
+              "Вид организации", "ОТДЕЛ", "НАЛОГООБЛОЖЕНИЕ", "ГРУППА РАСХОДОВ",
+              "СТАТЬЯ", "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+              "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
+          ]
+          workbook = Workbook()
+          sheet = workbook.active
+          sheet.title = "Тест"
+          sheet.append(["synthetic package smoke"])
+          sheet.append(headers)
+          sheet.append(["ТЕСТ", "Административные", "Департамент", "ТК", "ЦФО", "БЕЗ НДС", "Связь", "Интернет", 100, *([0] * 11)])
+          payload = BytesIO(); workbook.save(payload); workbook.close()
+          pending = service.prepare_upload("package-smoke.xlsx", payload.getvalue(), context)
+          run = service.process_upload(pending.upload_id, pending.candidates[0].candidate_id)
+          assert len(run.records) == 12
+
+          classifier = Workbook()
+          classifier_sheet = classifier.active
+          classifier_sheet.append(["Полный путь статьи", "Статья", "Показатель", "Канал сбыта"])
+          classifier_sheet.append(["Административные → Связь → Интернет", "Интернет", "Услуги связи", "Основной канал"])
+          classifier_payload = BytesIO(); classifier.save(classifier_payload); classifier.close()
+          service.upload_indicator_classifier(classifier_payload.getvalue(), run.run_id)
+          assert service.indicator_counts(run.run_id) == {"automatic": 1, "attention": 0, "not_found": 0}
+
+          exported = service.export_run(run.run_id)
+          check = load_workbook(BytesIO(exported), read_only=True, data_only=True)
+          try:
+              assert check.sheetnames == ["OPIU Light", "ОПИУ", "Показатели"]
+              assert check["OPIU Light"].max_row == 13
+              assert check["ОПИУ"].max_row == 13
+              assert check["Показатели"].max_row == 13
+              assert check["Показатели"]["G2"].value == "Услуги связи"
+              assert check["Показатели"]["H2"].value == 100
+          finally:
+              check.close()
+          print("package functional smoke PASS")
+          '@ | Set-Content -LiteralPath $script -Encoding UTF8
+          & $venvPython $script
+          if ($LASTEXITCODE -ne 0) { throw "Functional smoke failed" }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
+          if ($LASTEXITCODE -ne 0) { throw "Second launcher run failed" }
+          $secondPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
+          if ($secondPid -eq $firstPid) { throw "Restart did not replace previous process" }
+          $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
+          if ($health.status -ne "ok") { throw "Restarted health check failed" }
+
+          & $venvPython scripts/owner_smoke_http.py --base-url $url --phase post-restart
+          if ($LASTEXITCODE -ne 0) { throw "HTTP owner smoke post-restart phase failed" }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopPs
+          if ($LASTEXITCODE -ne 0) { throw "STOP_SERVICE failed" }
+          Start-Sleep -Milliseconds 800
+          try {
+            Invoke-RestMethod -Uri "$url/health" -TimeoutSec 2 | Out-Null
+            throw "Service still responds after STOP_SERVICE"
+          } catch {
+            if ($_.Exception.Message -eq "Service still responds after STOP_SERVICE") { throw }
+          }
+          Write-Host "OWNER_SMOKE_AUTO_PASS"
+      - name: ZIP integrity and checksum
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -LiteralPath dist -Filter "EXCEL_TO_OPIU_LIGHT_USER_*.zip" | Select-Object -First 1
+          if (-not $zip) { throw "User ZIP not found" }
+          python -c "import sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None" $zip.FullName
+          $hash = (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath "dist\SHA256.txt" -Value "$hash  $($zip.Name)" -Encoding ASCII
+          Write-Host "ZIP=$($zip.Name) SHA256=$hash"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EXCEL_TO_OPIU_LIGHT_FITERA_FINAL_WINDOWS_V2
+          path: |
+            dist/EXCEL_TO_OPIU_LIGHT_USER_*.zip
+            dist/SHA256.txt
+          if-no-files-found: error
+          retention-days: 14
