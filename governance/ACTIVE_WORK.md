@@ -1,57 +1,50 @@
 # Active Work
 
-STATUS: `THREE_SHEET_EXPORT_READY / AUTO_ARTICLE_INDICATOR_MATCHING_READY_FOR_CODEX / DRAFT / NO_MERGE / NO_LIVE_WRITE`
+STATUS: `OPIU_ERP_RULES_INTEGRATION / REAL_OWNER_SMOKE_PASSED_WITH_ATTENTION / CI_PENDING / DRAFT / NO_MERGE / NO_LIVE_WRITE`
 
 ## Current vertical slice
 
-`Built-in references → content-based Excel preparation → prepared budget or Intalev OPIU → exact ERP/tax/CFO decisions → automatic direct article-to-indicator matching → 12-month preview → three-sheet XLSX export`
+`Built-in references → content-based Excel preparation → exact ERP/tax/CFO decisions → formula-derived disclosure-group rules → 12-month preview → three-sheet XLSX export`
 
-## Canonical implementation
+## Git authority
 
-- Repository: `fitera2024-rgb/excel-transform-1c`.
-- Working branch: `feat/final-owner-smoke-fitera-v2`.
-- Draft PR: `#23`, not merged.
-- Exact implementation start is the commit that adds `governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
-- Three-sheet export already preserves `OPIU Light` and adds `ОПИУ` plus `Показатели`.
+- Latest product parent: `feat/final-owner-smoke-fitera-v2@b712cadba6d035108c56dcc9746ff42443c3b07c`.
+- Recovered CODEX-03 parent: `recovery/codex-03-opiu-rules-20260815@63d2e35244ae3fccc82bdef4fd1d702979219ad0`.
+- Integration target: `integration/opiu-erp-rules-v1`.
+- PR #23 remains Draft and unmerged; the OPIU-rule integration must use a separate Draft PR.
 
-## Current owner decision
+## Owner decision
 
-Normal user must not manage technical Rules manually.
+The indicator is determined by the exact disclosure group, then the exact article inside that group, then supported exact formula/source conditions. Article-only, fuzzy, contains, typo and case-corrected matching are forbidden.
 
-When a loaded classifier contains a direct correspondence `статья → показатель`, the service must find and apply one unique exact match automatically. Missing or ambiguous matches stay visible as `Требует внимания`; fuzzy, typo and case-only matching remain forbidden.
+## Implemented in the integration worktree
 
-## Active registry
+- six-source OPIU ERP rule builder and persistence;
+- full disclosure hierarchy resolver with deepest exact group priority;
+- fail-closed unsupported formula/source conditions;
+- one-time business upload form for formulas, analytics, ERP indicators, MXL sources, regions and networks;
+- formula-derived indicator export without inventing a sales channel;
+- existing two-stage source CFO → Intalev CFO → 1C node behavior preserved;
+- protected/legacy intake and three-sheet export preserved.
 
-- Work registry: `governance/tasks/WORK-REGISTRY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
-- Codex implementation task: `governance/tasks/CODEX-TASK-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
-- Coordinator QA task: `governance/tasks/COORDINATOR-QA-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
-- Exact task marker: `governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
+## Real smoke
 
-## Responsibility split
+- AY: 195 source rows; 189 automatically classified; 6 attention; 60 aggregated indicator rows.
+- PV: 184 source rows; 179 automatically classified; 5 attention; 60 aggregated indicator rows.
+- annual Intalev OPIU remains readable/exportable; unsupported ERP disclosure identity stays attention.
 
-### Codex
+## Next gate
 
-- direct classifier import and persistence;
-- exact matcher `article → indicator`;
-- automatic filling and aggregation of `Показатели`;
-- simplified UI without required Rules workflow;
-- tests, handoff and green CI;
-- final marker `READY_FOR_COORDINATOR_QA_AUTO_INDICATORS`.
-
-### ChatGPT coordinator
-
-- Product Contract and acceptance boundaries;
-- Git/PR/diff/tests/handoff review;
-- ambiguity and financial-semantics audit;
-- example ADO verification;
-- Windows package smoke;
-- Owner UX Smoke and final package delivery.
+- publish exact two-parent integration commit;
+- full GitHub CI;
+- Windows offline package start/HTTP flow/transform/restart/stop;
+- package checksum verification;
+- Owner UX Smoke.
 
 ## Forbidden
 
 - merge without owner acceptance;
 - ADO/ODBC/1C/live write;
-- fuzzy, typo, case-only or contains matching;
-- invented indicators, channels or reference codes;
-- real Excel, passwords or runtime databases in Git;
-- removal of the legacy `OPIU Light` sheet.
+- owner source files or runtime databases in Git;
+- fuzzy or guessed indicators;
+- removal or schema change of `OPIU Light` and `ОПИУ`.

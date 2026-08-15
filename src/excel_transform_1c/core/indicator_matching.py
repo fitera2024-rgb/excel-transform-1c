@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .models import ArticleIndicatorRule, PreviewRecord
+from .opiu_rules.opiu_rule_models import AUTO_MATCH
 
 
 INDICATOR_MATCHED = "matched"
@@ -124,11 +125,15 @@ def aggregate_indicator_rows(records: list[PreviewRecord]) -> list[IndicatorExpo
     amounts: dict[tuple[str, str, int, int, str, str, str], Decimal] = defaultdict(Decimal)
     for record in records:
         if (
-            record.indicator_match_status != INDICATOR_MATCHED
+            record.indicator_match_status not in {INDICATOR_MATCHED, AUTO_MATCH}
             or not record.indicator
-            or not record.sales_channel
             or record.amount is None
         ):
+            continue
+        # The legacy/manual classifier contract requires an explicit sales
+        # channel. Formula-derived OPIU expense indicators may legitimately
+        # have no channel dimension; an empty value is then exported exactly.
+        if record.indicator_match_status == INDICATOR_MATCHED and not record.sales_channel:
             continue
         period = f"{record.month:02d}.{record.year}"
         key = (

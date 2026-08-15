@@ -123,7 +123,8 @@ def test_ambiguous_and_missing_classifier_results_remain_unapplied(tmp_path):
     assert service.indicator_counts(run.run_id) == {
         "automatic": 0,
         "attention": 2,
-        "not_found": 1,
+        # Name-only rows have no disclosure group and are both fail-closed.
+        "not_found": 2,
     }
     internet = next(record for record in run.records if record.source_article == "Интернет")
     assert internet.indicator == ""
@@ -154,3 +155,13 @@ def test_indicator_export_populates_third_sheet_without_changing_first_two(tmp_p
         assert any(cell.value == 0 for cell in indicators["H"][1:])
     finally:
         workbook.close()
+
+def test_opiu_not_found_rows_are_visible_in_business_unresolved_list(tmp_path):
+    service = configured_service(tmp_path)
+    run = process_run(service)
+
+    rows = service.indicator_unresolved_rows(run.run_id)
+
+    assert len(rows) == 2
+    assert {row["status"] for row in rows} == {"Не найдено"}
+    assert all(row["action"] == "Загрузить / дополнить классификатор" for row in rows)

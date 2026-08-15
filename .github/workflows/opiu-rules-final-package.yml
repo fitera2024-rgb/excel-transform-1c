@@ -1,0 +1,174 @@
+name: Final FITERA OPIU Rules Package
+
+on:
+  push:
+    branches:
+      - integration/opiu-erp-rules-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-fitera-opiu-rules-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install and verify source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip setuptools wheel build
+          python -m pip install -e ".[test]"
+          python -m compileall -q src tests scripts
+          python -m pytest -q
+          node --check src/excel_transform_1c/ui/static/run.js
+          git diff --check b712cadba6d035108c56dcc9746ff42443c3b07c...HEAD
+          test -z "$(git ls-files '*.xls' '*.xlsx' '*.xlsm' '*.xlsb' '*.mxl')"
+      - name: Verify wheel resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m build --wheel --outdir dist-wheel
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          wheel = next(Path('dist-wheel').glob('*.whl'))
+          required = {
+              'excel_transform_1c/adapters/workbook_repair.py',
+              'excel_transform_1c/adapters/opiu_sources.py',
+              'excel_transform_1c/core/indicator_matching.py',
+              'excel_transform_1c/core/opiu_rules/opiu_formula_parser.py',
+              'excel_transform_1c/core/opiu_rules/opiu_indicator_resolver.py',
+              'excel_transform_1c/core/opiu_rules/opiu_rule_builder.py',
+              'excel_transform_1c/core/opiu_rules/opiu_rule_models.py',
+              'excel_transform_1c/baselines/erp_articles.json',
+              'excel_transform_1c/baselines/organizations.json',
+              'excel_transform_1c/baselines/scenarios.json',
+              'excel_transform_1c/baselines/intalev_cfos.json',
+              'excel_transform_1c/ui/static/fitera-logo.png',
+          }
+          with ZipFile(wheel) as archive:
+              missing = required - set(archive.namelist())
+          assert not missing, missing
+          print(wheel.name)
+          PY
+
+  windows-package:
+    needs: verify
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+          cache: pip
+      - name: Build application wheel and offline runtime
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel --outdir wheelhouse
+          python -m pip download --dest wheelhouse --only-binary=:all: `
+            "fastapi>=0.116,<1" `
+            "jinja2>=3.1,<4" `
+            "msoffcrypto-tool>=6,<7" `
+            "olefile>=0.47,<1" `
+            "openpyxl>=3.1,<4" `
+            "python-multipart>=0.0.20,<1" `
+            "xlrd>=2.0.2,<3" `
+            "uvicorn>=0.35,<1"
+      - name: Build user ZIP
+        shell: pwsh
+        run: |
+          python scripts/build_user_package.py `
+            --wheel-dir wheelhouse `
+            --output-dir dist `
+            --build-sha $env:GITHUB_SHA
+      - name: Smoke launcher, HTTP flow, formula rules, restart and stop
+        shell: pwsh
+        run: |
+          $package = Join-Path $PWD "dist\EXCEL_TO_OPIU_LIGHT_USER"
+          $startPs = Join-Path $package "START_SERVICE.ps1"
+          $stopPs = Join-Path $package "STOP_SERVICE.ps1"
+          foreach ($required in @($startPs, $stopPs, (Join-Path $package "README_USER_RU.md"))) {
+            if (-not (Test-Path -LiteralPath $required)) { throw "Missing package file: $required" }
+          }
+
+          $runtime = Join-Path $env:RUNNER_TEMP "fitera-opiu-rules-runtime"
+          Remove-Item -LiteralPath $runtime -Recurse -Force -ErrorAction SilentlyContinue
+          $env:OPIU_PORT = "8765"
+          $env:OPIU_RUNTIME_DIR = $runtime
+          $env:OPIU_NONINTERACTIVE = "1"
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
+          if ($LASTEXITCODE -ne 0) { throw "First launcher run failed" }
+          $url = (Get-Content -LiteralPath (Join-Path $runtime "service.url") -Raw).Trim()
+          $firstPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
+          $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
+          if ($health.status -ne "ok") { throw "Health check failed" }
+          $homeResponse = Invoke-WebRequest -UseBasicParsing -Uri "$url/" -TimeoutSec 10
+          foreach ($marker in @("ООО «ФИТЭРА»", "ERP-статьи", "ЦФО Инталев", "Источники правил ОПИУ ERP", "Загрузить / дополнить")) {
+            if ($homeResponse.Content -notmatch [regex]::Escape($marker)) { throw "Home marker missing: $marker" }
+          }
+
+          $venvPython = Join-Path $package ".venv\Scripts\python.exe"
+          & $venvPython -c "import excel_transform_1c,fastapi,openpyxl,msoffcrypto,olefile,xlrd; from excel_transform_1c.core.opiu_rules.opiu_indicator_resolver import OPIUIndicatorResolver"
+          if ($LASTEXITCODE -ne 0) { throw "Installed component import failed" }
+
+          & $venvPython scripts/owner_smoke_http.py --base-url $url --phase initial
+          if ($LASTEXITCODE -ne 0) { throw "HTTP owner smoke initial phase failed" }
+          & $venvPython scripts/package_smoke_opiu_rules.py
+          if ($LASTEXITCODE -ne 0) { throw "OPIU rule package smoke failed" }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
+          if ($LASTEXITCODE -ne 0) { throw "Second launcher run failed" }
+          $secondPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
+          if ($secondPid -eq $firstPid) { throw "Restart did not replace previous process" }
+          $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
+          if ($health.status -ne "ok") { throw "Restarted health check failed" }
+          $homeResponse = Invoke-WebRequest -UseBasicParsing -Uri "$url/" -TimeoutSec 10
+          if ($homeResponse.Content -notmatch [regex]::Escape("1 правил")) { throw "Persisted OPIU rule marker missing after restart" }
+
+          & $venvPython scripts/owner_smoke_http.py --base-url $url --phase post-restart
+          if ($LASTEXITCODE -ne 0) { throw "HTTP owner smoke post-restart phase failed" }
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $stopPs
+          if ($LASTEXITCODE -ne 0) { throw "STOP_SERVICE failed" }
+          Start-Sleep -Milliseconds 800
+          try {
+            Invoke-RestMethod -Uri "$url/health" -TimeoutSec 2 | Out-Null
+            throw "Service still responds after STOP_SERVICE"
+          } catch {
+            if ($_.Exception.Message -eq "Service still responds after STOP_SERVICE") { throw }
+          }
+          Write-Host "OPIU_RULES_OWNER_SMOKE_PASS"
+      - name: ZIP integrity and checksum
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -LiteralPath dist -Filter "EXCEL_TO_OPIU_LIGHT_USER_*.zip" | Select-Object -First 1
+          if (-not $zip) { throw "User ZIP not found" }
+          python -c "import sys,zipfile; z=zipfile.ZipFile(sys.argv[1]); assert z.testzip() is None" $zip.FullName
+          $hash = (Get-FileHash -LiteralPath $zip.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath "dist\SHA256.txt" -Value "$hash  $($zip.Name)" -Encoding ASCII
+          Write-Host "ZIP=$($zip.Name) SHA256=$hash"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: EXCEL_TO_OPIU_LIGHT_FITERA_OPIU_RULES_WINDOWS
+          path: |
+            dist/EXCEL_TO_OPIU_LIGHT_USER_*.zip
+            dist/SHA256.txt
+          if-no-files-found: error
+          retention-days: 14

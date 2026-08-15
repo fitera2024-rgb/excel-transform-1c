@@ -9,6 +9,7 @@ from excel_transform_1c.core.indicator_matching import (
     aggregate_indicator_rows,
 )
 from excel_transform_1c.core.models import ArticleIndicatorRule, PreviewRecord
+from excel_transform_1c.core.opiu_rules.opiu_rule_models import AUTO_MATCH
 
 
 def rule(
@@ -195,3 +196,20 @@ def test_indicator_rows_aggregate_equal_keys_and_keep_zero_and_negative():
         "Отрицательный": Decimal("-5"),
     }
     assert "Ошибка месяца" not in amounts
+
+
+def test_formula_derived_indicator_can_export_without_sales_channel():
+    derived = record("10", amount=Decimal("12"), channel="")
+    derived.indicator_match_status = AUTO_MATCH
+
+    rows = aggregate_indicator_rows([derived])
+
+    assert len(rows) == 1
+    assert rows[0].sales_channel == ""
+    assert rows[0].amount == Decimal("12")
+
+
+def test_manual_indicator_without_sales_channel_remains_unexported():
+    manual = record("11", amount=Decimal("12"), channel="")
+
+    assert aggregate_indicator_rows([manual]) == []
