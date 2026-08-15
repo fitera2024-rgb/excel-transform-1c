@@ -85,6 +85,8 @@ jobs:
           RECOVERY_PARENT: 63d2e35244ae3fccc82bdef4fd1d702979219ad0
         run: |
           set -euo pipefail
+          git config user.name 'OpenAI Coordinator'
+          git config user.email 'coordinator@users.noreply.github.com'
           git fetch origin recovery/codex-03-opiu-rules-20260815
           git cat-file -e "$LATEST_PARENT^{commit}"
           git cat-file -e "$RECOVERY_PARENT^{commit}"
