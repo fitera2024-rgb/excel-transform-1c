@@ -1,0 +1,93 @@
+name: Coordinator integrate OPIU rules
+
+on:
+  push:
+    branches:
+      - coord/opiu-rules-integrator-20260815
+
+permissions:
+  contents: write
+
+concurrency:
+  group: coordinator-integrate-opiu-rules
+  cancel-in-progress: true
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout payload authority
+        uses: actions/checkout@v4
+        with:
+          ref: coord/opiu-rules-integrator-20260815
+          path: payload
+          fetch-depth: 1
+      - name: Checkout exact latest product head
+        uses: actions/checkout@v4
+        with:
+          ref: b712cadba6d035108c56dcc9746ff42443c3b07c
+          path: work
+          fetch-depth: 0
+      - name: Reconstruct and verify coordinator patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat payload/governance/integration_payload/opiu-rules-6k/part-*.b64 > patch.gz.b64
+          echo 'e25ba81de402207d3216badb6b981cb68da92fd188ca54ee43eb72fad7a7a0a6  patch.gz.b64' | sha256sum -c -
+          base64 -d patch.gz.b64 > patch.gz
+          echo '14df4a074e6b4a161a731824fe6d83ffc5484f0f63b9fab9b948b2dfa54e0606  patch.gz' | sha256sum -c -
+          gzip -dc patch.gz > integration.patch
+          echo 'ec021426910e6f52bdfcc7c09350ee090f485d34ef08abced798ccc9c503e06c  integration.patch' | sha256sum -c -
+      - name: Apply exact hardened integration tree
+        shell: bash
+        working-directory: work
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = 'b712cadba6d035108c56dcc9746ff42443c3b07c'
+          git apply --whitespace=nowarn ../integration.patch
+          git add -A
+          git diff --cached --check
+          if git diff --cached --name-only | grep -E '\.(xls|xlsx|xlsm|xlsb|mxl|zip)$|(^|/)runtime/' ; then
+            echo 'Forbidden business/runtime artifact staged' >&2
+            exit 1
+          fi
+          test -z "$(git ls-files '*.xls' '*.xlsx' '*.xlsm' '*.xlsb' '*.mxl')"
+      - name: Verify merged source before publication
+        shell: bash
+        working-directory: work
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install -e '.[test]'
+          python -m compileall -q src tests scripts
+          python -m pytest tests/unit/test_opiu_rule_resolver.py -q
+          python -m pytest tests/integration/test_opiu_rule_catalog.py -q
+          python -m pytest tests/ui/test_ui_smoke.py -q
+          node --check src/excel_transform_1c/ui/static/run.js
+      - name: Create exact two-parent integration commit
+        id: publish
+        shell: bash
+        working-directory: work
+        env:
+          LATEST_PARENT: b712cadba6d035108c56dcc9746ff42443c3b07c
+          RECOVERY_PARENT: 63d2e35244ae3fccc82bdef4fd1d702979219ad0
+        run: |
+          set -euo pipefail
+          git fetch origin recovery/codex-03-opiu-rules-20260815
+          git cat-file -e "$LATEST_PARENT^{commit}"
+          git cat-file -e "$RECOVERY_PARENT^{commit}"
+          tree=$(git write-tree)
+          commit=$(printf '%s\n\n%s\n' \
+            'feat: integrate hardened OPIU ERP formula rules' \
+            'Coordinator integration: exact disclosure group -> article -> supported formula conditions; no live write.' \
+            | git commit-tree "$tree" -p "$LATEST_PARENT" -p "$RECOVERY_PARENT")
+          git push origin "$commit:refs/heads/integration/opiu-erp-rules-v1"
+          printf '%s\n' "$commit" | tee ../INTEGRATION_HEAD.txt
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OPIU_RULES_INTEGRATION_HEAD
+          path: INTEGRATION_HEAD.txt
+          if-no-files-found: error
+          retention-days: 14
