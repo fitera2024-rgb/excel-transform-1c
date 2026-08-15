@@ -11,7 +11,7 @@ STATUS: `THREE_SHEET_EXPORT_READY / AUTO_ARTICLE_INDICATOR_MATCHING_READY_FOR_CO
 - Repository: `fitera2024-rgb/excel-transform-1c`.
 - Working branch: `feat/final-owner-smoke-fitera-v2`.
 - Draft PR: `#23`, not merged.
-- Current head after task registration: `f11c1893240e06790a40481bdc3bc2b7be00fb9b`.
+- Exact implementation start is the commit that adds `governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
 - Three-sheet export already preserves `OPIU Light` and adds `ОПИУ` plus `Показатели`.
 
 ## Current owner decision
@@ -25,6 +25,7 @@ When a loaded classifier contains a direct correspondence `статья → по
 - Work registry: `governance/tasks/WORK-REGISTRY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
 - Codex implementation task: `governance/tasks/CODEX-TASK-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
 - Coordinator QA task: `governance/tasks/COORDINATOR-QA-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
+- Exact task marker: `governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
 
 ## Responsibility split
 
