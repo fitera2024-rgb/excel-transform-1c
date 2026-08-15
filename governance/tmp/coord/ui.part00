@@ -1,0 +1,65 @@
+diff --git a/a/excel_transform_1c/core/models.py b/b/excel_transform_1c/core/models.py
+index bc2f0d8..a60f2b4 100644
+--- a/a/excel_transform_1c/core/models.py
++++ b/b/excel_transform_1c/core/models.py
+@@ -168,6 +168,7 @@ class PreviewRecord:
+     status: str = STATUS_OK
+     reasons: list[str] = field(default_factory=list)
+     pointers: dict[str, SourcePointer] = field(default_factory=dict)
++    source_reporting_unit: str = ""
+     source_cfo: str = ""
+     source_cfo_key: str = ""
+     cfo_target_node_id: str = ""
+diff --git a/a/excel_transform_1c/core/indicator_matching.py b/b/excel_transform_1c/core/indicator_matching.py
+index 478cef2..eafb908 100644
+--- a/a/excel_transform_1c/core/indicator_matching.py
++++ b/b/excel_transform_1c/core/indicator_matching.py
+@@ -17,7 +17,7 @@ def full_article_path(expense_type: str, expense_group: str, article_name: str)
+     """Build the documented exact business path without text correction."""
+ 
+     parts = tuple(value.strip() for value in (expense_type, expense_group, article_name))
+-    return " → ".join(parts) if all(parts) else ""
++    return " → ".join(parts) if parts[2] else ""
+ 
+ 
+ @dataclass(frozen=True)
+diff --git a/a/excel_transform_1c/ui/app.py b/b/excel_transform_1c/ui/app.py
+index 99fb9ff..bcb3938 100644
+--- a/a/excel_transform_1c/ui/app.py
++++ b/b/excel_transform_1c/ui/app.py
+@@ -260,7 +260,9 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
+             confirmed_erp_rows=confirmed_erp_rows,
+             tax_not_required_rows=service.tax_not_required_source_rows(run_id),
+             cfo_mapping_entries=service.cfo_mapping_entries(run_id),
++            intalev_cfo_options=[{"source_key": item.source_key, "label": item.label} for item in service.intalev_cfos()],
+             indicator_counts=service.indicator_counts(run_id),
++            indicator_unresolved_rows=service.indicator_unresolved_rows(run_id),
+             message=message,
+             error=error,
+         )
+@@ -328,46 +330,20 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
+         )
+ 
+     @app.post("/runs/{run_id}/map-cfo")
+-    def map_cfo(
+-        request: Request,
+-        run_id: str,
+-        single_source_key: str = Form(""),
+-        source_key: str = Form(""),
+-        target_node_id: str = Form(""),
+-        source_keys: list[str] = Form(default=[]),
+-        target_node_ids: list[str] = Form(default=[]),
+-        confirmed_source_keys: list[str] = Form(default=[]),
+-        confirmed: str = Form(""),
+-    ):
++    def map_cfo(request: Request, run_id: str, source_reporting_unit: str = Form(""), source_cfo: str = Form(""), intalev_source_key: str = Form(""), source_key: str = Form(""), target_node_id: str = Form(""), confirmed: str = Form("")):
+         try:
+-            selected_source_key = single_source_key or source_key
+-            selected_target_node_id = target_node_id
+-            if single_source_key:
+-                if len(source_keys) != len(target_node_ids):
+-                    raise ValueError("Список сопоставлений ЦФО заполнен некорректно")
+-                by_source_key = dict(zip(source_keys, target_node_ids, strict=True))
+-                selected_target_node_id = by_source_key.get(single_source_key, "")
+-                confirmed = "1" if single_source_key in set(confirmed_source_keys) else ""
+             
