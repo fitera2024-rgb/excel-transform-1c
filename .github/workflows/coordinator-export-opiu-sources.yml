@@ -13,6 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - name: Checkout CODEX-03 base
+        uses: actions/checkout@v4
+        with:
+          ref: ffcb887844638eaac7a059b58150bdc200bb7e34
+          path: base
+          fetch-depth: 0
       - name: Checkout latest product head
         uses: actions/checkout@v4
         with:
@@ -29,14 +35,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf latest/.git recovery/.git export
+          rm -rf base/.git latest/.git recovery/.git export
           mkdir -p export
+          (cd base && zip -qr ../export/base-ffcb887.zip .)
           (cd latest && zip -qr ../export/latest-b712cad.zip .)
           (cd recovery && zip -qr ../export/recovery-63d2e35.zip .)
           sha256sum export/*.zip > export/SHA256.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: COORDINATOR_OPIU_SOURCE_TREES
+          name: COORDINATOR_OPIU_SOURCE_TREES_WITH_BASE
           path: export
           if-no-files-found: error
           retention-days: 3
