@@ -14,7 +14,7 @@
 </section>
 
 <section class="run-progress" aria-label="Этапы результата">
-  <span class="is-done">Файл принят</span><span class="is-done">Preview построен</span><span class="{% if unresolved %}is-current{% else %}is-done{% endif %}">{% if unresolved %}Требуются решения{% else %}Проверка завершена{% endif %}</span><span>Экспорт XLSX</span>
+  <span class="is-done">Файл принят</span><span class="is-done">Preview построен</span><span class="{% if unresolved or indicator_counts.attention > 0 %}is-current{% else %}is-done{% endif %}">{% if unresolved or indicator_counts.attention > 0 %}Требуются решения{% else %}Проверка завершена{% endif %}</span><span>Экспорт XLSX</span>
 </section>
 
 <section class="stats" data-testid="preview-stats">
@@ -45,83 +45,11 @@
     </label>
     <button type="submit">Повторить автоматический поиск</button>
   </form>
+  {% if indicator_unresolved_rows %}<div class="indicator-unresolved-list" data-testid="indicator-unresolved-list">{% for item in indicator_unresolved_rows %}<article class="indicator-unresolved-row" data-testid="indicator-unresolved-row"><strong>{{ item.source_line }}</strong><span>{{ item.expense_type }} → {{ item.expense_group }} → {{ item.source_article }}</span>{% if item.erp_code %}<span>ERP-код: {{ item.erp_code }}</span>{% endif %}<span><b>{{ item.status }}</b> — {{ item.reason }}</span><span>{{ item.action }}</span></article>{% endfor %}</div>{% endif %}
 </section>
 
 {% if run.cfo_mapping_enabled %}
-<section class="card cfo-mapping-section" data-testid="cfo-mapping-section">
-  <div class="section-heading">
-    <div>
-      <p class="eyebrow ink">ЦФО Инталев</p>
-      <h2>Сопоставление с деревом 1С</h2>
-    </div>
-    <p>Выберите точный узел 1С для каждого уникального ЦФО Инталев. Одно соответствие применяется ко всем строкам и месяцам этого ЦФО.</p>
-  </div>
-
-  <form method="post" action="/runs/{{ run.run_id }}/confirm-filled-cfo" class="bulk-confirm-card cfo-bulk-card" data-cfo-bulk-form data-testid="cfo-bulk-form">
-    <div class="bulk-confirm-copy">
-      <p class="eyebrow ink">Массовое применение ЦФО</p>
-      <h3>Применить все заполненные соответствия</h3>
-      <p>Сервис не выбирает узлы автоматически. В действие входят только заполненные точные соответствия.</p>
-    </div>
-    <input type="hidden" name="selections" value="[]" data-cfo-bulk-selections>
-    <label class="confirm-choice bulk-confirm-choice">
-      <input type="checkbox" name="confirmed" value="1" autocomplete="off" data-cfo-bulk-confirm disabled>
-      Подтверждаю все заполненные сопоставления ЦФО
-    </label>
-    <p class="bulk-confirm-count" data-cfo-bulk-count data-testid="cfo-bulk-count">Будет применено: 0 ЦФО</p>
-    <p class="hint bulk-confirm-empty" data-cfo-bulk-empty>Сначала заполните хотя бы одно новое соответствие.</p>
-    <button type="submit" data-cfo-bulk-submit data-testid="cfo-bulk-submit" disabled>Нет заполненных соответствий</button>
-  </form>
-
-  <div class="cfo-mapping-list">
-    {% for entry in cfo_mapping_entries %}
-    <article
-      class="cfo-mapping-row{% if entry.confirmed %} is-confirmed{% endif %}"
-      data-cfo-entry
-      data-source-key="{{ entry.source_key }}"
-      data-confirmed="{{ 'true' if entry.confirmed else 'false' }}"
-      data-eligible="{{ 'true' if entry.eligible else 'false' }}"
-    >
-      <div class="cfo-source-card">
-        <strong>{{ entry.source_label or "ЦФО не указан" }}</strong>
-        <span>Используется в {{ entry.row_count }} исходных строках текущего файла</span>
-        {% if not entry.eligible %}<small class="mapping-warning">{{ entry.status }}</small>{% endif %}
-      </div>
-      {% if entry.confirmed %}
-      <div class="business-status cfo-confirmed-status" data-testid="cfo-confirmed-status">
-        <strong>Сопоставление ЦФО подтверждено</strong>
-        <span>{{ entry.target_label }}</span>
-      </div>
-      {% elif entry.eligible %}
-      <form method="post" action="/runs/{{ run.run_id }}/map-cfo" class="cfo-mapping-form" data-cfo-form>
-        <input type="hidden" name="source_key" value="{{ entry.source_key }}">
-        <label>
-          ЦФО / подразделение / узел 1С
-          <select name="target_node_id" data-cfo-target>
-            <option value="">Выберите точный узел 1С</option>
-            {% for option in organization_options %}
-            <option value="{{ option.node_id }}">{{ option.label }}{% if option.full_path and option.full_path != option.name %} · {{ option.full_path }}{% endif %}</option>
-            {% endfor %}
-          </select>
-        </label>
-        <label class="confirm-choice">
-          <input type="checkbox" name="confirmed" value="1" data-cfo-confirm autocomplete="off" disabled>
-          Подтверждаю соответствие ЦФО
-        </label>
-        <button type="submit" data-cfo-submit disabled>Сначала выберите узел и поставьте галку</button>
-      </form>
-      {% else %}
-      <div class="read-only-attention">
-        <strong>Сопоставление заблокировано</strong>
-        <p>{{ entry.status }}. Проверьте классификатор ЦФО Инталев.</p>
-      </div>
-      {% endif %}
-    </article>
-    {% else %}
-    <p class="hint">В текущем файле не найдены ЦФО для сопоставления.</p>
-    {% endfor %}
-  </div>
-</section>
+<section class="card cfo-mapping-section" data-testid="cfo-mapping-section"><div class="section-heading"><div><p class="eyebrow ink">ЦФО</p><h2>Исходный ЦФО → ЦФО Инталев → узел 1С</h2></div></div><form method="post" action="/runs/{{ run.run_id }}/confirm-filled-cfo" class="bulk-confirm-card cfo-bulk-card" data-cfo-bulk-form data-testid="cfo-bulk-form"><input type="hidden" name="selections" value="[]" data-cfo-bulk-selections><label><input type="checkbox" name="confirmed" value="1" data-cfo-bulk-confirm disabled>Подтверждаю все заполненные сопоставления ЦФО</label><p data-cfo-bulk-count>Будет применено: 0 ЦФО</p><p data-cfo-bulk-empty>Сначала заполните хотя бы одно новое соответствие.</p><button type="submit" data-cfo-bulk-submit disabled>Нет заполненных соответствий</button></form><div class="cfo-mapping-list">{% for entry in cfo_mapping_entries %}<article class="cfo-mapping-row{% if entry.confirmed %} is-confirmed{% endif %}" data-cfo-entry data-entry-key="{{ entry.entry_key }}" data-source-reporting-unit="{{ entry.source_reporting_unit }}" data-source-cfo="{{ entry.source_cfo }}" data-confirmed="{{ 'true' if entry.confirmed else 'false' }}" data-eligible="true"><div class="cfo-source-card"><strong>{{ entry.source_label }}</strong><span>{{ entry.row_count }} исходных строк</span>{% if entry.intalev_confirmed %}<small>ЦФО Инталев: {{ entry.intalev_label }}</small>{% endif %}</div>{% if entry.confirmed %}<div class="business-status cfo-confirmed-status"><strong>Сопоставление ЦФО подтверждено</strong><span>{{ entry.intalev_label }} → {{ entry.target_label }}</span></div>{% else %}<form method="post" action="/runs/{{ run.run_id }}/map-cfo" class="cfo-mapping-form" data-cfo-form><input type="hidden" name="source_reporting_unit" value="{{ entry.source_reporting_unit }}"><input type="hidden" name="source_cfo" value="{{ entry.source_cfo }}"><label>ЦФО Инталев<select name="intalev_source_key" data-cfo-intalev><option value="">Выберите точный ЦФО Инталев</option>{% for option in intalev_cfo_options %}<option value="{{ option.source_key }}"{% if option.source_key == entry.intalev_source_key %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label><label>ЦФО / подразделение / узел 1С<select name="target_node_id" data-cfo-target><option value="">Выберите точный узел 1С</option>{% for option in organization_options %}<option value="{{ option.node_id }}"{% if option.node_id == entry.target_node_id %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label><label><input type="checkbox" name="confirmed" value="1" data-cfo-confirm disabled>Подтверждаю оба соответствия ЦФО</label><button type="submit" data-cfo-submit disabled>Сначала выберите оба значения и поставьте галку</button><small>{{ entry.status }}</small></form>{% endif %}</article>{% else %}<p class="hint">В текущем файле не найдены ЦФО для сопоставления.</p>{% endfor %}</div></section>
 {% endif %}
 
 {% if unresolved %}

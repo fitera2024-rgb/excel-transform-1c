@@ -17,7 +17,7 @@ def full_article_path(expense_type: str, expense_group: str, article_name: str) 
     """Build the documented exact business path without text correction."""
 
     parts = tuple(value.strip() for value in (expense_type, expense_group, article_name))
-    return " → ".join(parts) if all(parts) else ""
+    return " → ".join(parts) if parts[2] else ""
 
 
 @dataclass(frozen=True)

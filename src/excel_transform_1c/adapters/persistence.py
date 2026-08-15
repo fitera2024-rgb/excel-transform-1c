@@ -69,6 +69,13 @@ class LocalStore:
                     erp_code TEXT NOT NULL,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
+                CREATE TABLE IF NOT EXISTS source_cfo_mappings (
+                    reporting_unit TEXT NOT NULL,
+                    source_cfo TEXT NOT NULL,
+                    intalev_source_key TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY(reporting_unit, source_cfo)
+                );
                 CREATE TABLE IF NOT EXISTS cfo_mappings (
                     source_key TEXT PRIMARY KEY,
                     target_node_id TEXT NOT NULL,
@@ -399,6 +406,47 @@ class LocalStore:
             ).fetchall()
         return {
             tuple(json.loads(row["mapping_key"])): row["erp_code"]
+            for row in rows
+        }
+
+    def save_source_cfo_mapping(
+        self, reporting_unit: str, source_cfo: str, intalev_source_key: str
+    ) -> None:
+        self.save_source_cfo_mappings(
+            {(reporting_unit, source_cfo): intalev_source_key}
+        )
+
+    def save_source_cfo_mappings(
+        self, mappings: dict[tuple[str, str], str]
+    ) -> None:
+        rows = [
+            (reporting_unit, source_cfo, intalev_source_key)
+            for (reporting_unit, source_cfo), intalev_source_key in mappings.items()
+            if reporting_unit and source_cfo and intalev_source_key
+        ]
+        if not rows:
+            return
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO source_cfo_mappings(
+                    reporting_unit, source_cfo, intalev_source_key
+                ) VALUES (?, ?, ?)
+                ON CONFLICT(reporting_unit, source_cfo) DO UPDATE
+                SET intalev_source_key=excluded.intalev_source_key,
+                    updated_at=CURRENT_TIMESTAMP
+                """,
+                rows,
+            )
+
+    def load_source_cfo_mappings(self) -> dict[tuple[str, str], str]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT reporting_unit, source_cfo, intalev_source_key "
+                "FROM source_cfo_mappings"
+            ).fetchall()
+        return {
+            (row["reporting_unit"], row["source_cfo"]): row["intalev_source_key"]
             for row in rows
         }
 
