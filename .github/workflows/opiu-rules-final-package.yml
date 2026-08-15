@@ -119,9 +119,9 @@ jobs:
           $firstPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
           $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
           if ($health.status -ne "ok") { throw "Health check failed" }
-          $home = Invoke-WebRequest -UseBasicParsing -Uri "$url/" -TimeoutSec 10
+          $homeResponse = Invoke-WebRequest -UseBasicParsing -Uri "$url/" -TimeoutSec 10
           foreach ($marker in @("ООО «ФИТЭРА»", "ERP-статьи", "ЦФО Инталев", "Источники правил ОПИУ ERP", "Загрузить / дополнить")) {
-            if ($home.Content -notmatch [regex]::Escape($marker)) { throw "Home marker missing: $marker" }
+            if ($homeResponse.Content -notmatch [regex]::Escape($marker)) { throw "Home marker missing: $marker" }
           }
 
           $venvPython = Join-Path $package ".venv\Scripts\python.exe"
@@ -139,8 +139,8 @@ jobs:
           if ($secondPid -eq $firstPid) { throw "Restart did not replace previous process" }
           $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
           if ($health.status -ne "ok") { throw "Restarted health check failed" }
-          $home = Invoke-WebRequest -UseBasicParsing -Uri "$url/" -TimeoutSec 10
-          if ($home.Content -notmatch [regex]::Escape("1 правил")) { throw "Persisted OPIU rule marker missing after restart" }
+          $homeResponse = Invoke-WebRequest -UseBasicParsing -Uri "$url/" -TimeoutSec 10
+          if ($homeResponse.Content -notmatch [regex]::Escape("1 правил")) { throw "Persisted OPIU rule marker missing after restart" }
 
           & $venvPython scripts/owner_smoke_http.py --base-url $url --phase post-restart
           if ($LASTEXITCODE -ne 0) { throw "HTTP owner smoke post-restart phase failed" }
