@@ -1,0 +1,49 @@
+if not confirmed:
+                 raise ValueError("Поставьте галку «Подтверждаю соответствие ЦФО»")
+-            if not selected_source_key or not selected_target_node_id:
+-                raise ValueError("Выберите точный узел 1С для ЦФО")
+-            _, count = service.confirm_cfo_mappings(
+-                run_id,
+-                [
+-                    {
+-                        "source_key": selected_source_key,
+-                        "target_node_id": selected_target_node_id,
+-                    }
+-                ],
+-            )
++            selected = intalev_source_key or source_key
++            if not selected or not target_node_id:
++                raise ValueError("Выберите ЦФО Инталев и точный узел 1С")
++            selection = {"intalev_source_key": selected, "target_node_id": target_node_id}
++            if source_reporting_unit or source_cfo:
++                selection.update({"source_reporting_unit": source_reporting_unit, "source_cfo": source_cfo})
++            _, count = service.confirm_cfo_mappings(run_id, [selection])
+         except Exception as exc:
+             return preview(request, run_id, error=str(exc))
+-        return RedirectResponse(
+-            f"/runs/{run_id}?message=Сопоставление ЦФО подтверждено. "
+-            f"Обновлено новых соответствий: {count}",
+-            status_code=303,
+-        )
++        return RedirectResponse(f"/runs/{run_id}?message=Сопоставление ЦФО подтверждено. Обновлено соответствий: {count}", status_code=303)
+ 
+     @app.post("/runs/{run_id}/confirm-filled-cfo")
+     def confirm_filled_cfo(
+diff --git a/a/excel_transform_1c/ui/templates/run.html b/b/excel_transform_1c/ui/templates/run.html
+index 050be69..79f0f7a 100644
+--- a/a/excel_transform_1c/ui/templates/run.html
++++ b/b/excel_transform_1c/ui/templates/run.html
+@@ -14,7 +14,7 @@
+ </section>
+ 
+ <section class="run-progress" aria-label="Этапы результата">
+-  <span class="is-done">Файл принят</span><span class="is-done">Preview построен</span><span class="{% if unresolved %}is-current{% else %}is-done{% endif %}">{% if unresolved %}Требуются решения{% else %}Проверка завершена{% endif %}</span><span>Экспорт XLSX</span>
++  <span class="is-done">Файл принят</span><span class="is-done">Preview построен</span><span class="{% if unresolved or indicator_counts.attention > 0 %}is-current{% else %}is-done{% endif %}">{% if unresolved or indicator_counts.attention > 0 %}Требуются решения{% else %}Проверка завершена{% endif %}</span><span>Экспорт XLSX</span>
+ </section>
+ 
+ <section class="stats" data-testid="preview-stats">
+@@ -45,83 +45,11 @@
+     </label>
+     <button type="submit">Повторить автоматический поиск</button>
+   </form>
++  {% if indicator_unresolved_rows %}<div class="indicator-unresolved-list" data-testid="indicator-unresolved-list">{% for item in indicator_unresolved_rows %}<article class="indicator-unresolved-row" data-testid="indicator-unresolved-row"><strong>{{ item.source_line }}</strong><span>{{ item.expense_type }} → {{ item.expense_group }} → {{ item.s
