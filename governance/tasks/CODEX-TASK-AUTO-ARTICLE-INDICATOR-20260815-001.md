@@ -6,11 +6,15 @@ STATUS: `READY_FOR_IMPLEMENTATION / OWNER_ACCEPTED / RISK_L / DRAFT / NO_MERGE`
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
 - Working branch: `feat/final-owner-smoke-fitera-v2`.
-- Task base: `0c04587c5369bd2bb6c1b72dfd56d5254b2a19c0`.
+- Exact task base: commit, который добавляет файл `governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
 - Draft PR: `#23`.
 - Work registry: `governance/tasks/WORK-REGISTRY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
 
-До совпадения branch и exact head никаких файлов не изменять.
+Перед изменениями получить exact task base командой:
+
+`git log -1 --format=%H -- governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`
+
+Текущий `git rev-parse HEAD` обязан совпасть с этим SHA. До совпадения branch и exact head никаких файлов не изменять.
 
 ## Цель
 
