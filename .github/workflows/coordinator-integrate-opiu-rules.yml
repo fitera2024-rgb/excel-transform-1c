@@ -45,6 +45,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = 'b712cadba6d035108c56dcc9746ff42443c3b07c'
           git apply --whitespace=nowarn ../integration.patch
+          git restore --source=HEAD -- .github/workflows/final-owner-smoke-package-v2.yml
           python - <<'PY'
           from pathlib import Path
           for name in (
