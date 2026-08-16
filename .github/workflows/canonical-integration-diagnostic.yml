@@ -1,0 +1,67 @@
+name: Canonical Integration Diagnostic
+
+on:
+  push:
+    branches:
+      - automation/canonical-integration-diagnostic
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  capture-merge-worktree:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ab4513ed6923f56a8e8ee6dd36cfbf0e8ff04465
+          fetch-depth: 0
+
+      - name: Attempt exact two-parent merge and capture conflicts
+        shell: bash
+        run: |
+          set -uo pipefail
+          git config user.name "Canonical Integration Diagnostic"
+          git config user.email "canonical-integration@users.noreply.github.com"
+          git fetch origin 77645317b673b2e57dea803410126a61cdaf6d83
+
+          set +e
+          git merge --no-commit --no-ff 77645317b673b2e57dea803410126a61cdaf6d83
+          merge_exit=$?
+          set -e
+
+          mkdir -p diagnostics/base diagnostics/ours diagnostics/theirs
+          printf '%s\n' "$merge_exit" > diagnostics/merge-exit-code.txt
+          git status --short > diagnostics/status-short.txt
+          git ls-files -u > diagnostics/unmerged-index.txt
+          git diff --name-only --diff-filter=U > diagnostics/conflicts.txt
+          git diff --cc > diagnostics/combined-conflict.diff || true
+
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            mkdir -p "diagnostics/base/$(dirname "$path")" "diagnostics/ours/$(dirname "$path")" "diagnostics/theirs/$(dirname "$path")"
+            git show ":1:$path" > "diagnostics/base/$path" 2>/dev/null || true
+            git show ":2:$path" > "diagnostics/ours/$path" 2>/dev/null || true
+            git show ":3:$path" > "diagnostics/theirs/$path" 2>/dev/null || true
+          done < diagnostics/conflicts.txt
+
+          git rev-parse HEAD > diagnostics/ours-head.txt
+          git rev-parse MERGE_HEAD > diagnostics/theirs-head.txt
+          git merge-base HEAD MERGE_HEAD > diagnostics/merge-base.txt
+          git diff --stat HEAD MERGE_HEAD > diagnostics/parent-diff-stat.txt || true
+
+          tar -czf "$RUNNER_TEMP/merge-worktree.tar.gz" \
+            --exclude='./diagnostics' \
+            --exclude='./.git/objects/pack/*.keep' \
+            .
+          mv "$RUNNER_TEMP/merge-worktree.tar.gz" diagnostics/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: canonical-integration-diagnostic
+          path: diagnostics
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 7
