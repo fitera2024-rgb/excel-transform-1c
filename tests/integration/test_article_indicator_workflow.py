@@ -57,6 +57,12 @@ def test_classifier_parser_and_persistence_use_direct_exact_keys(tmp_path):
         "article_name": "Интернет",
         "indicator": "Услуги связи",
         "sales_channel": "Основной канал",
+        "indicator_type": "EXPENSE",
+        "revenue_group": "",
+        "formula_condition": "",
+        "analytics": "",
+        "nomenclature": "",
+        "unit": "",
     }
 
     first = WorkflowService(tmp_path / "runtime")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any
 
 
@@ -12,6 +13,19 @@ STATUS_OK = "ОК"
 STATUS_ATTENTION = "Требует внимания"
 STATUS_SKIPPED = "Пропущено"
 TAX_NOT_REQUIRED = "Не требуется"
+
+
+class IndicatorType(StrEnum):
+    EXPENSE = "EXPENSE"
+    REVENUE = "REVENUE"
+    QUANTITY = "QUANTITY"
+
+
+INDICATOR_TYPE_LABELS = {
+    IndicatorType.EXPENSE: "Расход",
+    IndicatorType.REVENUE: "Доход",
+    IndicatorType.QUANTITY: "Количество",
+}
 
 MONTH_NAMES = (
     "Январь",
@@ -71,6 +85,12 @@ class SourceRow:
     article: Any
     months: tuple[Any, ...]
     cells: dict[str, str]
+    indicator_type: Any = ""
+    revenue_group: Any = ""
+    formula_condition: Any = ""
+    analytics: Any = ""
+    nomenclature: Any = ""
+    unit: Any = ""
 
 
 @dataclass(frozen=True)
@@ -120,6 +140,12 @@ class ArticleIndicatorRule:
     article_name: str
     indicator: str
     sales_channel: str
+    indicator_type: IndicatorType = IndicatorType.EXPENSE
+    revenue_group: str = ""
+    formula_condition: str = ""
+    analytics: str = ""
+    nomenclature: str = ""
+    unit: str = ""
 
 
 @dataclass(frozen=True)
@@ -184,6 +210,12 @@ class PreviewRecord:
     organization_unit_code: str = ""
     erp_department: str = ""
     cfo_code: str = ""
+    indicator_type: IndicatorType = IndicatorType.EXPENSE
+    revenue_group: str = ""
+    formula_condition: str = ""
+    analytics: str = ""
+    nomenclature: str = ""
+    unit: str = ""
 
     @property
     def comment(self) -> str:
@@ -200,6 +232,10 @@ class PreviewRecord:
     @property
     def tax_not_required(self) -> bool:
         return self.tax == TAX_NOT_REQUIRED
+
+    @property
+    def indicator_type_label(self) -> str:
+        return INDICATOR_TYPE_LABELS[self.indicator_type]
 
 
 @dataclass

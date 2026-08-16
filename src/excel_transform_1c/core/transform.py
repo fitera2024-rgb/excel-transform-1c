@@ -5,8 +5,10 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
 
+from .indicator_resolvers import detect_indicator_type
 from .models import (
     ERPArticle,
+    IndicatorType,
     Issue,
     PreviewRecord,
     REPORT_TYPE_CODE,
@@ -117,18 +119,19 @@ def _amount(value: Any) -> Decimal:
 
 def _pointer(row: SourceRow, field: str, month: int | None = None) -> SourcePointer:
     source_key = f"month_{month}" if month else ("article" if field == "source_article" else field)
+    cell = row.cells.get(source_key) or row.cells["article"]
     return SourcePointer(
         file_name=row.source_file,
         sheet=row.sheet,
         row=row.row_number,
-        cell=row.cells[source_key],
+        cell=cell,
         field=field,
         month=month,
     )
 
 
 def _record_pointers(row: SourceRow, month: int) -> dict[str, SourcePointer]:
-    return {
+    pointers = {
         "reporting_unit": _pointer(row, "reporting_unit"),
         "expense_type": _pointer(row, "expense_type"),
         "department": _pointer(row, "department"),
@@ -139,6 +142,17 @@ def _record_pointers(row: SourceRow, month: int) -> dict[str, SourcePointer]:
         "source_article": _pointer(row, "source_article"),
         "amount": _pointer(row, "amount", month),
     }
+    for field in (
+        "indicator_type",
+        "revenue_group",
+        "formula_condition",
+        "analytics",
+        "nomenclature",
+        "unit",
+    ):
+        if field in row.cells:
+            pointers[field] = _pointer(row, field)
+    return pointers
 
 
 def transform_rows(
@@ -161,6 +175,37 @@ def transform_rows(
             "article": as_text(row.article),
         }
         shared_reasons: list[str] = []
+        try:
+            indicator_type = detect_indicator_type(
+                indicator_type=row.indicator_type,
+                revenue_group=row.revenue_group,
+                formula_condition=row.formula_condition,
+                analytics=row.analytics,
+                nomenclature=row.nomenclature,
+                unit=row.unit,
+            )
+        except ValueError as exc:
+            indicator_type = IndicatorType.EXPENSE
+            type_reason = str(exc)
+            shared_reasons.append(type_reason)
+            issues.append(
+                _issue(
+                    row,
+                    "indicator-type",
+                    type_reason,
+                    "indicator_type",
+                    row.indicator_type,
+                )
+            )
+
+        indicator_fields = {
+            "indicator_type": indicator_type,
+            "revenue_group": as_text(row.revenue_group),
+            "formula_condition": as_text(row.formula_condition),
+            "analytics": as_text(row.analytics),
+            "nomenclature": as_text(row.nomenclature),
+            "unit": as_text(row.unit),
+        }
 
         for field, value in shared.items():
             if value == "":
@@ -253,6 +298,7 @@ def transform_rows(
                             f"{skip_reason} ({pointers['amount'].sheet}!{pointers['amount'].cell})",
                         ],
                         pointers=pointers,
+                        **indicator_fields,
                     )
                 )
                 continue
@@ -295,6 +341,7 @@ def transform_rows(
                     status=STATUS_ATTENTION if reasons else STATUS_OK,
                     reasons=reasons,
                     pointers=pointers,
+                    **indicator_fields,
                 )
             )
 

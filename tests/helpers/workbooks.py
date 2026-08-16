@@ -335,6 +335,156 @@ def erp_organization_hierarchy_bytes(*, cfo_code: str = "000000173") -> bytes:
     return output.getvalue()
 
 
+def revenue_quantity_workbook_bytes() -> bytes:
+    """Synthetic prepared input covering all three structural indicator types."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "ОПИУ synthetic"
+    sheet.append(["Синтетический fixture: расходы, доходы и количества"])
+    sheet.append(
+        [
+            *HEADERS,
+            "Тип показателя",
+            "Группа дохода",
+            "Условия формулы",
+            "Аналитики",
+            "Номенклатура",
+            "Единица измерения",
+        ]
+    )
+    rows = [
+        (
+            [
+                "ПС",
+                "Административные",
+                "Департамент 1",
+                "ТК",
+                "ЦФО 1",
+                "20%",
+                "Связь",
+                "Интернет",
+                100,
+                *([0] * 11),
+            ],
+            ["EXPENSE", "", "", "", "", ""],
+        ),
+        (
+            [
+                "ПС",
+                "Прочие доходы",
+                "Департамент 2",
+                "ТК",
+                "ЦФО 2",
+                "БЕЗ НДС",
+                "Продажи",
+                "Продажа товара",
+                200,
+                *([0] * 11),
+            ],
+            [
+                "REVENUE",
+                "Выручка от продаж",
+                "Источник=Продажи",
+                "Организационные единицы | ЦФО | ИНТ номенклатура",
+                "",
+                "",
+            ],
+        ),
+        (
+            [
+                "ПС",
+                "Количественные показатели",
+                "Департамент 2",
+                "ТК",
+                "ЦФО 2",
+                "?",
+                "Продукция",
+                "Товар А",
+                5,
+                *([0] * 11),
+            ],
+            ["QUANTITY", "", "", "", "Товар А", "кг"],
+        ),
+    ]
+    for business, indicators in rows:
+        sheet.append([*business, *indicators])
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
+def revenue_quantity_classifier_bytes() -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Классификатор"
+    sheet.append(
+        [
+            "ERP-код статьи",
+            "Полный путь статьи",
+            "Статья",
+            "Показатель",
+            "Канал сбыта",
+            "Тип показателя",
+            "Группа дохода",
+            "Условия формулы",
+            "Аналитики",
+            "Номенклатура",
+            "Единица измерения",
+        ]
+    )
+    sheet.append(
+        [
+            "ERP-001",
+            "Административные → Связь → Интернет",
+            "Интернет",
+            "Административные расходы",
+            "Основной канал",
+            "EXPENSE",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]
+    )
+    sheet.append(
+        [
+            "",
+            "",
+            "Продажа товара",
+            "Выручка",
+            "Основной канал",
+            "REVENUE",
+            "Выручка от продаж",
+            "Источник=Продажи",
+            "Организационные единицы | ЦФО | ИНТ номенклатура",
+            "",
+            "",
+        ]
+    )
+    sheet.append(
+        [
+            "",
+            "",
+            "",
+            "Количество продукции",
+            "Основной канал",
+            "QUANTITY",
+            "",
+            "",
+            "",
+            "Товар А",
+            "кг",
+        ]
+    )
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
 def intalev_opiu_bytes(
     *,
     sheet_name: str = "TDSheet",

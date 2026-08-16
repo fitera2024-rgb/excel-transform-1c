@@ -31,14 +31,15 @@ from excel_transform_1c.core.indicator_matching import (
     INDICATOR_INCOMPLETE,
     INDICATOR_MATCHED,
     INDICATOR_MISSING,
-    ExactArticleIndicatorMatcher,
     apply_indicator_match,
 )
+from excel_transform_1c.core.indicator_resolvers import IndicatorResolverEngine
 from excel_transform_1c.core.models import (
     ArticleIndicatorRule,
     CandidateRange,
     ERPArticle,
     IntalevCFO,
+    IndicatorType,
     Issue,
     OrganizationNode,
     PreviewRecord,
@@ -338,18 +339,23 @@ class WorkflowService:
         source_rows: set[int] | None = None,
     ) -> None:
         rules = self.article_indicator_rules()
-        matcher = ExactArticleIndicatorMatcher(rules)
+        engine = IndicatorResolverEngine(rules)
         run.indicator_classifier_loaded = bool(rules)
         for record in run.records:
             if source_rows is not None and record.source_row not in source_rows:
                 continue
-            match = matcher.resolve(
-                erp_code=record.erp_code,
-                expense_type=record.expense_type,
-                expense_group=record.expense_group,
-                article_name=record.source_article,
-            )
+            previous_reason = record.indicator_match_reason
+            match = engine.resolve(record)
             apply_indicator_match(record, match)
+            if record.indicator_type != IndicatorType.EXPENSE:
+                if previous_reason:
+                    record.reasons = [
+                        reason for reason in record.reasons if reason != previous_reason
+                    ]
+                if match.status != INDICATOR_MATCHED and match.reason:
+                    record.reasons.append(match.reason)
+                if record.status != STATUS_SKIPPED:
+                    record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
 
     def indicator_counts(self, run_id: str) -> dict[str, int]:
         run = self.get_run(run_id)
@@ -388,6 +394,7 @@ class WorkflowService:
                 "expense_type": record.expense_type or "Без типа",
                 "expense_group": record.expense_group or "Без группы",
                 "source_article": record.source_article or "Без статьи",
+                "indicator_type": record.indicator_type_label,
                 "erp_code": record.erp_code,
                 "status": labels[status],
                 "reason": record.indicator_match_reason,

@@ -21,6 +21,15 @@ BUSINESS_ALIASES: dict[str, set[str]] = {
     "article": {"статья", "исходная статья"},
 }
 
+INDICATOR_ALIASES: dict[str, set[str]] = {
+    "indicator_type": {"тип показателя"},
+    "revenue_group": {"группа дохода", "группа доходов", "группа раскрытия"},
+    "formula_condition": {"условие формулы", "условия формулы"},
+    "analytics": {"аналитика", "аналитики"},
+    "nomenclature": {"номенклатура", "инт номенклатура"},
+    "unit": {"единица измерения", "ед. изм.", "единица"},
+}
+
 MONTH_ALIASES: dict[int, set[str]] = {
     1: {"январь", "янв", "01"},
     2: {"февраль", "фев", "02"},
@@ -69,6 +78,13 @@ def _column_schema(values: Iterable[Any]) -> dict[str, int] | None:
         if len(matches) != 1:
             return None
         columns[f"month_{month}"] = matches[0]
+    for field, aliases in INDICATOR_ALIASES.items():
+        normalized_aliases = {normalize_header(alias) for alias in aliases}
+        matches = [index for index, value in headers.items() if value in normalized_aliases]
+        if len(matches) > 1:
+            return None
+        if matches:
+            columns[field] = matches[0]
     return columns
 
 
@@ -387,7 +403,14 @@ def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str)
             field: value(field)
             for field in BUSINESS_ALIASES
         }
-        if all(value is None for value in (*shared_values.values(), *month_values)):
+        indicator_values = {
+            field: value(field) if field in candidate.columns else ""
+            for field in INDICATOR_ALIASES
+        }
+        if all(
+            item is None or item == ""
+            for item in (*shared_values.values(), *indicator_values.values(), *month_values)
+        ):
             continue
         cells = {
             field: f"{get_column_letter(column)}{row_number}"
@@ -401,6 +424,7 @@ def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str)
                 months=month_values,
                 cells=cells,
                 **shared_values,
+                **indicator_values,
             )
         )
     return result
