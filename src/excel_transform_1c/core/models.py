@@ -271,6 +271,22 @@ class PreviewRecord:
         return INDICATOR_TYPE_LABELS[self.indicator_type]
 
 
+@dataclass(frozen=True)
+class KPIResult:
+    """Business-safe resolved KPI value for one organization and period."""
+
+    organization: str
+    organization_code: str
+    department: str
+    department_name: str
+    cfo: str
+    cfo_code: str
+    indicator_type: str
+    indicator_name: str
+    period: str
+    value: Decimal | None
+
+
 @dataclass
 class Issue:
     issue_id: str

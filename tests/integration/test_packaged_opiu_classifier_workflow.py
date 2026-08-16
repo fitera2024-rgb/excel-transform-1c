@@ -184,12 +184,12 @@ def test_clean_install_applies_packaged_mxl_link_without_inventing_channel(tmp_p
         indicators = exported["Показатели"]
         assert tuple(cell.value for cell in indicators[1]) == ADO_INDICATOR_HEADERS
         assert indicators.max_row == 13
-        assert {cell.value for cell in indicators["G"][1:]} == {"Расход"}
-        assert {cell.value for cell in indicators["H"][1:]} == {None}
-        assert {cell.value for cell in indicators["I"][1:]} == {
+        assert {cell.value for cell in indicators["K"][1:]} == {"Расход"}
+        assert {cell.value for cell in indicators["L"][1:]} == {None}
+        assert {cell.value for cell in indicators["M"][1:]} == {
             "Административные расходы"
         }
-        assert sum(cell.value for cell in indicators["J"][1:]) == 100
+        assert sum(cell.value for cell in indicators["N"][1:]) == 100
     finally:
         exported.close()
 
@@ -236,10 +236,10 @@ def test_clean_install_resolves_structural_income_from_packaged_rules(tmp_path):
             "Дискаунтеры ДВ",
             "Дискаунтеры Федеральные",
         }
-        assert {cell.value for cell in indicators["G"][1:]} == {"Доход"}
-        assert {cell.value for cell in indicators["H"][1:]} == expected
-        assert {cell.value for cell in indicators["I"][1:]} == expected
-        assert sum(cell.value for cell in indicators["J"][1:]) == sum(
+        assert {cell.value for cell in indicators["K"][1:]} == {"Доход"}
+        assert {cell.value for cell in indicators["L"][1:]} == expected
+        assert {cell.value for cell in indicators["M"][1:]} == expected
+        assert sum(cell.value for cell in indicators["N"][1:]) == sum(
             float(record.amount) for record in run.records
         )
     finally:
@@ -344,7 +344,7 @@ def test_real_owner_budget_revenue_smoke_when_available(tmp_path):
     try:
         assert exported.sheetnames == ["OPIU Light", "ОПИУ", "Показатели"]
         exported_total = sum(
-            cell.value or 0 for cell in exported["Показатели"]["I"][1:]
+            cell.value or 0 for cell in exported["Показатели"]["N"][1:]
         )
         source_total = sum(float(record.amount) for record in run.records)
         assert exported_total == pytest.approx(source_total)
@@ -372,6 +372,6 @@ def test_real_owner_budget_revenue_smoke_when_available(tmp_path):
         assert expense_export.sheetnames == ["OPIU Light", "ОПИУ", "Показатели"]
         indicators = expense_export["Показатели"]
         assert indicators.max_row > 1
-        assert {cell.value for cell in indicators["H"][1:]} == {None}
+        assert {cell.value for cell in indicators["L"][1:]} == {None}
     finally:
         expense_export.close()

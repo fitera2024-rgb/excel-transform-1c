@@ -99,6 +99,7 @@ BDR_KPI_HEAD_ANCHORS = frozenset(
         "Оборот в кг",
         "Выручка за 1 кг",
         "Себестоимость 1 кг",
+        "Итого расходов на 1 кг",
         "Валовая прибыль на 1 кг",
     }
 )
@@ -209,6 +210,24 @@ def _bdr_plan_month_schemas(
     return result
 
 
+def _bdr_department_column(
+    rows: list[tuple[Any, ...]],
+    month_header_row: int,
+    first_month_column: int,
+) -> int | None:
+    """Find one exact BDR ``Отдел`` column next to the detected month schema."""
+
+    matches: set[int] = set()
+    first_header_row = max(month_header_row - 2, 1)
+    last_header_row = min(month_header_row + 1, len(rows))
+    for row_number in range(first_header_row, last_header_row + 1):
+        row = rows[row_number - 1]
+        for column in range(1, min(first_month_column, len(row) + 1)):
+            if normalize_header(row[column - 1]) == "отдел":
+                matches.add(column)
+    return next(iter(matches)) if len(matches) == 1 else None
+
+
 def _bdr_row_label(
     row: tuple[Any, ...], label_columns: tuple[int, ...]
 ) -> tuple[str, int] | None:
@@ -249,7 +268,16 @@ def _bdr_full_candidate(
         scanned_rows
     ):
         first_month_column = min(month_columns.values())
-        label_columns = tuple(range(1, first_month_column))
+        department_column = _bdr_department_column(
+            scanned_rows,
+            month_header_row,
+            first_month_column,
+        )
+        label_columns = tuple(
+            column
+            for column in range(1, first_month_column)
+            if column != department_column
+        )
         if not label_columns:
             continue
         last_scan_row = min(sheet.max_row or max_scan_rows, max_scan_rows)
@@ -320,7 +348,10 @@ def _bdr_full_candidate(
                 header_row=month_header_row,
                 first_data_row=first_data_row,
                 last_data_row=last_data_row,
-                columns=month_columns,
+                columns={
+                    **month_columns,
+                    **({"department": department_column} if department_column else {}),
+                },
                 source_kind="bdr_full",
                 source_cfo=source_cfo,
                 source_year=source_year,
@@ -763,9 +794,19 @@ def _last_data_row(
     return last
 
 
-def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str) -> list[SourceRow]:
+def read_source_rows(
+    workbook: Any,
+    candidate: CandidateRange,
+    source_file: str,
+    bdr_cached_formula_values: dict[str, Any] | None = None,
+) -> list[SourceRow]:
     if candidate.source_kind == "bdr_full":
-        return _read_bdr_full_rows(workbook, candidate, source_file)
+        return _read_bdr_full_rows(
+            workbook,
+            candidate,
+            source_file,
+            bdr_cached_formula_values or {},
+        )
     if candidate.source_kind == "intalev_opiu":
         return _read_intalev_source_rows(workbook, candidate, source_file)
     if candidate.source_kind == "prepared_income_budget":
@@ -839,6 +880,7 @@ def _read_bdr_full_rows(
     workbook: Any,
     candidate: CandidateRange,
     source_file: str,
+    cached_formula_values: dict[str, Any],
 ) -> list[SourceRow]:
     sheet = workbook[candidate.sheet]
     max_column = max((*candidate.columns.values(), *candidate.label_columns))
@@ -852,24 +894,44 @@ def _read_bdr_full_rows(
     result: list[SourceRow] = []
     for row_number, row in enumerate(rows, start=candidate.first_data_row):
         labelled = _bdr_row_label(row, candidate.label_columns)
-        if labelled is None or not _has_bdr_month_value(row, candidate.columns):
+        if labelled is None:
             continue
         indicator, indicator_column = labelled
         indicator_type = _bdr_indicator_type(candidate, row_number)
-        month_values = tuple(
-            row[candidate.columns[f"month_{month}"] - 1]
+        month_cells = tuple(
+            f"{get_column_letter(candidate.columns[f'month_{month}'])}{row_number}"
             for month in range(1, 13)
         )
+        month_values = tuple(
+            cached_formula_values.get(cell, row[candidate.columns[f"month_{month}"] - 1])
+            if indicator_type == IndicatorType.KPI
+            else row[candidate.columns[f"month_{month}"] - 1]
+            for month, cell in enumerate(month_cells, start=1)
+        )
+        if not any(value not in (None, "") for value in month_values):
+            continue
         article_cell = f"{get_column_letter(indicator_column)}{row_number}"
+        department_column = candidate.columns.get("department")
+        kpi_department = (
+            row[department_column - 1]
+            if indicator_type == IndicatorType.KPI
+            and department_column is not None
+            and department_column <= len(row)
+            else ""
+        )
+        department_cell = (
+            f"{get_column_letter(department_column)}{row_number}"
+            if kpi_department and department_column is not None
+            else candidate.reporting_unit_cell or article_cell
+        )
         cells = {
             "article": article_cell,
             "indicator_type": article_cell,
-            "cfo": candidate.reporting_unit_cell or article_cell,
+            "cfo": department_cell,
             "reporting_unit": candidate.reporting_unit_cell or article_cell,
+            **({"department": department_cell} if kpi_department else {}),
             **{
-                f"month_{month}": (
-                    f"{get_column_letter(candidate.columns[f'month_{month}'])}{row_number}"
-                )
+                f"month_{month}": month_cells[month - 1]
                 for month in range(1, 13)
             },
         }
@@ -880,9 +942,9 @@ def _read_bdr_full_rows(
                 row_number=row_number,
                 reporting_unit=candidate.source_cfo,
                 expense_type="",
-                department="",
+                department=kpi_department,
                 organization_type="",
-                cfo=candidate.source_cfo,
+                cfo=kpi_department or candidate.source_cfo,
                 tax=None,
                 expense_group="",
                 article=indicator,

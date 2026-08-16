@@ -4,12 +4,16 @@ import re
 import tempfile
 import zipfile
 from contextlib import contextmanager
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from pathlib import Path
+from posixpath import normpath
 from typing import Iterator
+from xml.etree import ElementTree
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 from excel_transform_1c.adapters.workbook_repair import prepare_workbook
 from excel_transform_1c.core.detection import detect_candidate_ranges, read_source_rows
@@ -17,7 +21,7 @@ from excel_transform_1c.core.indicator_matching import (
     IndicatorExportRow,
     aggregate_indicator_rows,
 )
-from excel_transform_1c.core.models import CandidateRange, PreviewRecord
+from excel_transform_1c.core.models import CandidateRange, IndicatorType, PreviewRecord
 
 
 # Business export sheet. Reference names and codes intentionally use separate
@@ -78,6 +82,10 @@ ADO_OPIU_HEADERS = (
 ADO_INDICATOR_HEADERS = (
     "Организация",
     "Код организации",
+    "Департамент",
+    "Отдел",
+    "ЦФО",
+    "Код ЦФО",
     "Сценарий",
     "Год",
     "Месяц",
@@ -218,8 +226,146 @@ def read_path(path: str | Path, candidate: CandidateRange, source_file: str):
     # bounded workflow in normal mode because ReadOnlyWorksheet deliberately
     # omits row_dimensions; prepared-budget workbooks stay streaming/read-only.
     read_only = candidate.source_kind != "intalev_opiu"
+    cached_formula_values = (
+        _bdr_kpi_cached_formula_values(path, candidate)
+        if candidate.source_kind == "bdr_full"
+        else {}
+    )
     with load_cached_workbook(path, read_only=read_only) as workbook:
-        return read_source_rows(workbook, candidate, source_file)
+        return read_source_rows(
+            workbook,
+            candidate,
+            source_file,
+            cached_formula_values,
+        )
+
+
+def _bdr_kpi_cached_formula_values(
+    path: str | Path,
+    candidate: CandidateRange,
+) -> dict[str, object]:
+    """Read only saved formula results for exact KPI month coordinates.
+
+    ``openpyxl(data_only=True)`` remains the primary value reader. This small
+    OOXML fallback covers formula variants where the cached ``<v>`` exists but
+    is not surfaced by the library. Formula text is never returned.
+    """
+
+    source_path = Path(path)
+    if not source_path.exists():
+        return {}
+    kpi_rows = {
+        row_number
+        for indicator_type, first_row, last_row in candidate.indicator_blocks
+        if indicator_type == IndicatorType.KPI
+        for row_number in range(first_row, last_row + 1)
+    }
+    target_cells = {
+        f"{get_column_letter(candidate.columns[f'month_{month}'])}{row_number}"
+        for row_number in kpi_rows
+        for month in range(1, 13)
+    }
+    result: dict[str, object] = {}
+    try:
+        prepared_path = prepare_workbook(source_path).working_path
+        with zipfile.ZipFile(prepared_path) as archive:
+            sheet_part = _worksheet_part(archive, candidate.sheet)
+            if not sheet_part:
+                return {}
+            with archive.open(sheet_part) as sheet_xml:
+                for _, cell in ElementTree.iterparse(sheet_xml, events=("end",)):
+                    element_name = _local_name(cell.tag)
+                    if element_name != "c":
+                        if element_name == "row":
+                            cell.clear()
+                        continue
+                    coordinate = cell.attrib.get("r", "")
+                    if coordinate in target_cells:
+                        formula = next(
+                            (
+                                child
+                                for child in cell
+                                if _local_name(child.tag) == "f"
+                            ),
+                            None,
+                        )
+                        cached = next(
+                            (
+                                child
+                                for child in cell
+                                if _local_name(child.tag) == "v"
+                            ),
+                            None,
+                        )
+                        if (
+                            cached is not None
+                            and cached.text is not None
+                            and formula is not None
+                        ):
+                            result[coordinate] = _cached_formula_scalar(
+                                cell.attrib.get("t", "n"),
+                                cached.text,
+                            )
+                    cell.clear()
+    except (OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError):
+        return {}
+    return result
+
+
+def _worksheet_part(archive: zipfile.ZipFile, sheet_name: str) -> str:
+    workbook_root = ElementTree.fromstring(archive.read("xl/workbook.xml"))
+    relation_id = ""
+    for element in workbook_root.iter():
+        if _local_name(element.tag) != "sheet" or element.attrib.get("name") != sheet_name:
+            continue
+        relation_id = next(
+            (
+                value
+                for name, value in element.attrib.items()
+                if _local_name(name) == "id"
+            ),
+            "",
+        )
+        break
+    if not relation_id:
+        return ""
+
+    relations_root = ElementTree.fromstring(
+        archive.read("xl/_rels/workbook.xml.rels")
+    )
+    target = next(
+        (
+            element.attrib.get("Target", "")
+            for element in relations_root.iter()
+            if _local_name(element.tag) == "Relationship"
+            and element.attrib.get("Id") == relation_id
+        ),
+        "",
+    )
+    if not target:
+        return ""
+    if target.startswith("/"):
+        return target.lstrip("/")
+    if target.startswith("xl/"):
+        return target
+    return normpath(f"xl/{target}")
+
+
+def _cached_formula_scalar(cell_type: str, value: str) -> object:
+    if cell_type == "e":
+        return value
+    if cell_type == "b":
+        return value == "1"
+    if cell_type in {"", "n"}:
+        try:
+            return Decimal(value)
+        except InvalidOperation:
+            return value
+    return value
+
+
+def _local_name(name: str) -> str:
+    return name.rsplit("}", 1)[-1]
 
 
 def _style_header(sheet, headers: tuple[str, ...], last_column: str) -> None:
@@ -360,7 +506,7 @@ def _write_ado_indicators_sheet(
     records: list[PreviewRecord],
 ) -> None:
     sheet.title = "Показатели"
-    _style_header(sheet, ADO_INDICATOR_HEADERS, "J")
+    _style_header(sheet, ADO_INDICATOR_HEADERS, "N")
     organization_references = _indicator_organization_references(records)
     for row in rows:
         organization, organization_code = organization_references.get(
@@ -371,6 +517,10 @@ def _write_ado_indicators_sheet(
             (
                 organization or None,
                 organization_code or None,
+                row.department or None,
+                row.cfo or None,
+                row.cfo or None,
+                row.cfo_code or None,
                 row.scenario,
                 row.year,
                 row.month,
@@ -381,25 +531,30 @@ def _write_ado_indicators_sheet(
                 float(row.amount),
             )
         )
-    sheet.auto_filter.ref = f"A1:J{max(len(rows) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:N{max(len(rows) + 1, 1)}"
     widths = {
         "A": 28,
         "B": 20,
-        "C": 18,
-        "D": 10,
-        "E": 10,
-        "F": 12,
+        "C": 28,
+        "D": 28,
+        "E": 28,
+        "F": 16,
         "G": 18,
-        "H": 26,
-        "I": 24,
-        "J": 16,
+        "H": 10,
+        "I": 10,
+        "J": 12,
+        "K": 18,
+        "L": 26,
+        "M": 24,
+        "N": 16,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
-    for cell in sheet["B"]:
-        cell.number_format = "@"
-    sheet["J1"].alignment = Alignment(horizontal="center", vertical="center")
-    for cell in sheet["J"][1:]:
+    for column in ("B", "F"):
+        for cell in sheet[column]:
+            cell.number_format = "@"
+    sheet["N1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["N"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 

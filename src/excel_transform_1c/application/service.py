@@ -35,6 +35,7 @@ from excel_transform_1c.core.indicator_matching import (
 )
 from excel_transform_1c.baselines import baseline_counts
 from excel_transform_1c.core.indicator_resolvers import IndicatorResolverEngine
+from excel_transform_1c.core.kpi import kpi_results_from_records
 from excel_transform_1c.core.models import (
     ArticleIndicatorRule,
     CandidateRange,
@@ -42,6 +43,7 @@ from excel_transform_1c.core.models import (
     IntalevCFO,
     IndicatorType,
     Issue,
+    KPIResult,
     OrganizationNode,
     PreviewRecord,
     ProcessedRun,
@@ -466,6 +468,11 @@ class WorkflowService:
             source_row: records[0].indicator_type
             for source_row, records in by_row.items()
         }
+        kpi_by_row = {
+            source_row: records
+            for source_row, records in by_row.items()
+            if source_types[source_row] == IndicatorType.KPI
+        }
         matched = {
             source_row
             for source_row, records in by_row.items()
@@ -519,6 +526,33 @@ class WorkflowService:
                 value == IndicatorType.EXPENSE for value in source_types.values()
             ),
             "kpi": sum(value == IndicatorType.KPI for value in source_types.values()),
+            "kpi_found": len(kpi_by_row),
+            "kpi_with_organization": sum(
+                any(
+                    record.organization_unit and record.organization_unit_code
+                    for record in records
+                )
+                for records in kpi_by_row.values()
+            ),
+            "kpi_with_period": sum(
+                any(
+                    record.month in range(1, 13) and record.year > 0
+                    for record in records
+                )
+                for records in kpi_by_row.values()
+            ),
+            "kpi_with_value": sum(
+                any(record.amount is not None for record in records)
+                for records in kpi_by_row.values()
+            ),
+            "kpi_exported": sum(
+                any(
+                    record.amount is not None
+                    and record.indicator_match_status == INDICATOR_MATCHED
+                    for record in records
+                )
+                for records in kpi_by_row.values()
+            ),
             "indicators": len(by_row),
             "matched": len(matched),
             "exported": len(exported),
@@ -529,6 +563,9 @@ class WorkflowService:
             ),
             "exclusions": exclusions,
         }
+
+    def kpi_results(self, run_id: str) -> list[KPIResult]:
+        return kpi_results_from_records(self.get_run(run_id).visible_records())
 
     @staticmethod
     def _issue_is_inline_editable(issue: Issue) -> bool:

@@ -13,7 +13,7 @@ from excel_transform_1c.adapters.excel import (
 from excel_transform_1c.ui.app import create_app
 from tests.helpers.workbooks import (
     BDR_FULL_INDICATORS,
-    bdr_full_workbook_bytes,
+    bdr_formula_workbook_bytes,
     erp_organization_hierarchy_bytes,
 )
 
@@ -56,7 +56,7 @@ def test_bdr_full_start_preview_export_stop(tmp_path) -> None:
             files={
                 "budget_file": (
                     "БДР 2026 ИТОГ.xlsx",
-                    bdr_full_workbook_bytes(reporting_unit=reporting_unit),
+                    bdr_formula_workbook_bytes(reporting_unit=reporting_unit),
                     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
             },
@@ -67,7 +67,11 @@ def test_bdr_full_start_preview_export_stop(tmp_path) -> None:
         assert "Прочитано строк БДР:" in response.text
         assert "Доходные показатели:" in response.text
         assert "Расходные показатели:" in response.text
-        assert "KPI показатели:" in response.text
+        assert "KPI найдено:" in response.text
+        assert "KPI с организацией:" in response.text
+        assert "KPI с периодом:" in response.text
+        assert "KPI со значением:" in response.text
+        assert "KPI экспортировано:" in response.text
         assert "Все прочитанные показатели имеют экспортируемые значения" in response.text
         assert 'data-testid="indicator-classifier-summary"' not in response.text
 
@@ -110,6 +114,6 @@ def test_bdr_full_start_preview_export_stop(tmp_path) -> None:
             assert first[headers["Тип показателя"] - 1].value == "KPI"
             assert first[headers["Показатель"] - 1].value == "Оборот в кг"
             assert first[headers["Период"] - 1].value == "01.2026"
-            assert first[headers["Значение"] - 1].value == 10
+            assert first[headers["Значение"] - 1].value == 593845
         finally:
             workbook.close()

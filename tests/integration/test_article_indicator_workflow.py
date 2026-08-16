@@ -170,10 +170,10 @@ def test_indicator_export_populates_all_result_sheets_without_changing_financial
         indicators = workbook["Показатели"]
         assert tuple(cell.value for cell in indicators[1]) == ADO_INDICATOR_HEADERS
         assert indicators.max_row == 25
-        assert {cell.value for cell in indicators["I"][1:]} == {
+        assert {cell.value for cell in indicators["M"][1:]} == {
             "Услуги связи",
             "Маркетинговые расходы",
         }
-        assert any(cell.value == 0 for cell in indicators["J"][1:])
+        assert any(cell.value == 0 for cell in indicators["N"][1:])
     finally:
         workbook.close()

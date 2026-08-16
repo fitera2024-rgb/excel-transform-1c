@@ -39,7 +39,7 @@ HEADERS = [
 BDR_FULL_INDICATORS = (
     (10, "Оборот в кг"),
     (11, "Выручка за 1 кг"),
-    (12, "Себестоимость 1 кг"),
+    (12, "Итого расходов на 1 кг"),
     (13, "Валовая прибыль на 1 кг"),
     (20, "Выручка ИТОГО"),
     (21, "Прочие доходы по основной деятельности"),
@@ -66,11 +66,13 @@ def bdr_full_workbook_bytes(
     sheet = workbook.active
     sheet.title = "Произвольный сводный лист"
     sheet.cell(2, 1, reporting_unit)
+    sheet.cell(2, 5, "Отдел")
     for month in range(1, 13):
         column = 22 + month
         sheet.cell(2, column, datetime(2026, month, 1))
         sheet.cell(3, column, "план")
     for row_number, indicator in BDR_FULL_INDICATORS:
+        sheet.cell(row_number, 5, reporting_unit)
         sheet.cell(row_number, 7, indicator)
         for month in range(1, 13):
             sheet.cell(
@@ -101,6 +103,63 @@ def bdr_full_workbook_bytes(
     workbook.save(output)
     workbook.close()
     return output.getvalue()
+
+
+def bdr_formula_workbook_bytes(
+    *,
+    reporting_unit: str = "АЮ Отдел обеспечения",
+    indicator: str = "Оборот в кг",
+    month: int = 1,
+    cached_value: int = 593845,
+) -> bytes:
+    """Whole-BDR fixture whose KPI month is a formula with a saved result."""
+
+    raw = bdr_full_workbook_bytes(reporting_unit=reporting_unit)
+    row_number = next(
+        row for row, name in BDR_FULL_INDICATORS if name == indicator
+    )
+    coordinate = f"{_column_letter(22 + month)}{row_number}"
+    return _replace_numeric_cell_with_cached_formula(
+        raw,
+        coordinate,
+        row_number * month,
+        f"SUM({cached_value},0)",
+        cached_value,
+    )
+
+
+def _replace_numeric_cell_with_cached_formula(
+    workbook_bytes: bytes,
+    coordinate: str,
+    original_value: int,
+    formula: str,
+    cached_value: int,
+) -> bytes:
+    with ZipFile(BytesIO(workbook_bytes), "r") as source:
+        members = {name: source.read(name) for name in source.namelist()}
+    sheet_name = "xl/worksheets/sheet1.xml"
+    xml = members[sheet_name].decode("utf-8")
+    original = f'<c r="{coordinate}" t="n"><v>{original_value}</v></c>'
+    replacement = (
+        f'<c r="{coordinate}"><f>{formula}</f><v>{cached_value}</v></c>'
+    )
+    if original not in xml:
+        raise AssertionError(f"Fixture cell not found: {coordinate}")
+    members[sheet_name] = xml.replace(original, replacement, 1).encode("utf-8")
+    output = BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as target:
+        for name, data in members.items():
+            target.writestr(name, data)
+    return output.getvalue()
+
+
+def _column_letter(column: int) -> str:
+    letters = ""
+    current = column
+    while current:
+        current, remainder = divmod(current - 1, 26)
+        letters = chr(65 + remainder) + letters
+    return letters
 
 
 def workbook_bytes(

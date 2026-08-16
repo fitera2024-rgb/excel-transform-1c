@@ -31,6 +31,9 @@ class IndicatorMatch:
 @dataclass(frozen=True)
 class IndicatorExportRow:
     organization: str
+    department: str
+    cfo: str
+    cfo_code: str
     scenario: str
     year: int
     month: int
@@ -123,7 +126,7 @@ def aggregate_indicator_rows(records: list[PreviewRecord]) -> list[IndicatorExpo
     """Aggregate only complete direct matches by the exact business key."""
 
     amounts: dict[
-        tuple[str, str, int, int, str, str, str, str], Decimal
+        tuple[str, str, str, str, str, int, int, str, str, str, str], Decimal
     ] = defaultdict(Decimal)
     for record in records:
         if (
@@ -133,8 +136,12 @@ def aggregate_indicator_rows(records: list[PreviewRecord]) -> list[IndicatorExpo
         ):
             continue
         period = f"{record.month:02d}.{record.year}"
+        cfo = record.erp_department or record.cfo
         key = (
             record.organization,
+            record.department,
+            cfo,
+            record.cfo_code,
             record.scenario,
             record.year,
             record.month,

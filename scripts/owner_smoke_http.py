@@ -38,6 +38,10 @@ ADO_OPIU_HEADERS = (
 ADO_INDICATOR_HEADERS = (
     "Организация",
     "Код организации",
+    "Департамент",
+    "Отдел",
+    "ЦФО",
+    "Код ЦФО",
     "Сценарий",
     "Год",
     "Месяц",
@@ -165,13 +169,14 @@ def budget_bytes() -> bytes:
     sheet = workbook.active
     sheet.title = "Синтетический бизнес-свод"
     sheet.cell(2, 1, "АЮ Административный Отдел")
+    sheet.cell(2, 5, "Отдел")
     for month in range(1, 13):
         sheet.cell(2, 22 + month, datetime(2026, month, 1))
         sheet.cell(3, 22 + month, "план")
     indicators = (
         (10, "Оборот в кг"),
         (11, "Выручка за 1 кг"),
-        (12, "Себестоимость 1 кг"),
+        (12, "Итого расходов на 1 кг"),
         (13, "Валовая прибыль на 1 кг"),
         (20, "Выручка ИТОГО"),
         (21, "Прочие доходы по основной деятельности"),
@@ -185,6 +190,7 @@ def budget_bytes() -> bytes:
         (41, "Операционная прибыль"),
     )
     for row_number, indicator in indicators:
+        sheet.cell(row_number, 5, "АЮ Административный Отдел")
         sheet.cell(row_number, 7, indicator)
         for month in range(1, 13):
             sheet.cell(row_number, 22 + month, row_number * month)
@@ -318,17 +324,17 @@ def assert_export(payload: bytes) -> None:
         assert tuple(cell.value for cell in workbook["ОПИУ"][1]) == ADO_OPIU_HEADERS
         assert tuple(cell.value for cell in workbook["Показатели"][1]) == ADO_INDICATOR_HEADERS
         assert workbook["ОПИУ"].max_column == 20
-        assert workbook["Показатели"].max_column == 10
+        assert workbook["Показатели"].max_column == 14
         assert workbook["Показатели"].max_row == 14 * 12 + 1
         rows = list(
             workbook["Показатели"].iter_rows(min_row=2, values_only=True)
         )
-        assert {row[6] for row in rows} == {
+        assert {row[10] for row in rows} == {
             "Доход",
             "Расход",
             "KPI",
         }
-        assert "Оборот в кг" in {row[8] for row in rows}
+        assert "Оборот в кг" in {row[12] for row in rows}
     finally:
         workbook.close()
 
@@ -342,7 +348,11 @@ def initial_owner_smoke(opener, base_url: str) -> None:
         "Прочитано строк БДР:",
         "Доходные показатели:",
         "Расходные показатели:",
-        "KPI показатели:",
+        "KPI найдено:",
+        "KPI с организацией:",
+        "KPI с периодом:",
+        "KPI со значением:",
+        "KPI экспортировано:",
         "Количество показателей:",
         "Сопоставлено:",
         "Экспортировано:",
@@ -351,7 +361,11 @@ def initial_owner_smoke(opener, base_url: str) -> None:
     assert re.search(r"Прочитано строк БДР:</dt><dd>14</dd>", initial_html)
     assert re.search(r"Доходные показатели:</dt><dd>3</dd>", initial_html)
     assert re.search(r"Расходные показатели:</dt><dd>5</dd>", initial_html)
-    assert re.search(r"KPI показатели:</dt><dd>6</dd>", initial_html)
+    assert re.search(r"KPI найдено:</dt><dd>6</dd>", initial_html)
+    assert re.search(r"KPI с организацией:</dt><dd>6</dd>", initial_html)
+    assert re.search(r"KPI с периодом:</dt><dd>6</dd>", initial_html)
+    assert re.search(r"KPI со значением:</dt><dd>6</dd>", initial_html)
+    assert re.search(r"KPI экспортировано:</dt><dd>6</dd>", initial_html)
     assert re.search(r"Сопоставлено:</dt><dd>14</dd>", initial_html)
     assert 'data-testid="indicator-classifier-summary"' not in initial_html
     assert "Проверка завершена" in initial_html

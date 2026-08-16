@@ -75,7 +75,7 @@ def test_bdr_detect_kpi_block() -> None:
         assert {
             "Оборот в кг",
             "Выручка за 1 кг",
-            "Себестоимость 1 кг",
+            "Итого расходов на 1 кг",
             "Валовая прибыль на 1 кг",
             "EBITDA",
             "Операционная прибыль",
@@ -136,6 +136,11 @@ def test_bdr_export_not_empty(tmp_path) -> None:
     assert diagnostics["income"] == 3
     assert diagnostics["expense"] == 5
     assert diagnostics["kpi"] == 6
+    assert diagnostics["kpi_found"] == 6
+    assert diagnostics["kpi_with_organization"] == 6
+    assert diagnostics["kpi_with_period"] == 6
+    assert diagnostics["kpi_with_value"] == 6
+    assert diagnostics["kpi_exported"] == 6
     assert diagnostics["matched"] == len(BDR_FULL_INDICATORS)
     assert diagnostics["exported"] == len(BDR_FULL_INDICATORS)
     assert diagnostics["exclusions"] == []
