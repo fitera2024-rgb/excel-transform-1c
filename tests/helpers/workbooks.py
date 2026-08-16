@@ -303,7 +303,14 @@ def real_reference_bytes(kind: str) -> bytes:
     return output.getvalue()
 
 
-def erp_organization_hierarchy_bytes(*, cfo_code: str = "000000173") -> bytes:
+def erp_organization_hierarchy_bytes(
+    *,
+    cfo_code: str = "000000173",
+    cfo_name: str = "АЮ Административный Отдел",
+    source_department: str = "Административный департамент",
+    organization_name: str = 'ООО "Айс Юнион"',
+    organization_code: str = "000000001",
+) -> bytes:
     """Synthetic structural analogue of the ERP organization hierarchy export."""
 
     workbook = Workbook()
@@ -314,20 +321,20 @@ def erp_organization_hierarchy_bytes(*, cfo_code: str = "000000173") -> bytes:
     sheet.cell(8, 32, "Верхний уровень иерархии")
     sheet.cell(8, 39, "Код")
 
-    sheet.cell(9, 1, 'ООО "Айс Юнион"')
-    sheet.cell(10, 1, "АЮ Административный Отдел")
-    sheet.cell(11, 1, "Административный департамент")
-    sheet.cell(11, 7, "АЮ Административный Отдел")
-    sheet.cell(11, 32, 'ООО "Айс Юнион"')
+    sheet.cell(9, 1, organization_name)
+    sheet.cell(10, 1, cfo_name)
+    sheet.cell(11, 1, source_department)
+    sheet.cell(11, 7, cfo_name)
+    sheet.cell(11, 32, organization_name)
     sheet.cell(11, 39, cfo_code)
 
     # The real export may list the coded organization element after its
     # subordinate CFO rows. The explicit parent column, not row order, is the
     # relationship authority for enrichment.
-    sheet.cell(12, 1, 'ООО "Айс Юнион"')
-    sheet.cell(13, 7, 'ООО "Айс Юнион"')
+    sheet.cell(12, 1, organization_name)
+    sheet.cell(13, 7, organization_name)
     sheet.cell(13, 32, "4 Владивосток")
-    sheet.cell(13, 39, "000000001")
+    sheet.cell(13, 39, organization_code)
 
     output = BytesIO()
     workbook.save(output)

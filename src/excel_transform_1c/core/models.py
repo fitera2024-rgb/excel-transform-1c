@@ -123,6 +123,18 @@ class OrganizationNode:
 
 
 @dataclass(frozen=True)
+class OrganizationHierarchyNode:
+    """One node of the business organization hierarchy resolved from ERP."""
+
+    id: str
+    name: str
+    code: str
+    parent_id: str | None
+    level: int
+    type: str
+
+
+@dataclass(frozen=True)
 class IntalevCFO:
     source_key: str
     code: str
