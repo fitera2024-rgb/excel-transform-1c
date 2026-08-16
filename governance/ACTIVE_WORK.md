@@ -1,57 +1,69 @@
 # Active Work
 
-STATUS: `THREE_SHEET_EXPORT_READY / AUTO_ARTICLE_INDICATOR_MATCHING_READY_FOR_CODEX / DRAFT / NO_MERGE / NO_LIVE_WRITE`
+STATUS: `OWNER_GATE_ACCEPTED / CANONICAL_L_INTEGRATION_DISPATCH_READY / CONFLICTS_REQUIRE_SEMANTIC_RESOLUTION / DRAFT / NO_MERGE / NO_RELEASE / NO_LIVE_WRITE`
 
-## Current vertical slice
+## Current objective
 
-`Built-in references → content-based Excel preparation → prepared budget or Intalev OPIU → exact ERP/tax/CFO decisions → automatic direct article-to-indicator matching → 12-month preview → three-sheet XLSX export`
+Create one canonical preview/export release candidate that combines the accepted capabilities of PR #24 and PR #25:
 
-## Canonical implementation
+`prepared budgets + full BDR KPI/revenue/expenses + annual/monthly Intalev OPIU → exact ERP/tax/CFO and disclosure-group/formula-source decisions → maximum preview → OPIU Light / ОПИУ / Показатели export`
+
+## Owner gate
+
+Accepted on `2026-08-17`:
+
+- PR #25 does not supersede PR #24;
+- both development lines are required in the next canonical release candidate;
+- ADO, ODBC, SQL/1C write and live write remain forbidden.
+
+Authority:
+
+- Issue `#27`;
+- `governance/handoffs/HANDOFF-OWNER-GATE-CANONICAL-PREVIEW-EXPORT-20260817-001.md`.
+
+## Exact Git authority
 
 - Repository: `fitera2024-rgb/excel-transform-1c`.
-- Working branch: `feat/final-owner-smoke-fitera-v2`.
-- Draft PR: `#23`, not merged.
-- Exact implementation start is the commit that adds `governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
-- Three-sheet export already preserves `OPIU Light` and adds `ОПИУ` plus `Показатели`.
-
-## Current owner decision
-
-Normal user must not manage technical Rules manually.
-
-When a loaded classifier contains a direct correspondence `статья → показатель`, the service must find and apply one unique exact match automatically. Missing or ambiguous matches stay visible as `Требует внимания`; fuzzy, typo and case-only matching remain forbidden.
+- Canonical branch: `integration/canonical-preview-export-v1`.
+- Initial PR #25 parent: `c713cee112e4b935b3a5b2c319d23fc6cbf180cb`.
+- Mandatory PR #24 parent: `77645317b673b2e57dea803410126a61cdaf6d83`.
+- Common base: `b712cadba6d035108c56dcc9746ff42443c3b07c`.
+- Conflict-discovery Draft PR: `#26`, merge state `dirty`.
 
 ## Active registry
 
-- Work registry: `governance/tasks/WORK-REGISTRY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
-- Codex implementation task: `governance/tasks/CODEX-TASK-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
-- Coordinator QA task: `governance/tasks/COORDINATOR-QA-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
-- Exact task marker: `governance/tasks/TASK-READY-AUTO-ARTICLE-INDICATOR-20260815-001.md`.
+- Work: `governance/tasks/WORK-CANONICAL-PREVIEW-EXPORT-20260817-001.md`.
+- Codex: `governance/tasks/CODEX-TASK-CANONICAL-PREVIEW-EXPORT-INTEGRATION-20260817-001.md`.
+- Coordinator QA: `governance/tasks/COORDINATOR-QA-CANONICAL-PREVIEW-EXPORT-20260817-001.md`.
 
-## Responsibility split
+## Current action
 
-### Codex
+`DISPATCH_CODEX_SEMANTIC_INTEGRATION`
 
-- direct classifier import and persistence;
-- exact matcher `article → indicator`;
-- automatic filling and aggregation of `Показатели`;
-- simplified UI without required Rules workflow;
-- tests, handoff and green CI;
-- final marker `READY_FOR_COORDINATOR_QA_AUTO_INDICATORS`.
+Codex must:
 
-### ChatGPT coordinator
+1. start from the exact contract head pinned in Issue #27;
+2. create an ordinary two-parent integration preserving both exact histories;
+3. resolve overlapping files field-by-field;
+4. preserve all tests and business semantics from both parents;
+5. synchronize Product, User Flow, Architecture, Decisions and Feature Baseline;
+6. run full CI and Windows package smoke;
+7. return `READY_FOR_COORDINATOR_QA_CANONICAL_INTEGRATION` with an exact handoff.
 
-- Product Contract and acceptance boundaries;
-- Git/PR/diff/tests/handoff review;
-- ambiguity and financial-semantics audit;
-- example ADO verification;
-- Windows package smoke;
-- Owner UX Smoke and final package delivery.
+## Gates after Codex
+
+1. independent coordinator Git/diff/test/package QA;
+2. source reconciliation review;
+3. Owner UX Smoke on one exact package;
+4. separate explicit merge decision.
 
 ## Forbidden
 
-- merge without owner acceptance;
-- ADO/ODBC/1C/live write;
-- fuzzy, typo, case-only or contains matching;
-- invented indicators, channels or reference codes;
-- real Excel, passwords or runtime databases in Git;
-- removal of the legacy `OPIU Light` sheet.
+- merge to `main` or release during integration;
+- squash, rebase or history rewrite of the accepted parents;
+- wholesale conflict resolution by unexplained `ours`/`theirs`;
+- ADO, ODBC, direct SQL, 1C write or live write;
+- fuzzy/contains/typo/case-only matching;
+- universal Rules Engine or technical normal-user rules UI;
+- real owner Excel/MXL, passwords, runtime DB or row-level financial output in Git;
+- removal of either accepted parent capability without a new owner decision.
