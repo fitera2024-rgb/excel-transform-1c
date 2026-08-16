@@ -362,7 +362,27 @@ try {
     }
     Write-Host "Компоненты приложения проверены."
 
-    $runtimeDirectory = if ($env:OPIU_RUNTIME_DIR) { $env:OPIU_RUNTIME_DIR } else { Join-Path $root "runtime" }
+    if ($env:OPIU_RUNTIME_DIR) {
+        $runtimeDirectory = $env:OPIU_RUNTIME_DIR
+    } else {
+        $packageRuntimeDirectory = Join-Path $root "runtime"
+        $runtimeDirectory = $packageRuntimeDirectory
+        if ($packageVenvDirectory.Length -gt 100 -and $env:LOCALAPPDATA) {
+            $runtimeDirectory = Join-Path $env:LOCALAPPDATA "FITERA\ExcelToOpiuLight\runtime"
+            Write-Host "Путь распаковки длинный; рабочие файлы Excel будут храниться в короткой системной папке."
+            Write-Host "Рабочие данные: $runtimeDirectory"
+
+            # Preserve catalogs and confirmed mappings from an earlier launch
+            # that used package-local storage. Transient uploads and RUN files
+            # are intentionally not copied into the short path.
+            $packageDatabase = Join-Path $packageRuntimeDirectory "local.db"
+            $shortDatabase = Join-Path $runtimeDirectory "local.db"
+            if ((Test-Path -LiteralPath $packageDatabase) -and -not (Test-Path -LiteralPath $shortDatabase)) {
+                New-Item -ItemType Directory -Path $runtimeDirectory -Force | Out-Null
+                Copy-Item -LiteralPath $packageDatabase -Destination $shortDatabase
+            }
+        }
+    }
     New-Item -ItemType Directory -Path $runtimeDirectory -Force | Out-Null
     $env:EXCEL_TRANSFORM_RUNTIME = $runtimeDirectory
 

@@ -116,14 +116,15 @@ jobs:
             if (-not (Test-Path -LiteralPath $required)) { throw "Missing package file: $required" }
           }
 
-          $runtime = Join-Path $env:RUNNER_TEMP "fitera-final-v2-runtime"
+          $runtime = Join-Path $env:LOCALAPPDATA "FITERA\ExcelToOpiuLight\runtime"
           Remove-Item -LiteralPath $runtime -Recurse -Force -ErrorAction SilentlyContinue
           $env:OPIU_PORT = "8765"
-          $env:OPIU_RUNTIME_DIR = $runtime
+          Remove-Item Env:OPIU_RUNTIME_DIR -ErrorAction SilentlyContinue
           $env:OPIU_NONINTERACTIVE = "1"
 
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
           if ($LASTEXITCODE -ne 0) { throw "First launcher run failed" }
+          $env:OPIU_RUNTIME_DIR = $runtime
           $url = (Get-Content -LiteralPath (Join-Path $runtime "service.url") -Raw).Trim()
           $firstPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
           $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
