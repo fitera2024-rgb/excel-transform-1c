@@ -1,121 +1,89 @@
-# HANDOFF CODEX-06: Revenue and Quantity Indicator Engine
+# HANDOFF CODEX-06: Revenue + Quantity Indicators Engine
+
+> **STATUS: READY_FOR_OWNER_UX_SMOKE_REVENUE_QUANTITY.** The coordinator gap report has been addressed. This handoff replaces the earlier `SUPERSEDED / CHANGES_REQUIRED` state.
 
 ## Git boundary
 
 - Repository: `fitera2024-rgb/excel-transform-1c`
 - Branch: `feat/final-owner-smoke-fitera-v2`
 - Base SHA: `61c30fd2ed4a13c6bdb392bf2e614a7c40b60677`
-- Final SHA (implementation): `8dc3007e1bed84031dbe7cbdab3608778e91301d`
-- The handoff is committed separately so the document can contain the immutable implementation SHA.
-- Merge, release, PR, ADO, ODBC, 1C write and live write were not performed.
+- Final implementation SHA: `73cae073366900007eed473acaaa821b33f1507c`
+- The handoff is committed separately so it can contain the immutable implementation SHA. The delivery HEAD is reported with the owner handoff.
+- No merge, PR, release, push, ADO, ODBC, 1C write or live write was performed.
 
-## What changed
+## Delivered behavior
 
-- Added explicit indicator classification: `EXPENSE`, `REVENUE`, `QUANTITY`.
-- Every classifier rule and every Preview record now has an indicator type.
-- Added exact structural input fields for revenue and quantity without making them required for legacy prepared-budget inputs.
-- Added type labels to Preview: `Расход`, `Доход`, `Количество`.
-- Missing, incomplete or ambiguous revenue/quantity links remain `Требует внимания`.
-- Kept the export contract unchanged: sheets `OPIU Light`, `ОПИУ`, `Показатели` and their existing columns.
-- Packaged all supplied OPIU reference content as normalized immutable baselines: 517 formulas, 517 analytics rows, 683 report indicators, 310 MXL selections, 22 regions and 233 networks.
-- Added 208 exact expense links derived from MXL hierarchy filters and full ERP disclosure paths. A clean install loads them automatically; the user no longer uploads the raw report-indicator export as a classifier.
+- Added explicit indicator types `EXPENSE`, `REVENUE` and `QUANTITY`, including Preview labels `Расход`, `Доход` and `Количество`.
+- Preserved the expense chain `группа раскрытия → статья → условия формулы → показатель`.
+- Expense completeness and export are type-aware: `sales_channel` is not required for an exact expense result. The real owner expense range exports matched indicators with an empty channel.
+- Revenue analytics are read only from the selected input-budget row: `Контрагент`, `ИНТ канал сбыта`/`Канал сбыта`, `Сеть`, `Регион продаж`, and `Номенклатура` when declared by a rule. No ERP counterparty card or enrichment query is used.
+- `RevenueResolver` requires an exact group + article match, optional exact full path, and exact values for every constraint declared by the rule. A formula condition is compared only when the input row contains one.
+- `QuantityResolver` requires exact nomenclature + unit, a present quantity value, and one exact catalog link.
+- Missing required input is `Требует внимания`; mismatch is unresolved; multiple exact candidates are ambiguous. There is no fuzzy, `contains`, name-only, first-candidate or guessed fallback.
+- Export sheet names and column structures remain unchanged: `OPIU Light`, `ОПИУ`, `Показатели`.
 
-## Resolver boundary
+## Packaged rules and source coverage
 
-- `ExpenseResolver` is an alias of the existing `ExactArticleIndicatorMatcher`.
-- `src/excel_transform_1c/core/indicator_matching.py` was not modified.
-- `RevenueResolver` uses one exact key: group of revenue + article + formula condition + analytics. It does not use fuzzy, contains, title-only matching or first-result selection.
-- `QuantityResolver` requires quantity in the source row, nomenclature, unit and one exact nomenclature/unit link to an indicator.
-- `IndicatorResolverEngine` routes each Preview record to exactly one resolver by its explicit/structurally detected type.
-- `SelectionExpenseResolver` handles only packaged filter-proven rules and requires the exact full path `expense type → disclosure group → article`; it never falls back to a title or selects a first candidate.
-- The legacy `ExpenseResolver` remains the unchanged direct matcher for existing/user-supplied rules. `src/excel_transform_1c/core/indicator_matching.py` is still unchanged.
+- Total active classifier rules: **215**.
+- `EXPENSE`: **208** exact packaged rules.
+- `REVENUE`: **7** new exact packaged rules; derivation audit `7 candidates / 7 derived / 0 unresolved / 0 ambiguous`.
+- `QUANTITY`: **0** packaged rules; source audit `7 candidates / 0 derived / 7 unresolved / 0 ambiguous`.
+- The seven revenue rules cover the exact owner BDR articles `Опт`, `Розница`, `HoReCa`, `Сети ДВ`, `Сети Федеральные`, `Дискаунтеры ДВ`, and `Дискаунтеры Федеральные` under `Выручка_продажи внешние`.
+- No supplied source contains an authoritative concrete `Номенклатура + Единица измерения → Показатель` pair. Quantity rows therefore remain `Требует внимания`; creating a rule by inference would violate the owner safety boundary.
 
-## Source evidence used
+Normalized read-only evidence packaged by the builder:
 
-The supplied workbooks and MXL were inspected read-only; source files were not changed or added to Git:
+- 517 formula rows;
+- 517 analytics rows;
+- 310 MXL source selections;
+- 683 report indicators;
+- 22 regions;
+- 233 networks.
 
-- `ОПИУ ФОРМУЛЫ.xlsx`
-- `ОПИУ аНАЛИТИКИ.xlsx`
-- `Источники для ОПИУ_ ЕРП.mxl`
-- `ПоказателиОтчетов_ОПИУ_ЕРП.xlsx`
-- `Регионы.xlsx`
-- `СЕТИ.xlsx`
+The exact MXL evidence SHA-256 is `fa24195774e7e0d90f1aee523efccf2eb4b51f9c02540251034c54a2258c7864`.
 
-Observed evidence used in the resolver contract:
+## Real owner-budget smoke
 
-- formula and analytics rows align by the same exact business-row sequence;
-- the MXL supplies exact source/formula relationships for only part of the formula references;
-- the indicator catalog does not provide a filled, authoritative type value;
-- therefore type and resolution are structural and exact, and uncovered links are not guessed.
-- MXL contains no authoritative expense `Канал сбыта`. The packaged links keep that field empty, show the proven indicator in Preview and remain `Требует внимания`; no invented channel and no incomplete indicator-export row are produced.
+Read-only workbook snapshot SHA-256: `9bc838a43ecc29f1b6d163264963c596a4edd7415f11587e2c52992cd66bd970`.
 
-## Changed implementation files
+- Exact BDR summary detection found the owner range on `БДР 2026 ИТОГ` without selecting a first candidate.
+- Revenue: 7 source rows expanded to 84 monthly records; all 7 indicators resolved automatically; input sales channels were preserved; ERP codes remained empty; exported indicator total reconciled to the selected input total.
+- Expense: the separate real prepared expense range was selected explicitly; packaged exact matches were present; every matched expense had an empty `sales_channel`; the `Показатели` export retained those rows with an empty channel.
+- Quantity without a proven packaged pair stayed `Требует внимания` and was not exported as a resolved indicator.
+- The workbook also contains more than one structurally valid revenue/expense candidate. The application presents candidate selection; it does not silently combine ranges or take the first candidate.
 
-- `src/excel_transform_1c/adapters/references.py`
-- `src/excel_transform_1c/adapters/persistence.py`
-- `src/excel_transform_1c/application/service.py`
-- `src/excel_transform_1c/baselines/__init__.py`
-- `src/excel_transform_1c/baselines/manifest.json`
-- `src/excel_transform_1c/baselines/article_indicators.json`
-- `src/excel_transform_1c/baselines/opiu_analytics.json`
-- `src/excel_transform_1c/baselines/opiu_formulas.json`
-- `src/excel_transform_1c/baselines/opiu_report_indicators.json`
-- `src/excel_transform_1c/baselines/opiu_source_rules.json`
-- `src/excel_transform_1c/baselines/regions.json`
-- `src/excel_transform_1c/baselines/sales_networks.json`
-- `src/excel_transform_1c/core/__init__.py`
-- `src/excel_transform_1c/core/detection.py`
-- `src/excel_transform_1c/core/indicator_resolvers.py`
-- `src/excel_transform_1c/core/models.py`
-- `src/excel_transform_1c/core/transform.py`
-- `src/excel_transform_1c/ui/templates/run.html`
-- `src/excel_transform_1c/ui/templates/home.html`
-- `packaging/user/README_USER_RU.md`
-- `scripts/build_opiu_baselines.py`
-- `tests/helpers/workbooks.py`
-- `tests/integration/test_article_indicator_workflow.py`
-- `tests/integration/test_revenue_quantity_workflow.py`
-- `tests/unit/test_revenue_quantity_resolvers.py`
-- `tests/unit/test_packaged_opiu_baselines.py`
-- `tests/integration/test_packaged_opiu_classifier_workflow.py`
+The password-protected `source-original.xlsx` was not changed. Smoke used the application's existing decrypted working snapshot of the same upload because no workbook password was available.
 
-## Tests
+## Verification
 
-Added unit coverage:
+- `python -m compileall -q src tests scripts` — PASS.
+- `python -m pytest -q` with both real source fixtures — PASS: `180 passed, 3 skipped, 1 warning`.
+- Required resolver tests pass: `test_indicator_type_detection`, `test_revenue_resolver_exact_match`, `test_quantity_resolver_exact_match`, `test_expense_logic_not_changed`.
+- `node --check src/excel_transform_1c/ui/static/run.js` — PASS.
+- `git diff --check` — PASS; only configured LF/CRLF conversion warnings were emitted.
+- Integration flow `START_SERVICE → Upload Excel → Load OPIU rules → Resolve expense/revenue/quantity → Preview → Confirm → Export XLSX → STOP_SERVICE` — PASS in the integration suite.
+- Correctly marked offline package launcher smoke — PASS: health/home, initial HTTP owner workflow, export, stop, restart, persisted classifier, final stop.
+- Service stop was verified after smoke.
 
-- `test_indicator_type_detection`
-- `test_revenue_resolver_exact_match`
-- `test_quantity_resolver_exact_match`
-- `test_expense_logic_not_changed`
+## Offline package
 
-Added integration coverage for:
+- Build source SHA: `73cae073366900007eed473acaaa821b33f1507c`.
+- ZIP: `EXCEL_TO_OPIU_LIGHT_USER_73cae0733669.zip`.
+- Size: `8,149,027` bytes.
+- SHA-256: `2165df75ae5094e3989335720d2358c170b5a4e7fa091068c57590d4c0bb2bdb`.
+- The ZIP is a local handoff artifact only; it was not released or uploaded.
 
-- service lifespan start/stop;
-- Excel upload;
-- classifier/rules upload;
-- expense, revenue and quantity detection;
-- Preview values and user-facing type labels;
-- confirmation;
-- XLSX export with all three indicator types and unchanged sheet/header contracts.
+## Changed files from Base SHA
 
-## Verification and smoke result
-
-- `python -m compileall -q src tests scripts` — PASS
-- `python -m pytest -q` — PASS: `152 passed, 5 skipped, 1 warning`
-- `node --check src/excel_transform_1c/ui/static/run.js` — PASS
-- `git diff --check` — PASS
-- Revenue/quantity integration smoke (`START_SERVICE → upload Excel → upload rules → detect three types → Preview → Confirm → Export XLSX → STOP_SERVICE`) — PASS
-
-The first full pytest attempt encountered an unrelated Windows environment error while an optional real-file test recursively inspected the unavailable `Documents\Bitrix24` path. The successful required run set that optional real-file fixture to an explicitly absent path, causing the test's intended `skip`; no production or test code was changed to mask the environment issue.
-
-## Feature Baseline result
-
-PASS. Existing CFO, organizational-unit, ERP-code, bulk-confirmation, expense-resolution and three-sheet export tests remain green. The existing expense matcher and export columns are unchanged.
+- Governance/package: `governance/handoffs/HANDOFF-CODEX-06-REVENUE-QUANTITY-20260816-001.md`, `governance/handoffs/REPORT-COORDINATOR-CODEX-06-GAP-20260816-001.md`, `packaging/user/README_USER_RU.md`.
+- Builders/smoke: `scripts/build_opiu_baselines.py`, `scripts/owner_smoke_http.py`.
+- Adapters/application: `src/excel_transform_1c/adapters/excel.py`, `persistence.py`, `references.py`, `src/excel_transform_1c/application/service.py`.
+- Baselines: `src/excel_transform_1c/baselines/__init__.py`, `manifest.json`, `article_indicators.json`, `opiu_analytics.json`, `opiu_formulas.json`, `opiu_report_indicators.json`, `opiu_source_rules.json`, `regions.json`, `sales_networks.json`.
+- Core/UI: `src/excel_transform_1c/core/__init__.py`, `detection.py`, `indicator_matching.py`, `indicator_resolvers.py`, `models.py`, `transform.py`, `src/excel_transform_1c/ui/templates/home.html`, `run.html`.
+- Tests/helpers: `tests/helpers/workbooks.py`, `tests/integration/test_article_indicator_workflow.py`, `test_indicator_unresolved_rows.py`, `test_packaged_opiu_classifier_workflow.py`, `test_reference_catalog_persistence.py`, `test_revenue_quantity_workflow.py`, `tests/ui/test_indicator_unresolved_ui.py`, `test_ui_smoke.py`, `tests/unit/test_article_indicator_matching.py`, `test_input_revenue_analytics.py`, `test_packaged_opiu_baselines.py`, `test_real_revenue_baselines.py`, `test_revenue_quantity_resolvers.py`, `test_revenue_rule_import.py`.
 
 ## Limitations
 
-- The resolver accepts only complete exact keys; it deliberately does not normalize case, use fuzzy/contains matching or select the first candidate.
-- Supplied MXL evidence covers only part of the referenced formula vocabulary. Relationships absent from that evidence require an explicit classifier row and otherwise remain `Требует внимания`.
-- A quantity without an explicit unit or nomenclature-to-indicator link remains `Требует внимания`.
-- The source workbooks/MXL are not modified and are not shown as technical content in normal UI. Their normalized rows and SHA-256 evidence are packaged under `baselines`; raw owner files are not copied into Git.
-- The packaged MXL expense link can identify the indicator for 208 full paths, but cannot complete the eight-column `Показатели` row until an authoritative sales channel exists.
+- Quantity coverage cannot be made automatic until an authoritative source supplies exact nomenclature/unit/indicator links.
+- Input ranges are selected independently. Automatic consolidation of separate expense and revenue ranges is outside the confirmed scope and is deliberately not inferred.
+- The application does not query ADO/ODBC/1C and does not write to 1C or any live system in this implementation or smoke.
