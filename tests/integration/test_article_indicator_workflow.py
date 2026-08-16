@@ -161,10 +161,10 @@ def test_indicator_export_populates_third_sheet_without_changing_first_two(tmp_p
         indicators = workbook["Показатели"]
         assert tuple(cell.value for cell in indicators[1]) == ADO_INDICATOR_HEADERS
         assert indicators.max_row == 25
-        assert {cell.value for cell in indicators["G"][1:]} == {
+        assert {cell.value for cell in indicators["H"][1:]} == {
             "Услуги связи",
             "Маркетинговые расходы",
         }
-        assert any(cell.value == 0 for cell in indicators["H"][1:])
+        assert any(cell.value == 0 for cell in indicators["I"][1:])
     finally:
         workbook.close()

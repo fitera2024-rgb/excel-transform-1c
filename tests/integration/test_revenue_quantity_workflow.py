@@ -137,7 +137,7 @@ def test_start_service_upload_rules_preview_confirm_export_stop_service(tmp_path
                 == ADO_INDICATOR_HEADERS
             )
             indicators = [
-                cell.value for cell in workbook["Показатели"]["G"][1:]
+                cell.value for cell in workbook["Показатели"]["H"][1:]
             ]
             assert set(indicators) == {
                 "Административные расходы",

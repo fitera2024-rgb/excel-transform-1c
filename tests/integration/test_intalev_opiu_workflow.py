@@ -44,13 +44,13 @@ def test_intalev_preview_and_valid_export_preserve_business_values(tmp_path):
         assert tuple(cell.value for cell in sheet[1]) == EXPORT_HEADERS
         assert sheet.max_row == 37
         values = [tuple(cell.value for cell in row) for row in sheet.iter_rows(min_row=2)]
-        assert sum(row[15] == 0 for row in values) == 34
-        assert any(row[15] == -10 for row in values)
-        skipped = next(row for row in values if row[18] == 10 and row[4] == 5)
-        assert skipped[15] is None
-        assert skipped[16] == "Пропущено"
-        assert "I10" in skipped[17]
-        assert all(row[8] == "ЦД/ЦЗ Фонд развития" for row in values)
+        assert sum(row[18] == 0 for row in values) == 34
+        assert any(row[18] == -10 for row in values)
+        skipped = next(row for row in values if row[21] == 10 and row[5] == 5)
+        assert skipped[18] is None
+        assert skipped[19] == "Пропущено"
+        assert "I10" in skipped[20]
+        assert all(row[10] == "ЦД/ЦЗ Фонд развития" for row in values)
         assert sheet.freeze_panes == "A2"
     finally:
         workbook.close()

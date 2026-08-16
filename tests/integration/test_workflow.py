@@ -160,12 +160,12 @@ def test_skipped_month_stays_in_preview_and_export_with_pointer(tmp_path):
     exported = [
         tuple(cell.value for cell in row)
         for row in sheet.iter_rows(min_row=2)
-        if row[18].value == 3 and row[4].value == 5
+        if row[21].value == 3 and row[5].value == 5
     ]
     assert len(exported) == 1
-    assert exported[0][15] is None
-    assert exported[0][16] == STATUS_SKIPPED
-    assert "M3" in exported[0][17]
+    assert exported[0][18] is None
+    assert exported[0][19] == STATUS_SKIPPED
+    assert "M3" in exported[0][20]
 
 
 def test_field_specific_correction_keeps_other_missing_field_attention(tmp_path):

@@ -20,17 +20,21 @@ from excel_transform_1c.core.indicator_matching import (
 from excel_transform_1c.core.models import CandidateRange, PreviewRecord
 
 
-# Legacy sheet: retained without schema changes for backward compatibility.
+# Business export sheet. Reference names and codes intentionally use separate
+# columns; a display path with a parenthesized code must never leak here.
 EXPORT_HEADERS = (
     "Единица отчёта",
     "Организация",
+    "Код организации",
     "Сценарий",
     "Год",
     "Месяц",
     "Период",
     "Департамент",
     "Вид организации",
-    "Отдел / ЦФО",
+    "Отдел",
+    "ЦФО",
+    "Код ЦФО",
     "Тип расходов",
     "Группа расходов",
     "Исходное название статьи",
@@ -48,12 +52,13 @@ EXPORT_HEADERS = (
 # dropped because a code is not available yet.
 ADO_OPIU_HEADERS = (
     "Организация",
+    "Код организации",
     "Сценарий",
     "Год",
     "Месяц",
     "Период",
-    "Организационные единицы",
-    "Код Организационных единиц",
+    "Департамент",
+    "Отдел",
     "ЦФО",
     "Код ЦФО",
     "Тип расходов",
@@ -68,6 +73,7 @@ ADO_OPIU_HEADERS = (
 
 ADO_INDICATOR_HEADERS = (
     "Организация",
+    "Код организации",
     "Сценарий",
     "Год",
     "Месяц",
@@ -76,6 +82,55 @@ ADO_INDICATOR_HEADERS = (
     "Тип расходов",
     "Сумма",
 )
+
+
+def _separate_organization_reference(value: str) -> tuple[str, str]:
+    """Split the exact RunContext display contract into export name and code."""
+
+    text = value.strip()
+    match = re.fullmatch(r"(?P<path>.+) \((?P<code>[^()]*)\)", text)
+    if match is None:
+        path = text
+        code = ""
+    else:
+        path = match.group("path").strip()
+        code = match.group("code").strip()
+    name = path.rsplit(" → ", 1)[-1].strip()
+    return name, code
+
+
+def _record_organization_reference(record: PreviewRecord) -> tuple[str, str]:
+    """Prefer the exact root reference produced by the hierarchy resolver."""
+
+    if record.organization_unit or record.organization_unit_code:
+        return (
+            record.organization_unit.strip(),
+            record.organization_unit_code.strip(),
+        )
+    return _separate_organization_reference(record.organization)
+
+
+def _indicator_organization_references(
+    records: list[PreviewRecord],
+) -> dict[str, tuple[str, str]]:
+    """Resolve one exact root reference for every aggregated context value."""
+
+    candidates: dict[str, set[tuple[str, str]]] = {}
+    for record in records:
+        if not (record.organization_unit or record.organization_unit_code):
+            continue
+        candidates.setdefault(record.organization, set()).add(
+            _record_organization_reference(record)
+        )
+
+    resolved: dict[str, tuple[str, str]] = {}
+    for organization, references in candidates.items():
+        if len(references) != 1:
+            raise ValueError(
+                "Для одного контекста экспорта найдены разные exact ERP-организации"
+            )
+        resolved[organization] = next(iter(references))
+    return resolved
 
 
 @contextmanager
@@ -176,19 +231,25 @@ def _style_header(sheet, headers: tuple[str, ...], last_column: str) -> None:
 
 def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
     sheet.title = "OPIU Light"
-    _style_header(sheet, EXPORT_HEADERS, "S")
+    _style_header(sheet, EXPORT_HEADERS, "V")
     for record in records:
+        organization, organization_code = _record_organization_reference(record)
+        department = record.department or None
+        cfo = record.erp_department or record.cfo or None
         sheet.append(
             (
                 record.reporting_unit,
-                record.organization,
+                organization or None,
+                organization_code or None,
                 record.scenario,
                 record.year,
                 record.month,
                 f"{record.month:02d}.{record.year}",
-                record.department,
+                department,
                 record.organization_type,
-                record.cfo,
+                cfo,
+                cfo,
+                record.cfo_code or None,
                 record.expense_type,
                 record.expense_group,
                 record.source_article,
@@ -201,35 +262,44 @@ def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
                 record.source_row,
             )
         )
-    sheet.auto_filter.ref = f"A1:S{max(len(records) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:V{max(len(records) + 1, 1)}"
     sheet.column_dimensions["A"].width = 18
     sheet.column_dimensions["B"].width = 28
     sheet.column_dimensions["C"].width = 18
-    sheet.column_dimensions["F"].width = 12
-    for column in ("G", "H", "I", "J", "K", "L", "N", "O", "Q", "R"):
+    sheet.column_dimensions["D"].width = 18
+    sheet.column_dimensions["G"].width = 12
+    for column in ("H", "I", "J", "K", "M", "N", "O", "Q", "R", "T", "U"):
         sheet.column_dimensions[column].width = 22
-    sheet.column_dimensions["M"].width = 18
-    sheet.column_dimensions["P"].width = 16
-    sheet.column_dimensions["S"].width = 18
-    sheet["P1"].alignment = Alignment(horizontal="center", vertical="center")
-    for cell in sheet["P"][1:]:
+    sheet.column_dimensions["L"].width = 16
+    sheet.column_dimensions["P"].width = 18
+    sheet.column_dimensions["S"].width = 16
+    sheet.column_dimensions["V"].width = 18
+    for column in ("C", "L", "P"):
+        for cell in sheet[column]:
+            cell.number_format = "@"
+    sheet["S1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["S"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
 def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
     sheet.title = "ОПИУ"
-    _style_header(sheet, ADO_OPIU_HEADERS, "Q")
+    _style_header(sheet, ADO_OPIU_HEADERS, "R")
     for record in records:
+        organization, organization_code = _record_organization_reference(record)
+        department = record.department or None
+        cfo = record.erp_department or record.cfo or None
         sheet.append(
             (
-                record.organization,
+                organization or None,
+                organization_code or None,
                 record.scenario,
                 record.year,
                 record.month,
                 f"{record.month:02d}.{record.year}",
-                record.organization_unit or record.department or None,
-                record.organization_unit_code or None,
-                record.erp_department or record.cfo or None,
+                department,
+                cfo,
+                cfo,
                 record.cfo_code or None,
                 record.expense_type,
                 record.erp_code or None,
@@ -241,45 +311,53 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
                 float(record.amount) if record.amount is not None else None,
             )
         )
-    sheet.auto_filter.ref = f"A1:Q{max(len(records) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:R{max(len(records) + 1, 1)}"
     widths = {
         "A": 28,
-        "B": 18,
-        "C": 10,
+        "B": 20,
+        "C": 18,
         "D": 10,
-        "E": 12,
-        "F": 28,
-        "G": 20,
+        "E": 10,
+        "F": 12,
+        "G": 28,
         "H": 28,
-        "I": 16,
-        "J": 24,
-        "K": 18,
-        "L": 30,
-        "M": 24,
-        "N": 18,
-        "O": 20,
-        "P": 18,
-        "Q": 16,
+        "I": 28,
+        "J": 16,
+        "K": 24,
+        "L": 18,
+        "M": 30,
+        "N": 24,
+        "O": 18,
+        "P": 20,
+        "Q": 18,
+        "R": 16,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
-    for column in ("G", "I", "K", "N", "P"):
+    for column in ("B", "J", "L", "O", "Q"):
         for cell in sheet[column]:
             cell.number_format = "@"
-    for cell in sheet["Q"][1:]:
+    for cell in sheet["R"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
 def _write_ado_indicators_sheet(
     sheet,
     rows: list[IndicatorExportRow],
+    records: list[PreviewRecord],
 ) -> None:
     sheet.title = "Показатели"
-    _style_header(sheet, ADO_INDICATOR_HEADERS, "H")
+    _style_header(sheet, ADO_INDICATOR_HEADERS, "I")
+    organization_references = _indicator_organization_references(records)
     for row in rows:
+        organization, organization_code = organization_references.get(
+            row.organization,
+            _separate_organization_reference(row.organization),
+        )
         sheet.append(
             (
-                row.organization,
+                organization or None,
+                organization_code or None,
                 row.scenario,
                 row.year,
                 row.month,
@@ -289,21 +367,24 @@ def _write_ado_indicators_sheet(
                 float(row.amount),
             )
         )
-    sheet.auto_filter.ref = f"A1:H{max(len(rows) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:I{max(len(rows) + 1, 1)}"
     widths = {
         "A": 28,
-        "B": 18,
-        "C": 10,
+        "B": 20,
+        "C": 18,
         "D": 10,
-        "E": 12,
-        "F": 26,
-        "G": 24,
-        "H": 16,
+        "E": 10,
+        "F": 12,
+        "G": 26,
+        "H": 24,
+        "I": 16,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
-    sheet["H1"].alignment = Alignment(horizontal="center", vertical="center")
-    for cell in sheet["H"][1:]:
+    for cell in sheet["B"]:
+        cell.number_format = "@"
+    sheet["I1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["I"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
@@ -318,6 +399,7 @@ def export_opiu_light(records: list[PreviewRecord]) -> bytes:
         _write_ado_indicators_sheet(
             workbook.create_sheet(),
             aggregate_indicator_rows(records),
+            records,
         )
 
         output = BytesIO()

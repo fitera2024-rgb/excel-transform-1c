@@ -85,9 +85,13 @@ def test_export_uses_exact_erp_organization_hierarchy_codes(tmp_path) -> None:
     workbook = load_workbook(BytesIO(service.export_run(run.run_id)), data_only=True)
     try:
         row = tuple(cell.value for cell in workbook["ОПИУ"][2])
-        assert row[5:9] == (
+        assert row[0:2] == (
             'ООО "Айс Юнион"',
             "000000001",
+        )
+        assert row[6:10] == (
+            "Административный департамент",
+            "АЮ Административный Отдел",
             "АЮ Административный Отдел",
             "000000173",
         )
