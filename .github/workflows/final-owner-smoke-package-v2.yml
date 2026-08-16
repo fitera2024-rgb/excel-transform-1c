@@ -145,12 +145,14 @@ jobs:
 
           runtime = Path(os.environ["OPIU_RUNTIME_DIR"])
           service = WorkflowService(runtime)
-          assert service.reference_counts() == {
-              "erp_articles": 271,
-              "organizations": 357,
-              "scenarios": 12,
-              "intalev_cfos": 16,
-          }
+          counts = service.reference_counts()
+          # The preceding HTTP smoke deliberately supplements the organization
+          # catalog.  Packaged baselines must remain present, while the total is
+          # allowed to grow after an explicit user import.
+          assert counts["erp_articles"] >= 271
+          assert counts["organizations"] >= 357
+          assert counts["scenarios"] >= 12
+          assert counts["intalev_cfos"] >= 16
           scenario = next(item for item in service.store.list_scenarios() if item.name == "ПЛАН 2026" and item.year == 2026)
           node = service.organization_nodes()[0]
           context = service.build_context("ТЕСТ", node.node_id, scenario.scenario_id, 2026, [])
