@@ -291,7 +291,7 @@ def initial_owner_smoke(opener, base_url: str) -> None:
     }
     assert 'data-testid="indicator-unresolved-list"' in initial_html
     assert "Требуются решения" in initial_html
-    assert "Загрузить / дополнить классификатор" in initial_html
+    assert "Дополнить точные соответствия — необязательно" in initial_html
     lowered = initial_html.lower()
     assert "sql id" not in lowered
     assert "internal key" not in lowered
