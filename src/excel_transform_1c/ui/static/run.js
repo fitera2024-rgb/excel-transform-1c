@@ -6,6 +6,20 @@
   const EMPTY_LEVEL = "__EMPTY__";
   const VALUE_PREFIX = "__VALUE__:";
   const editors = [...document.querySelectorAll('[data-testid="attention-editor"]')];
+  const bulkForm = document.querySelector("[data-bulk-confirm-form]");
+  const bulkConfirmation = bulkForm?.querySelector("[data-bulk-confirm]");
+  const bulkSelections = bulkForm?.querySelector("[data-bulk-confirm-selections]");
+  const bulkCount = bulkForm?.querySelector("[data-bulk-confirm-count]");
+  const bulkEmpty = bulkForm?.querySelector("[data-bulk-confirm-empty]");
+  const bulkSubmit = bulkForm?.querySelector("[data-bulk-confirm-submit]");
+  let bulkConfirmableRows = new Set();
+  try {
+    bulkConfirmableRows = new Set(
+      JSON.parse(bulkForm?.dataset.bulkConfirmableRows || "[]").map((value) => Number(value)),
+    );
+  } catch {
+    bulkConfirmableRows = new Set();
+  }
 
   function encodeLevelValue(value) {
     return value === "" ? EMPTY_LEVEL : `${VALUE_PREFIX}${encodeURIComponent(value)}`;
@@ -290,21 +304,6 @@
   });
 
   // ERP bulk confirmation.
-  const bulkForm = document.querySelector("[data-bulk-confirm-form]");
-  const bulkConfirmation = bulkForm?.querySelector("[data-bulk-confirm]");
-  const bulkSelections = bulkForm?.querySelector("[data-bulk-confirm-selections]");
-  const bulkCount = bulkForm?.querySelector("[data-bulk-confirm-count]");
-  const bulkEmpty = bulkForm?.querySelector("[data-bulk-confirm-empty]");
-  const bulkSubmit = bulkForm?.querySelector("[data-bulk-confirm-submit]");
-  let bulkConfirmableRows = new Set();
-  try {
-    bulkConfirmableRows = new Set(
-      JSON.parse(bulkForm?.dataset.bulkConfirmableRows || "[]").map((value) => Number(value)),
-    );
-  } catch {
-    bulkConfirmableRows = new Set();
-  }
-
   function currentBulkSelections() {
     const bySourceRow = new Map();
     editors.forEach((form) => {

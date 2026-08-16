@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -35,6 +37,205 @@ HEADERS = [
 ]
 
 
+BDR_FULL_INDICATORS = (
+    (10, "Оборот в кг"),
+    (11, "Выручка за 1 кг"),
+    (12, "Итого расходов на 1 кг"),
+    (13, "Валовая прибыль на 1 кг"),
+    (20, "Выручка ИТОГО"),
+    (21, "Прочие доходы по основной деятельности"),
+    (22, "Валовая прибыль"),
+    (30, "Расходы по основной деятельности ИТОГО"),
+    (31, "Административные расходы"),
+    (32, "Коммерческие расходы"),
+    (33, "Расходы на транспортную логистику"),
+    (34, "Расходы на складскую логистику"),
+    (40, "EBITDA"),
+    (41, "Операционная прибыль"),
+)
+
+
+def bdr_full_workbook_bytes(
+    *,
+    reporting_unit: str = "АЮ Административный Отдел",
+    with_internal_prepared_range: bool = True,
+    error_indicator: str = "",
+) -> bytes:
+    """Synthetic whole-BDR business document with all three required blocks."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Произвольный сводный лист"
+    sheet.cell(2, 1, reporting_unit)
+    sheet.cell(2, 5, "Отдел")
+    for month in range(1, 13):
+        column = 22 + month
+        sheet.cell(2, column, datetime(2026, month, 1))
+        sheet.cell(3, column, "план")
+    for row_number, indicator in BDR_FULL_INDICATORS:
+        sheet.cell(row_number, 5, reporting_unit)
+        sheet.cell(row_number, 7, indicator)
+        for month in range(1, 13):
+            sheet.cell(
+                row_number,
+                22 + month,
+                "#N/A" if indicator == error_indicator else row_number * month,
+            )
+
+    if with_internal_prepared_range:
+        internal = workbook.create_sheet("загрузка ERP расходы")
+        internal.append(HEADERS)
+        internal.append(
+            [
+                reporting_unit,
+                "Административные расходы",
+                "Административный департамент",
+                "ТК",
+                reporting_unit,
+                "БЕЗ НДС",
+                "Связь",
+                "Интернет",
+                1,
+                *([0] * 11),
+            ]
+        )
+
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
+def bdr_formula_workbook_bytes(
+    *,
+    reporting_unit: str = "АЮ Отдел обеспечения",
+    indicator: str = "Оборот в кг",
+    month: int = 1,
+    cached_value: int = 593845,
+) -> bytes:
+    """Whole-BDR fixture whose KPI month is a formula with a saved result."""
+
+    raw = bdr_full_workbook_bytes(reporting_unit=reporting_unit)
+    row_number = next(
+        row for row, name in BDR_FULL_INDICATORS if name == indicator
+    )
+    coordinate = f"{_column_letter(22 + month)}{row_number}"
+    return _replace_numeric_cell_with_cached_formula(
+        raw,
+        coordinate,
+        row_number * month,
+        f"SUM({cached_value},0)",
+        cached_value,
+    )
+
+
+def bdr_split_kpi_value_workbook_bytes(
+    *,
+    reporting_unit: str = "АЮ Отдел обеспечения",
+    cached_value: int = 593845,
+) -> bytes:
+    """Department-aware BDR plus one exact aggregate KPI value sheet."""
+
+    workbook = Workbook()
+    planning = workbook.active
+    planning.title = "Строки БДР с отделом"
+    planning.cell(2, 1, reporting_unit)
+    planning.cell(2, 5, "Отдел")
+    for month in range(1, 13):
+        planning.cell(2, 9 + month, datetime(2026, month, 1))
+        planning.cell(3, 9 + month, "план")
+    for row_number, indicator in BDR_FULL_INDICATORS:
+        planning.cell(row_number, 5, reporting_unit)
+        planning.cell(row_number, 7, indicator)
+        for month in range(1, 13):
+            planning.cell(row_number, 9 + month, 0)
+
+    summary = workbook.create_sheet("Сводные значения БДР")
+    summary.cell(2, 1, "АЮ")
+    for month in range(1, 13):
+        summary.cell(2, 22 + month, datetime(2026, month, 1))
+        summary.cell(3, 22 + month, "план")
+    for row_number, indicator in BDR_FULL_INDICATORS:
+        summary.cell(row_number, 7, indicator)
+        for month in range(1, 13):
+            summary.cell(row_number, 22 + month, row_number * month)
+            summary.cell(row_number, 22 + month).number_format = "#,##0"
+    # The owner summary contains a repeated expense total after the KPI tail.
+    # It must not invalidate the exact expense-block anchor before EBITDA.
+    summary.cell(42, 7, "Расходы по основной деятельности ИТОГО")
+    for month in range(1, 13):
+        summary.cell(42, 22 + month, 42 * month)
+
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    raw = output.getvalue()
+    row_number = next(
+        row for row, name in BDR_FULL_INDICATORS if name == "Оборот в кг"
+    )
+    raw = _replace_numeric_cell_with_cached_formula(
+        raw,
+        f"W{row_number}",
+        row_number,
+        f"SUM({cached_value},0)",
+        cached_value,
+        sheet_name="xl/worksheets/sheet2.xml",
+    )
+    revenue_per_kg_row = next(
+        row for row, name in BDR_FULL_INDICATORS if name == "Выручка за 1 кг"
+    )
+    return _replace_numeric_cell_with_cached_formula(
+        raw,
+        f"W{revenue_per_kg_row}",
+        revenue_per_kg_row,
+        "469.5283132972408",
+        469.5283132972408,
+        sheet_name="xl/worksheets/sheet2.xml",
+    )
+
+
+def _replace_numeric_cell_with_cached_formula(
+    workbook_bytes: bytes,
+    coordinate: str,
+    original_value: int,
+    formula: str,
+    cached_value: int | float,
+    *,
+    sheet_name: str = "xl/worksheets/sheet1.xml",
+) -> bytes:
+    with ZipFile(BytesIO(workbook_bytes), "r") as source:
+        members = {name: source.read(name) for name in source.namelist()}
+    xml = members[sheet_name].decode("utf-8")
+    pattern = re.compile(
+        rf'<c r="{re.escape(coordinate)}"(?P<attrs>[^>]*)>'
+        rf'<v>{re.escape(str(original_value))}</v></c>'
+    )
+    match = pattern.search(xml)
+    if match is None:
+        raise AssertionError(f"Fixture cell not found: {coordinate}")
+    style = re.search(r'\s+s="[^"]+"', match.group("attrs"))
+    style_attribute = style.group(0) if style else ""
+    replacement = (
+        f'<c r="{coordinate}"{style_attribute}>'
+        f'<f>{formula}</f><v>{cached_value}</v></c>'
+    )
+    members[sheet_name] = pattern.sub(replacement, xml, count=1).encode("utf-8")
+    output = BytesIO()
+    with ZipFile(output, "w", ZIP_DEFLATED) as target:
+        for name, data in members.items():
+            target.writestr(name, data)
+    return output.getvalue()
+
+
+def _column_letter(column: int) -> str:
+    letters = ""
+    current = column
+    while current:
+        current, remainder = divmod(current - 1, 26)
+        letters = chr(65 + remainder) + letters
+    return letters
+
+
 def workbook_bytes(
     *,
     sheet_name: str = "Произвольное имя",
@@ -49,6 +250,8 @@ def workbook_bytes(
     reporting_unit: str = "ПС",
     tax_error: bool = False,
     second_cfo: str = "ЦФО 2",
+    first_department: str = "Департамент 1",
+    first_cfo: str = "ЦФО 1",
 ) -> bytes:
     workbook = Workbook()
     first = workbook.active
@@ -68,10 +271,25 @@ def workbook_bytes(
             reporting_unit,
             tax_error,
             second_cfo,
+            first_department,
+            first_cfo,
         )
         if two_candidates:
             second = workbook.create_sheet("Второй диапазон")
-            _append_candidate(second, False, False, False, False, False, False, reporting_unit, False, second_cfo)
+            _append_candidate(
+                second,
+                False,
+                False,
+                False,
+                False,
+                False,
+                False,
+                reporting_unit,
+                False,
+                second_cfo,
+                first_department,
+                first_cfo,
+            )
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()
@@ -120,6 +338,8 @@ def _append_candidate(
     reporting_unit: str,
     tax_error: bool = False,
     second_cfo: str = "ЦФО 2",
+    first_department: str = "Департамент 1",
+    first_cfo: str = "ЦФО 1",
 ) -> None:
     sheet.append(["Синтетический fixture: вымышленные данные"])
     sheet.append(HEADERS)
@@ -131,9 +351,9 @@ def _append_candidate(
         [
             reporting_unit,
             "Административные",
-            "" if department_error else "Департамент 1",
+            "" if department_error else first_department,
             "ТК",
-            "" if cfo_error else "ЦФО 1",
+            "" if cfo_error else first_cfo,
             "?" if tax_error else 0.2,
             "Связь",
             "Интернет" if not missing_mapping else "Нет в ERP",
@@ -281,6 +501,219 @@ def real_reference_bytes(kind: str) -> bytes:
 
     output = BytesIO()
     workbook.save(output)
+    return output.getvalue()
+
+
+def erp_organization_hierarchy_bytes(
+    *,
+    cfo_code: str = "000000173",
+    cfo_name: str = "АЮ Административный Отдел",
+    source_department: str = "Административный департамент",
+    organization_name: str = 'ООО "Айс Юнион"',
+    organization_code: str = "000000001",
+) -> bytes:
+    """Synthetic structural analogue of the ERP organization hierarchy export."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Лист_1"
+    sheet.cell(7, 1, "Организация")
+    sheet.cell(8, 7, "Головная организация")
+    sheet.cell(8, 32, "Верхний уровень иерархии")
+    sheet.cell(8, 39, "Код")
+
+    sheet.cell(9, 1, organization_name)
+    sheet.cell(10, 1, cfo_name)
+    sheet.cell(11, 1, source_department)
+    sheet.cell(11, 7, cfo_name)
+    sheet.cell(11, 32, organization_name)
+    sheet.cell(11, 39, cfo_code)
+
+    # The real export may list the coded organization element after its
+    # subordinate CFO rows. The explicit parent column, not row order, is the
+    # relationship authority for enrichment.
+    sheet.cell(12, 1, organization_name)
+    sheet.cell(13, 7, organization_name)
+    sheet.cell(13, 32, "4 Владивосток")
+    sheet.cell(13, 39, organization_code)
+
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
+def revenue_quantity_workbook_bytes() -> bytes:
+    """Synthetic prepared input covering all three structural indicator types."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "ОПИУ synthetic"
+    sheet.append(["Синтетический fixture: расходы, доходы и количества"])
+    sheet.append(
+        [
+            *HEADERS,
+            "Тип показателя",
+            "Группа дохода",
+            "Условия формулы",
+            "Аналитики",
+            "Номенклатура",
+            "Единица измерения",
+            "Контрагент",
+            "ИНТ канал сбыта",
+            "Сеть",
+            "Регион продаж",
+        ]
+    )
+    rows = [
+        (
+            [
+                "ПС",
+                "Административные",
+                "Департамент 1",
+                "ТК",
+                "ЦФО 1",
+                "20%",
+                "Связь",
+                "Интернет",
+                100,
+                *([0] * 11),
+            ],
+            ["EXPENSE", "", "", "", "", "", "", "", "", ""],
+        ),
+        (
+            [
+                "ПС",
+                "Прочие доходы",
+                "Департамент 2",
+                "ТК",
+                "ЦФО 2",
+                "БЕЗ НДС",
+                "Продажи",
+                "Продажа товара",
+                200,
+                *([0] * 11),
+            ],
+            [
+                "REVENUE",
+                "Выручка от продаж",
+                "Источник=Продажи",
+                "Организационные единицы | ЦФО | ИНТ номенклатура",
+                "Товар А",
+                "",
+                'ООО "Покупатель"',
+                "Сети Федеральные",
+                "Сеть 1",
+                "Приморский край",
+            ],
+        ),
+        (
+            [
+                "ПС",
+                "Количественные показатели",
+                "Департамент 2",
+                "ТК",
+                "ЦФО 2",
+                "?",
+                "Продукция",
+                "Товар А",
+                5,
+                *([0] * 11),
+            ],
+            ["QUANTITY", "", "", "", "Товар А", "кг", "", "", "", ""],
+        ),
+    ]
+    for business, indicators in rows:
+        sheet.append([*business, *indicators])
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
+def revenue_quantity_classifier_bytes() -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Классификатор"
+    sheet.append(
+        [
+            "ERP-код статьи",
+            "Полный путь статьи",
+            "Статья",
+            "Показатель",
+            "Канал сбыта",
+            "Тип показателя",
+            "Группа дохода",
+            "Условия формулы",
+            "Аналитики",
+            "Номенклатура",
+            "Единица измерения",
+            "Контрагент",
+            "ИНТ канал сбыта",
+            "Сеть",
+            "Регион продаж",
+        ]
+    )
+    sheet.append(
+        [
+            "ERP-001",
+            "Административные → Связь → Интернет",
+            "Интернет",
+            "Административные расходы",
+            "Основной канал",
+            "EXPENSE",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]
+    )
+    sheet.append(
+        [
+            "",
+            "",
+            "Продажа товара",
+            "Выручка",
+            "Основной канал",
+            "REVENUE",
+            "Выручка от продаж",
+            "Источник=Продажи",
+            "Организационные единицы | ЦФО | ИНТ номенклатура",
+            "Товар А",
+            "",
+            'ООО "Покупатель"',
+            "Сети Федеральные",
+            "Сеть 1",
+            "Приморский край",
+        ]
+    )
+    sheet.append(
+        [
+            "",
+            "",
+            "",
+            "Количество продукции",
+            "Основной канал",
+            "QUANTITY",
+            "",
+            "",
+            "",
+            "Товар А",
+            "кг",
+            "",
+            "",
+            "",
+            "",
+        ]
+    )
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
     return output.getvalue()
 
 

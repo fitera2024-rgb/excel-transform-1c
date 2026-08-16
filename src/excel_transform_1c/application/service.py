@@ -31,15 +31,19 @@ from excel_transform_1c.core.indicator_matching import (
     INDICATOR_INCOMPLETE,
     INDICATOR_MATCHED,
     INDICATOR_MISSING,
-    ExactArticleIndicatorMatcher,
     apply_indicator_match,
 )
+from excel_transform_1c.baselines import baseline_counts
+from excel_transform_1c.core.indicator_resolvers import IndicatorResolverEngine
+from excel_transform_1c.core.kpi import kpi_results_from_records
 from excel_transform_1c.core.models import (
     ArticleIndicatorRule,
     CandidateRange,
     ERPArticle,
     IntalevCFO,
+    IndicatorType,
     Issue,
+    KPIResult,
     OrganizationNode,
     PreviewRecord,
     ProcessedRun,
@@ -49,6 +53,10 @@ from excel_transform_1c.core.models import (
     STATUS_SKIPPED,
     TAX_NOT_REQUIRED,
 )
+from excel_transform_1c.core.organization_hierarchy import (
+    MISSING_ERP_ELEMENT_CODE_REASON,
+    ExactOrganizationHierarchyResolver,
+)
 from excel_transform_1c.core.transform import ExactERPMapper, normalize_tax, transform_rows
 
 
@@ -56,6 +64,9 @@ UPLOAD_CHUNK_SIZE = 1024 * 1024
 INLINE_EDITABLE_ISSUE_KINDS = frozenset({"erp-mapping", "tax", "cfo-mapping"})
 INLINE_EDITABLE_SHARED_FIELDS = frozenset(
     {"department", "cfo", "expense_group", "source_article"}
+)
+BDR_ORGANIZATION_NOT_RESOLVED = (
+    "Сокращённое имя БДР не найдено однозначно в выбранной ERP-иерархии"
 )
 
 
@@ -83,11 +94,21 @@ class WorkflowService:
         self.run_keys: dict[str, str] = {}
 
     def reference_counts(self) -> dict[str, int]:
+        packaged = baseline_counts()
         return {
             "erp_articles": len(self.store.load_reference("erp_articles")),
             "organizations": len(self.store.load_reference("organizations")),
             "scenarios": len(self.store.list_scenarios()),
             "intalev_cfos": len(self.store.load_reference("intalev_cfos")),
+            "article_indicators": len(
+                self.store.load_reference("article_indicators")
+            ),
+            "opiu_formulas": packaged["opiu_formulas"],
+            "opiu_analytics": packaged["opiu_analytics"],
+            "regions": packaged["regions"],
+            "sales_networks": packaged["sales_networks"],
+            "opiu_report_indicators": packaged["opiu_report_indicators"],
+            "opiu_source_rules": packaged["opiu_source_rules"],
         }
 
     def upload_reference(self, kind: str, content: bytes) -> int:
@@ -304,11 +325,14 @@ class WorkflowService:
             records=records,
             issues=issues,
             created_at=datetime.now(UTC).isoformat(),
-            cfo_mapping_enabled=bool(self.intalev_cfos()),
+            cfo_mapping_enabled=(
+                bool(self.intalev_cfos()) and candidate.source_kind != "bdr_full"
+            ),
             indicator_classifier_loaded=bool(self.article_indicator_rules()),
         )
         if run.cfo_mapping_enabled:
             self._initialize_cfo_mappings(run)
+        self._apply_organization_reference_enrichment(run)
         self._apply_indicator_matches(run)
         self.runs[run_id] = run
         self.run_keys[run_key] = run_id
@@ -332,19 +356,58 @@ class WorkflowService:
         run: ProcessedRun,
         source_rows: set[int] | None = None,
     ) -> None:
-        rules = self.article_indicator_rules()
-        matcher = ExactArticleIndicatorMatcher(rules)
-        run.indicator_classifier_loaded = bool(rules)
+        direct_bdr_records = {
+            record.record_id
+            for record in run.records
+            if run.candidate.source_kind == "bdr_full"
+            and record.source_kind == "bdr_full"
+        }
         for record in run.records:
+            if record.record_id not in direct_bdr_records:
+                continue
             if source_rows is not None and record.source_row not in source_rows:
                 continue
-            match = matcher.resolve(
-                erp_code=record.erp_code,
-                expense_type=record.expense_type,
-                expense_group=record.expense_group,
-                article_name=record.source_article,
-            )
+            previous_reason = record.indicator_match_reason
+            if previous_reason:
+                record.reasons = [
+                    reason for reason in record.reasons if reason != previous_reason
+                ]
+            record.indicator = record.source_article
+            record.sales_channel = record.input_sales_channel
+            record.indicator_match_status = INDICATOR_MATCHED
+            record.indicator_match_reason = ""
+            if record.status != STATUS_SKIPPED:
+                record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
+
+        rules = self.article_indicator_rules()
+        engine = IndicatorResolverEngine(rules)
+        run.indicator_classifier_loaded = bool(rules)
+        for record in run.records:
+            if record.record_id in direct_bdr_records:
+                continue
+            if source_rows is not None and record.source_row not in source_rows:
+                continue
+            previous_reason = record.indicator_match_reason
+            match = engine.resolve(record)
             apply_indicator_match(record, match)
+            if (
+                match.status == INDICATOR_INCOMPLETE
+                and match.rule is not None
+                and match.rule.indicator.strip()
+            ):
+                # Keep the proven business result visible while the missing
+                # output dimension remains attention-only and non-exportable.
+                record.indicator = match.rule.indicator
+                record.sales_channel = match.rule.sales_channel
+            if record.indicator_type != IndicatorType.EXPENSE:
+                if previous_reason:
+                    record.reasons = [
+                        reason for reason in record.reasons if reason != previous_reason
+                    ]
+                if match.status != INDICATOR_MATCHED and match.reason:
+                    record.reasons.append(match.reason)
+                if record.status != STATUS_SKIPPED:
+                    record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
 
     def indicator_counts(self, run_id: str) -> dict[str, int]:
         run = self.get_run(run_id)
@@ -379,16 +442,158 @@ class WorkflowService:
             pointer = record.pointers.get("source_article")
             result.append({
                 "source_row": source_row,
-                "source_line": f"{pointer.sheet if pointer else run.candidate.sheet}!{source_row}",
+                "source_line": (
+                    f"{pointer.sheet}!{pointer.cell}"
+                    if pointer
+                    else f"{run.candidate.sheet}!{source_row}"
+                ),
                 "expense_type": record.expense_type or "Без типа",
                 "expense_group": record.expense_group or "Без группы",
                 "source_article": record.source_article or "Без статьи",
+                "indicator_type": record.indicator_type_label,
+                "indicator": record.indicator,
+                "sales_channel": record.sales_channel,
                 "erp_code": record.erp_code,
                 "status": labels[status],
                 "reason": record.indicator_match_reason,
-                "action": "Загрузить / дополнить классификатор",
+                "action": (
+                    "Проверить обязательные поля дохода во входном бюджете"
+                    if (
+                        record.indicator_type == IndicatorType.REVENUE
+                        and record.indicator_match_status == INDICATOR_INCOMPLETE
+                        and "поля точного правила" in record.indicator_match_reason
+                    )
+                    else "Загрузить / дополнить классификатор"
+                ),
             })
         return result
+
+    def bdr_diagnostics(self, run_id: str) -> dict[str, Any] | None:
+        run = self.get_run(run_id)
+        if run.candidate.source_kind != "bdr_full":
+            return None
+        by_row: dict[int, list[PreviewRecord]] = {}
+        for record in run.records:
+            by_row.setdefault(record.source_row, []).append(record)
+
+        source_types = {
+            source_row: records[0].indicator_type
+            for source_row, records in by_row.items()
+        }
+        kpi_by_row = {
+            source_row: records
+            for source_row, records in by_row.items()
+            if source_types[source_row] == IndicatorType.KPI
+        }
+        matched = {
+            source_row
+            for source_row, records in by_row.items()
+            if any(
+                record.organization_unit
+                and record.organization_unit_code
+                and record.department
+                and record.erp_department
+                and record.cfo_code
+                for record in records
+            )
+        }
+        exported = {
+            source_row
+            for source_row, records in by_row.items()
+            if any(
+                record.amount is not None
+                and record.indicator_match_status == INDICATOR_MATCHED
+                for record in records
+            )
+        }
+        exclusions: list[dict[str, Any]] = []
+        for source_row, records in sorted(by_row.items()):
+            if source_row in exported:
+                continue
+            reasons = list(
+                dict.fromkeys(
+                    reason
+                    for record in records
+                    for reason in (
+                        *record.reasons,
+                        record.indicator_match_reason,
+                    )
+                    if reason
+                )
+            )
+            exclusions.append(
+                {
+                    "source_row": records[0].source_excel_row,
+                    "source_sheet": records[0].pointers["source_article"].sheet,
+                    "indicator": records[0].source_article,
+                    "reason": "; ".join(reasons)
+                    or "Нет числовых значений ни за один период",
+                }
+            )
+        return {
+            "rows_read": len(by_row),
+            "monthly_cells_read": len(run.records),
+            "numeric_values": sum(
+                record.amount is not None for record in run.records
+            ),
+            "excel_errors": sum(
+                any(
+                    reason.startswith("Ошибка Excel в месячной ячейке")
+                    for reason in record.reasons
+                )
+                for record in run.records
+            ),
+            "attention_rows": sum(
+                any(record.status != STATUS_OK for record in records)
+                for records in by_row.values()
+            ),
+            "income": sum(
+                value == IndicatorType.REVENUE for value in source_types.values()
+            ),
+            "expense": sum(
+                value == IndicatorType.EXPENSE for value in source_types.values()
+            ),
+            "kpi": sum(value == IndicatorType.KPI for value in source_types.values()),
+            "kpi_found": len(kpi_by_row),
+            "kpi_with_organization": sum(
+                any(
+                    bool(record.organization.strip())
+                    for record in records
+                )
+                for records in kpi_by_row.values()
+            ),
+            "kpi_with_period": sum(
+                any(
+                    record.month in range(1, 13) and record.year > 0
+                    for record in records
+                )
+                for records in kpi_by_row.values()
+            ),
+            "kpi_with_value": sum(
+                any(record.amount is not None for record in records)
+                for records in kpi_by_row.values()
+            ),
+            "kpi_exported": sum(
+                any(
+                    record.amount is not None
+                    and record.indicator_match_status == INDICATOR_MATCHED
+                    for record in records
+                )
+                for records in kpi_by_row.values()
+            ),
+            "indicators": len(by_row),
+            "matched": len(matched),
+            "exported": len(exported),
+            "exported_period_rows": sum(
+                record.amount is not None
+                and record.indicator_match_status == INDICATOR_MATCHED
+                for record in run.visible_records()
+            ),
+            "exclusions": exclusions,
+        }
+
+    def kpi_results(self, run_id: str) -> list[KPIResult]:
+        return kpi_results_from_records(self.get_run(run_id).visible_records())
 
     @staticmethod
     def _issue_is_inline_editable(issue: Issue) -> bool:
@@ -962,7 +1167,87 @@ class WorkflowService:
                 record.status = STATUS_ATTENTION if reasons else STATUS_OK
             record.reasons = list(dict.fromkeys(reasons))
 
+        self._apply_organization_reference_enrichment(run, {source_row})
         self._apply_indicator_matches(run, {source_row})
+
+    def _apply_organization_reference_enrichment(
+        self,
+        run: ProcessedRun,
+        source_rows: set[int] | None = None,
+    ) -> None:
+        nodes = self.organization_nodes()
+        resolver = ExactOrganizationHierarchyResolver(nodes)
+        selected_rows = source_rows or {record.source_row for record in run.records}
+
+        for source_row in sorted(selected_rows):
+            row_records = [
+                record for record in run.records if record.source_row == source_row
+            ]
+            if not row_records:
+                continue
+            for issue in run.issues:
+                if (
+                    not issue.resolved
+                    and issue.kind == "organization-reference"
+                    and issue.pointer.row == source_row
+                ):
+                    issue.resolved = True
+
+            base = row_records[0]
+            is_bdr = run.candidate.source_kind == "bdr_full"
+            if is_bdr:
+                resolution = resolver.resolve_exact_department(
+                    run.context.organization_node_id,
+                    base.source_cfo or base.source_reporting_unit,
+                )
+            else:
+                resolution = resolver.resolve(
+                    run.context.organization_node_id,
+                    base.department,
+                    base.source_cfo or base.cfo,
+                )
+            reason = (
+                resolution.reason
+                if resolution
+                else (BDR_ORGANIZATION_NOT_RESOLVED if is_bdr else None)
+            )
+            for record in row_records:
+                record.organization_unit = resolution.organization_unit if resolution else ""
+                record.organization_unit_code = (
+                    resolution.organization_unit_code if resolution else ""
+                )
+                if is_bdr and resolution:
+                    record.department = resolution.department
+                record.erp_department = (
+                    resolution.cfo
+                    if is_bdr and resolution
+                    else (resolution.department if resolution else "")
+                )
+                record.cfo_code = resolution.cfo_code if resolution else ""
+                record.reasons = [
+                    item
+                    for item in record.reasons
+                    if item
+                    not in {
+                        MISSING_ERP_ELEMENT_CODE_REASON,
+                        BDR_ORGANIZATION_NOT_RESOLVED,
+                    }
+                ]
+                if reason:
+                    record.reasons.append(reason)
+                if record.status != STATUS_SKIPPED:
+                    record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
+
+            if reason:
+                run.issues.append(
+                    self._issue_from_record(
+                        base,
+                        "organization-reference",
+                        reason,
+                        "department",
+                        base.department,
+                    )
+                )
 
     @staticmethod
     def _issue_from_record(

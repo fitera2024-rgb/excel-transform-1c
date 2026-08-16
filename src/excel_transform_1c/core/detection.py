@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import date, datetime
 from typing import Any
 
 from openpyxl.utils import get_column_letter
 
-from .models import CandidateRange, MONTH_NAMES, SourceRow
+from .models import CandidateRange, IndicatorType, MONTH_NAMES, SourceRow
 
 
 BUSINESS_ALIASES: dict[str, set[str]] = {
@@ -19,6 +20,26 @@ BUSINESS_ALIASES: dict[str, set[str]] = {
     "tax": {"налогообложение", "налог"},
     "expense_group": {"группа расходов", "группа"},
     "article": {"статья", "исходная статья"},
+}
+
+INCOME_ALIASES: dict[str, set[str]] = {
+    "revenue_type": {"тип доходов"},
+    "revenue_group": {"группа дохода", "группа доходов"},
+    "article": {"статья", "исходная статья"},
+    "analytics": {"аналитика", "аналитики"},
+}
+
+INDICATOR_ALIASES: dict[str, set[str]] = {
+    "indicator_type": {"тип показателя"},
+    "revenue_group": {"группа дохода", "группа доходов", "группа раскрытия"},
+    "formula_condition": {"условие формулы", "условия формулы"},
+    "analytics": {"аналитика", "аналитика1", "аналитики"},
+    "nomenclature": {"номенклатура", "инт номенклатура"},
+    "unit": {"единица измерения", "ед. изм.", "единица"},
+    "counterparty": {"контрагент"},
+    "input_sales_channel": {"инт канал сбыта", "канал сбыта"},
+    "sales_network": {"сеть"},
+    "sales_region": {"регион продаж"},
 }
 
 MONTH_ALIASES: dict[int, set[str]] = {
@@ -45,6 +66,44 @@ INTALEV_PERIOD = re.compile(
 TECHNICAL_TOTAL = re.compile(r"(?:^|\s)итого(?:\s|$)", re.IGNORECASE)
 TECHNICAL_RATIO = re.compile(r"^(?:%|рентабельност)", re.IGNORECASE)
 EXPENSE_WORD = re.compile(r"расход", re.IGNORECASE)
+BDR_REVENUE_GROUP = "Выручка_продажи внешние"
+BDR_REVENUE_ARTICLES = (
+    "Опт",
+    "Розница",
+    "HoReCa",
+    "Сети ДВ",
+    "Сети Федеральные",
+    "Дискаунтеры ДВ",
+    "Дискаунтеры Федеральные",
+)
+BDR_INCOME_START = "Выручка ИТОГО"
+BDR_EXPENSE_START = "Расходы по основной деятельности ИТОГО"
+BDR_KPI_TAIL_START = "EBITDA"
+BDR_INCOME_ANCHORS = frozenset(
+    {
+        BDR_INCOME_START,
+        "Прочие доходы по основной деятельности",
+        "Валовая прибыль",
+    }
+)
+BDR_EXPENSE_ANCHORS = frozenset(
+    {
+        "Административные расходы",
+        "Коммерческие расходы",
+        "Расходы на транспортную логистику",
+        "Расходы на складскую логистику",
+    }
+)
+BDR_KPI_HEAD_ANCHORS = frozenset(
+    {
+        "Оборот в кг",
+        "Выручка за 1 кг",
+        "Себестоимость 1 кг",
+        "Итого расходов на 1 кг",
+        "Валовая прибыль на 1 кг",
+    }
+)
+BDR_KPI_TAIL_ANCHORS = frozenset({BDR_KPI_TAIL_START, "Операционная прибыль"})
 
 
 def normalize_header(value: Any) -> str:
@@ -69,7 +128,455 @@ def _column_schema(values: Iterable[Any]) -> dict[str, int] | None:
         if len(matches) != 1:
             return None
         columns[f"month_{month}"] = matches[0]
+    for field, aliases in INDICATOR_ALIASES.items():
+        normalized_aliases = {normalize_header(alias) for alias in aliases}
+        matches = [index for index, value in headers.items() if value in normalized_aliases]
+        if len(matches) > 1:
+            return None
+        if matches:
+            columns[field] = matches[0]
     return columns
+
+
+def _income_column_schema(values: Iterable[Any]) -> dict[str, int] | None:
+    """Recognize the owner income range by its complete structural header."""
+
+    headers = {
+        index: normalize_header(value)
+        for index, value in enumerate(values, start=1)
+    }
+    columns: dict[str, int] = {}
+    for field, aliases in INCOME_ALIASES.items():
+        normalized_aliases = {normalize_header(alias) for alias in aliases}
+        matches = [
+            index for index, value in headers.items() if value in normalized_aliases
+        ]
+        if len(matches) != 1:
+            return None
+        columns[field] = matches[0]
+    for month, aliases in MONTH_ALIASES.items():
+        normalized_aliases = {normalize_header(alias) for alias in aliases}
+        matches = [
+            index for index, value in headers.items() if value in normalized_aliases
+        ]
+        if len(matches) != 1:
+            return None
+        columns[f"month_{month}"] = matches[0]
+
+    # Context columns are optional for income files, but when the exact owner
+    # range provides them they are source evidence and must survive Preview and
+    # export.  Their absence still does not make an income row invalid.
+    for field in (
+        "reporting_unit",
+        "department",
+        "organization_type",
+        "cfo",
+        "tax",
+    ):
+        normalized_aliases = {
+            normalize_header(alias) for alias in BUSINESS_ALIASES[field]
+        }
+        matches = [
+            index for index, value in headers.items() if value in normalized_aliases
+        ]
+        if len(matches) > 1:
+            return None
+        if matches:
+            columns[field] = matches[0]
+
+    # Dedicated input analytics remain optional, exact columns. The four
+    # required income columns above are already authoritative for their fields.
+    for field, aliases in INDICATOR_ALIASES.items():
+        if field in {"revenue_group", "analytics"}:
+            continue
+        normalized_aliases = {normalize_header(alias) for alias in aliases}
+        matches = [
+            index for index, value in headers.items() if value in normalized_aliases
+        ]
+        if len(matches) > 1:
+            return None
+        if matches:
+            columns[field] = matches[0]
+    return columns
+
+
+def _bdr_plan_month_schemas(
+    rows: list[tuple[Any, ...]],
+) -> list[tuple[dict[str, int], int, int]]:
+    """Return exact January–December plan headers from the scanned sheet head."""
+
+    result: list[tuple[dict[str, int], int, int]] = []
+    for row_index, row in enumerate(rows[:-1]):
+        next_row = rows[row_index + 1]
+        for start in range(0, max(len(row) - 11, 0)):
+            periods = [_date_month(row[start + offset]) for offset in range(12)]
+            if any(period is None for period in periods):
+                continue
+            years = {period[0] for period in periods if period is not None}
+            months = [period[1] for period in periods if period is not None]
+            if len(years) != 1 or months != list(range(1, 13)):
+                continue
+            if not all(
+                normalize_header(next_row[start + offset]) == "план"
+                for offset in range(12)
+            ):
+                continue
+            result.append(
+                (
+                    {f"month_{month}": start + month for month in range(1, 13)},
+                    next(iter(years)),
+                    row_index + 1,
+                )
+            )
+    return result
+
+
+def _bdr_department_column(
+    rows: list[tuple[Any, ...]],
+    month_header_row: int,
+    first_month_column: int,
+) -> int | None:
+    """Find one exact BDR ``Отдел`` column next to the detected month schema."""
+
+    matches: set[int] = set()
+    first_header_row = max(month_header_row - 2, 1)
+    last_header_row = min(month_header_row + 1, len(rows))
+    for row_number in range(first_header_row, last_header_row + 1):
+        row = rows[row_number - 1]
+        for column in range(1, min(first_month_column, len(row) + 1)):
+            if normalize_header(row[column - 1]) == "отдел":
+                matches.add(column)
+    return next(iter(matches)) if len(matches) == 1 else None
+
+
+def _bdr_row_label(
+    row: tuple[Any, ...], label_columns: tuple[int, ...]
+) -> tuple[str, int] | None:
+    labels = [
+        (str(row[column - 1]).strip(), column)
+        for column in label_columns
+        if column <= len(row)
+        and isinstance(row[column - 1], str)
+        and str(row[column - 1]).strip()
+    ]
+    return labels[-1] if labels else None
+
+
+def _has_bdr_month_value(row: tuple[Any, ...], columns: dict[str, int]) -> bool:
+    return any(
+        column <= len(row) and row[column - 1] not in (None, "")
+        for field, column in columns.items()
+        if field.startswith("month_")
+    )
+
+
+def _one_exact_row(
+    labelled_rows: list[tuple[int, str]], label: str
+) -> int | None:
+    matches = [row_number for row_number, value in labelled_rows if value == label]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _one_exact_row_between(
+    labelled_rows: list[tuple[int, str]],
+    label: str,
+    *,
+    after: int,
+    before: int,
+) -> int | None:
+    """Return the single exact anchor inside an already proven block order."""
+
+    matches = [
+        row_number
+        for row_number, value in labelled_rows
+        if value == label and after < row_number < before
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _bdr_full_candidate(
+    sheet: Any,
+    scanned_rows: list[tuple[Any, ...]],
+    max_scan_rows: int = 2000,
+) -> CandidateRange | None:
+    """Detect one complete BDR by its ordered business blocks and plan periods."""
+
+    matches: list[CandidateRange] = []
+    for month_columns, source_year, month_header_row in _bdr_plan_month_schemas(
+        scanned_rows
+    ):
+        first_month_column = min(month_columns.values())
+        department_column = _bdr_department_column(
+            scanned_rows,
+            month_header_row,
+            first_month_column,
+        )
+        label_columns = tuple(
+            column
+            for column in range(1, first_month_column)
+            if column != department_column
+        )
+        if not label_columns:
+            continue
+        last_scan_row = min(sheet.max_row or max_scan_rows, max_scan_rows)
+        body = list(
+            sheet.iter_rows(
+                min_row=month_header_row + 2,
+                max_row=last_scan_row,
+                min_col=1,
+                max_col=max(month_columns.values()),
+                values_only=True,
+            )
+        )
+        labelled_rows: list[tuple[int, str]] = []
+        business_rows: list[int] = []
+        for row_number, row in enumerate(body, start=month_header_row + 2):
+            labelled = _bdr_row_label(row, label_columns)
+            if labelled is None:
+                continue
+            label, _ = labelled
+            labelled_rows.append((row_number, label))
+            if _has_bdr_month_value(row, month_columns):
+                business_rows.append(row_number)
+
+        income_start = _one_exact_row(labelled_rows, BDR_INCOME_START)
+        kpi_tail_start = _one_exact_row(labelled_rows, BDR_KPI_TAIL_START)
+        expense_start = (
+            _one_exact_row_between(
+                labelled_rows,
+                BDR_EXPENSE_START,
+                after=income_start,
+                before=kpi_tail_start,
+            )
+            if income_start is not None and kpi_tail_start is not None
+            else None
+        )
+        if (
+            income_start is None
+            or expense_start is None
+            or kpi_tail_start is None
+            or not (income_start < expense_start < kpi_tail_start)
+            or not business_rows
+        ):
+            continue
+
+        exact_labels = {label for _, label in labelled_rows}
+        if not (
+            BDR_INCOME_ANCHORS.issubset(exact_labels)
+            and BDR_EXPENSE_ANCHORS.issubset(exact_labels)
+            and len(BDR_KPI_HEAD_ANCHORS.intersection(exact_labels)) >= 3
+            and BDR_KPI_TAIL_ANCHORS.issubset(exact_labels)
+        ):
+            continue
+
+        first_data_row = min(business_rows)
+        last_data_row = max(business_rows)
+        if not (first_data_row < income_start and kpi_tail_start <= last_data_row):
+            continue
+
+        header = scanned_rows[month_header_row - 1]
+        reporting_values = [
+            (str(header[column - 1]).strip(), column)
+            for column in label_columns
+            if column <= len(header)
+            and isinstance(header[column - 1], str)
+            and str(header[column - 1]).strip()
+        ]
+        source_cfo = reporting_values[0][0] if len(reporting_values) == 1 else ""
+        reporting_unit_cell = (
+            f"{get_column_letter(reporting_values[0][1])}{month_header_row}"
+            if len(reporting_values) == 1
+            else ""
+        )
+        matches.append(
+            CandidateRange(
+                candidate_id="",
+                sheet=sheet.title,
+                header_row=month_header_row,
+                first_data_row=first_data_row,
+                last_data_row=last_data_row,
+                columns={
+                    **month_columns,
+                    **({"department": department_column} if department_column else {}),
+                },
+                source_kind="bdr_full",
+                source_cfo=source_cfo,
+                source_year=source_year,
+                indicator_blocks=(
+                    (IndicatorType.KPI, first_data_row, income_start - 1),
+                    (IndicatorType.REVENUE, income_start, expense_start - 1),
+                    (IndicatorType.EXPENSE, expense_start, kpi_tail_start - 1),
+                    (IndicatorType.KPI, kpi_tail_start, last_data_row),
+                ),
+                label_columns=label_columns,
+                reporting_unit_cell=reporting_unit_cell,
+            )
+        )
+
+    # Multiple full schemas are an ambiguity, not an invitation to take the first.
+    return matches[0] if len(matches) == 1 else None
+
+
+def _bdr_value_label_rows(
+    sheet: Any,
+    candidate: CandidateRange,
+) -> dict[int, str]:
+    """Return exact KPI/revenue labels keyed by their source row."""
+
+    result: dict[int, str] = {}
+    rows = sheet.iter_rows(
+        min_row=candidate.first_data_row,
+        max_row=candidate.last_data_row,
+        min_col=1,
+        max_col=max(candidate.label_columns),
+        values_only=True,
+    )
+    for row_number, row in enumerate(rows, start=candidate.first_data_row):
+        if _bdr_indicator_type(candidate, row_number) not in {
+            IndicatorType.KPI,
+            IndicatorType.REVENUE,
+        }:
+            continue
+        labelled = _bdr_row_label(row, candidate.label_columns)
+        if labelled is not None:
+            result[row_number] = labelled[0]
+    return result
+
+
+def _attach_exact_bdr_value_source(
+    workbook: Any,
+    candidate: CandidateRange,
+    summaries: list[CandidateRange],
+) -> CandidateRange:
+    """Bind department-aware rows to one exact summary indicator/month grid."""
+
+    same_year = [
+        summary
+        for summary in summaries
+        if summary.source_year == candidate.source_year
+    ]
+    if len(same_year) != 1:
+        return candidate
+    summary = same_year[0]
+    target_rows = _bdr_value_label_rows(workbook[candidate.sheet], candidate)
+    source_rows = _bdr_value_label_rows(workbook[summary.sheet], summary)
+    mapping: dict[int, int] = {
+        target_row: target_row
+        for target_row, label in target_rows.items()
+        if source_rows.get(target_row) == label
+    }
+
+    target_by_label: dict[str, list[int]] = {}
+    source_by_label: dict[str, list[int]] = {}
+    for row_number, label in target_rows.items():
+        target_by_label.setdefault(label, []).append(row_number)
+    for row_number, label in source_rows.items():
+        source_by_label.setdefault(label, []).append(row_number)
+    for label, target_row_numbers in target_by_label.items():
+        source_row_numbers = source_by_label.get(label, [])
+        if len(target_row_numbers) == 1 and len(source_row_numbers) == 1:
+            mapping.setdefault(target_row_numbers[0], source_row_numbers[0])
+
+    target_labels = set(target_rows.values())
+    if not BDR_KPI_HEAD_ANCHORS.intersection(target_labels) or not (
+        BDR_KPI_TAIL_ANCHORS.issubset(target_labels)
+    ):
+        return candidate
+    if len(mapping) < len(BDR_KPI_HEAD_ANCHORS.intersection(target_labels)) + len(
+        BDR_KPI_TAIL_ANCHORS
+    ):
+        return candidate
+    return replace(
+        candidate,
+        bdr_value_sheet=summary.sheet,
+        bdr_value_columns={
+            field: column
+            for field, column in summary.columns.items()
+            if field.startswith("month_")
+        },
+        bdr_value_rows=tuple(sorted(mapping.items())),
+    )
+
+
+def _bdr_saved_value_score(sheet: Any, candidate: CandidateRange) -> tuple[int, int, int, int]:
+    """Score one BDR grid only by saved KPI/revenue month results.
+
+    The owner workbook can contain a formula-heavy planning grid and a compact
+    saved-result grid.  Sheet names and positions are not evidence.  A unique
+    grid with more numeric cached results (then more non-zero results and fewer
+    errors/gaps) is the value source; ties remain ambiguous.
+    """
+
+    numeric = nonzero = errors = missing = 0
+    rows = sheet.iter_rows(
+        min_row=candidate.first_data_row,
+        max_row=candidate.last_data_row,
+        min_col=1,
+        max_col=max(candidate.columns.values()),
+        values_only=True,
+    )
+    for row_number, row in enumerate(rows, start=candidate.first_data_row):
+        if _bdr_indicator_type(candidate, row_number) not in {
+            IndicatorType.KPI,
+            IndicatorType.REVENUE,
+        }:
+            continue
+        for month in range(1, 13):
+            value = row[candidate.columns[f"month_{month}"] - 1]
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                numeric += 1
+                nonzero += int(value != 0)
+            elif str(value or "").startswith("#"):
+                errors += 1
+            elif value in (None, ""):
+                missing += 1
+    return numeric, nonzero, -errors, -missing
+
+
+def _select_full_bdr_candidates(
+    workbook: Any,
+    candidates: list[CandidateRange],
+    components: tuple[CandidateRange, ...],
+) -> list[CandidateRange]:
+    """Return one structurally reconciled business candidate per source year."""
+
+    by_year: dict[int | None, list[CandidateRange]] = {}
+    for candidate in candidates:
+        by_year.setdefault(candidate.source_year, []).append(candidate)
+
+    selected: list[CandidateRange] = []
+    for year_candidates in by_year.values():
+        scored = [
+            (_bdr_saved_value_score(workbook[item.sheet], item), item)
+            for item in year_candidates
+        ]
+        best_score = max(score for score, _ in scored)
+        value_candidates = [item for score, item in scored if score == best_score]
+        if len(value_candidates) != 1:
+            # A true ambiguity is shown as multiple business candidates; the
+            # service never picks the first workbook range silently.
+            selected.extend(year_candidates)
+            continue
+        value_candidate = value_candidates[0]
+
+        context_candidates = [
+            item
+            for item in year_candidates
+            if item is not value_candidate and "department" in item.columns
+        ]
+        if len(context_candidates) == 1:
+            business_candidate = _attach_exact_bdr_value_source(
+                workbook,
+                context_candidates[0],
+                [value_candidate],
+            )
+        elif not context_candidates:
+            business_candidate = value_candidate
+        else:
+            selected.extend(context_candidates)
+            continue
+        selected.append(replace(business_candidate, bdr_components=components))
+    return selected
 
 
 def detect_candidate_ranges(
@@ -78,20 +585,39 @@ def detect_candidate_ranges(
     scan_columns: int = 100,
 ) -> list[CandidateRange]:
     raw: list[tuple[Any, int, dict[str, int], str, str, int | None]] = []
+    full_bdr_candidates: list[CandidateRange] = []
     for sheet in workbook.worksheets:
         max_row = min(sheet.max_row or scan_rows, scan_rows)
         max_column = min(sheet.max_column or scan_columns, scan_columns)
-        rows = sheet.iter_rows(
-            min_row=1,
-            max_row=max_row,
-            min_col=1,
-            max_col=max_column,
-            values_only=True,
+        scanned_rows = list(
+            sheet.iter_rows(
+                min_row=1,
+                max_row=max_row,
+                min_col=1,
+                max_col=max_column,
+                values_only=True,
+            )
         )
-        for row_number, values in enumerate(rows, start=1):
+        full_bdr = _bdr_full_candidate(sheet, scanned_rows)
+        if full_bdr is not None:
+            full_bdr_candidates.append(full_bdr)
+        for row_number, values in enumerate(scanned_rows, start=1):
             schema = _column_schema(values)
             if schema:
                 raw.append((sheet, row_number, schema, "prepared_budget", "", None))
+                continue
+            income_schema = _income_column_schema(values)
+            if income_schema:
+                raw.append(
+                    (
+                        sheet,
+                        row_number,
+                        income_schema,
+                        "prepared_income_budget",
+                        "",
+                        None,
+                    )
+                )
                 continue
             intalev = _intalev_schema(values)
             if intalev:
@@ -107,6 +633,18 @@ def detect_candidate_ranges(
                         source_year,
                     )
                 )
+
+        for parent_row, columns, source_year in _bdr_revenue_schemas(scanned_rows):
+            raw.append(
+                (
+                    sheet,
+                    parent_row,
+                    columns,
+                    "bdr_revenue_summary",
+                    "",
+                    source_year,
+                )
+            )
 
     candidates: list[CandidateRange] = []
     for index, (sheet, header_row, columns, source_kind, source_cfo, source_year) in enumerate(raw):
@@ -124,6 +662,9 @@ def detect_candidate_ranges(
             first_data_row, last_data_row = _intalev_data_bounds(
                 sheet, header_row + 1, upper_bound, columns["article"]
             )
+        elif source_kind == "bdr_revenue_summary":
+            first_data_row = header_row + 1
+            last_data_row = header_row + len(BDR_REVENUE_ARTICLES)
         else:
             first_data_row = header_row + 1
             last_data_row = _last_data_row(sheet, first_data_row, upper_bound, columns)
@@ -142,7 +683,125 @@ def detect_candidate_ranges(
                 source_year=source_year,
             )
         )
+    if full_bdr_candidates:
+        components = tuple(
+            sorted(
+                (
+                    candidate
+                    for candidate in candidates
+                    if candidate.source_kind
+                    in {"prepared_budget", "prepared_income_budget"}
+                ),
+                key=lambda item: (item.source_kind, item.sheet, item.header_row),
+            )
+        )
+        selected = _select_full_bdr_candidates(
+            workbook,
+            full_bdr_candidates,
+            components,
+        )
+        return [
+            replace(candidate, candidate_id=f"candidate-{index}")
+            for index, candidate in enumerate(selected, start=1)
+        ]
     return candidates
+
+
+def _date_month(value: Any) -> tuple[int, int] | None:
+    if isinstance(value, (date, datetime)):
+        return value.year, value.month
+    return None
+
+
+def _bdr_revenue_schemas(
+    rows: list[tuple[Any, ...]],
+) -> list[tuple[int, dict[str, int], int]]:
+    """Find only the source-proven BDR revenue block by its full structure.
+
+    The summary has no semantic labels for its two hierarchy columns. A block
+    is accepted only when a contiguous January–December header is followed by
+    twelve exact ``план`` markers and the body contains the exact revenue group
+    plus every one of the seven exact child articles, once each. This avoids
+    sheet-name, contains, first-candidate and position-only inference.
+    """
+
+    result: list[tuple[int, dict[str, int], int]] = []
+    month_schemas: list[tuple[dict[str, int], int, int]] = []
+    for row_index, row in enumerate(rows[:-1]):
+        next_row = rows[row_index + 1]
+        for start in range(0, max(len(row) - 11, 0)):
+            periods = [_date_month(row[start + offset]) for offset in range(12)]
+            if any(period is None for period in periods):
+                continue
+            years = {period[0] for period in periods if period is not None}
+            months = [period[1] for period in periods if period is not None]
+            if len(years) != 1 or months != list(range(1, 13)):
+                continue
+            if not all(
+                normalize_header(next_row[start + offset]) == "план"
+                for offset in range(12)
+            ):
+                continue
+            year = next(iter(years))
+            month_schemas.append(
+                (
+                    {
+                        f"month_{month}": start + month
+                        for month in range(1, 13)
+                    },
+                    year,
+                    row_index + 1,
+                )
+            )
+
+    expected_articles = set(BDR_REVENUE_ARTICLES)
+    child_count = len(BDR_REVENUE_ARTICLES)
+    for parent_index, parent in enumerate(rows):
+        children = rows[parent_index + 1 : parent_index + 1 + child_count]
+        if len(children) != child_count:
+            continue
+        group_columns = [
+            index
+            for index, value in enumerate(parent)
+            if str(value or "").strip() == BDR_REVENUE_GROUP
+        ]
+        for group_index in group_columns:
+            if not all(
+                str(row[group_index] or "").strip() == BDR_REVENUE_GROUP
+                for row in children
+            ):
+                continue
+            for article_index in group_columns:
+                if article_index == group_index:
+                    continue
+                articles = [str(row[article_index] or "").strip() for row in children]
+                if len(set(articles)) != child_count or set(articles) != expected_articles:
+                    continue
+                for month_columns, source_year, month_header_row in month_schemas:
+                    if parent_index + 1 <= month_header_row + 1:
+                        continue
+                    if not all(
+                        any(
+                            isinstance(row[column - 1], (int, float))
+                            and not isinstance(row[column - 1], bool)
+                            for column in month_columns.values()
+                        )
+                        for row in children
+                    ):
+                        continue
+                    result.append(
+                        (
+                            parent_index + 1,
+                            {
+                                "revenue_group": group_index + 1,
+                                "article": article_index + 1,
+                                "input_sales_channel": article_index + 1,
+                                **month_columns,
+                            },
+                            source_year,
+                        )
+                    )
+    return result
 
 
 def _intalev_schema(values: Iterable[Any]) -> dict[str, int] | None:
@@ -166,11 +825,11 @@ def _intalev_schema(values: Iterable[Any]) -> dict[str, int] | None:
             return None
         months[month] = index
         years.add(year)
-    if set(months) != set(range(1, 13)) or len(years) != 1:
+    if not months or len(years) != 1:
         return None
     return {
         "article": indicators[0],
-        **{f"month_{month}": months[month] for month in range(1, 13)},
+        **{f"month_{month}": column for month, column in sorted(months.items())},
     }
 
 
@@ -190,7 +849,12 @@ def _parse_period(value: Any) -> tuple[int, int] | None:
 
 def _period_year(values: Iterable[Any], columns: dict[str, int]) -> int | None:
     row = list(values)
-    period = _parse_period(row[columns["month_1"] - 1])
+    first_month_column = next(
+        column
+        for field, column in sorted(columns.items())
+        if field.startswith("month_")
+    )
+    period = _parse_period(row[first_month_column - 1])
     return period[0] if period else None
 
 
@@ -359,9 +1023,25 @@ def _last_data_row(
     return last
 
 
-def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str) -> list[SourceRow]:
+def read_source_rows(
+    workbook: Any,
+    candidate: CandidateRange,
+    source_file: str,
+    bdr_cached_formula_values: dict[str, Any] | None = None,
+) -> list[SourceRow]:
+    if candidate.source_kind == "bdr_full":
+        return _read_bdr_full_rows(
+            workbook,
+            candidate,
+            source_file,
+            bdr_cached_formula_values or {},
+        )
     if candidate.source_kind == "intalev_opiu":
         return _read_intalev_source_rows(workbook, candidate, source_file)
+    if candidate.source_kind == "prepared_income_budget":
+        return _read_income_source_rows(workbook, candidate, source_file)
+    if candidate.source_kind == "bdr_revenue_summary":
+        return _read_bdr_revenue_rows(workbook, candidate, source_file)
 
     sheet = workbook[candidate.sheet]
     result: list[SourceRow] = []
@@ -387,7 +1067,14 @@ def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str)
             field: value(field)
             for field in BUSINESS_ALIASES
         }
-        if all(value is None for value in (*shared_values.values(), *month_values)):
+        indicator_values = {
+            field: value(field) if field in candidate.columns else ""
+            for field in INDICATOR_ALIASES
+        }
+        if all(
+            item is None or item == ""
+            for item in (*shared_values.values(), *indicator_values.values(), *month_values)
+        ):
             continue
         cells = {
             field: f"{get_column_letter(column)}{row_number}"
@@ -401,18 +1088,390 @@ def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str)
                 months=month_values,
                 cells=cells,
                 **shared_values,
+                **indicator_values,
+            )
+        )
+    return result
+
+
+def _bdr_indicator_type(candidate: CandidateRange, row_number: int) -> IndicatorType:
+    matches = [
+        indicator_type
+        for indicator_type, first_row, last_row in candidate.indicator_blocks
+        if first_row <= row_number <= last_row
+    ]
+    if len(matches) != 1:
+        raise ValueError("Строка БДР не относится к одному определённому блоку")
+    return matches[0]
+
+
+def _bdr_channel_parent_rows(
+    sheet: Any,
+    candidate: CandidateRange,
+) -> dict[int, tuple[str, int, int]]:
+    """Return exact parent indicators for structural seven-channel blocks.
+
+    Owner BDR files use two layouts: the parent indicator can be repeated in
+    another label column on every channel row, or written once immediately
+    above the canonical seven sales channels.  Only the complete ordered block
+    is accepted, which keeps an isolated word such as ``Опт`` from being
+    guessed into an unrelated KPI.
+    """
+
+    labelled: dict[int, tuple[str, int]] = {}
+    rows = sheet.iter_rows(
+        min_row=candidate.first_data_row,
+        max_row=candidate.last_data_row,
+        min_col=1,
+        max_col=max(candidate.label_columns),
+        values_only=True,
+    )
+    for row_number, row in enumerate(rows, start=candidate.first_data_row):
+        value = _bdr_row_label(row, candidate.label_columns)
+        if value is not None:
+            labelled[row_number] = value
+
+    result: dict[int, tuple[str, int, int]] = {}
+    channel_count = len(BDR_REVENUE_ARTICLES)
+    for parent_row, parent in labelled.items():
+        if parent[0] in BDR_REVENUE_ARTICLES:
+            continue
+        child_rows = tuple(range(parent_row + 1, parent_row + channel_count + 1))
+        child_labels = tuple(labelled.get(row, ("", 0))[0] for row in child_rows)
+        if child_labels != BDR_REVENUE_ARTICLES:
+            continue
+        try:
+            parent_type = _bdr_indicator_type(candidate, parent_row)
+            child_types = {
+                _bdr_indicator_type(candidate, row_number)
+                for row_number in child_rows
+            }
+        except ValueError:
+            continue
+        if (
+            parent_type not in {IndicatorType.KPI, IndicatorType.REVENUE}
+            or child_types != {parent_type}
+        ):
+            continue
+        result.update(
+            {
+                row_number: (parent[0], parent[1], parent_row)
+                for row_number in child_rows
+            }
+        )
+    return result
+
+
+def _read_bdr_full_rows(
+    workbook: Any,
+    candidate: CandidateRange,
+    source_file: str,
+    cached_formula_values: dict[str, Any],
+) -> list[SourceRow]:
+    sheet = workbook[candidate.sheet]
+    channel_parents = _bdr_channel_parent_rows(sheet, candidate)
+    value_rows = dict(candidate.bdr_value_rows)
+    max_column = max((*candidate.columns.values(), *candidate.label_columns))
+    rows = sheet.iter_rows(
+        min_row=candidate.first_data_row,
+        max_row=candidate.last_data_row,
+        min_col=1,
+        max_col=max_column,
+        values_only=True,
+    )
+    result: list[SourceRow] = []
+    for row_number, row in enumerate(rows, start=candidate.first_data_row):
+        labelled = _bdr_row_label(row, candidate.label_columns)
+        if labelled is None:
+            continue
+        indicator, indicator_column = labelled
+        indicator_row = row_number
+        indicator_type = _bdr_indicator_type(candidate, row_number)
+        if (
+            indicator_type == IndicatorType.EXPENSE
+            and any(
+                component.source_kind == "prepared_budget"
+                for component in candidate.bdr_components
+            )
+        ):
+            continue
+        input_sales_channel = ""
+        if (
+            indicator_type in {IndicatorType.KPI, IndicatorType.REVENUE}
+            and indicator in BDR_REVENUE_ARTICLES
+        ):
+            parent_labels = [
+                (str(row[column - 1]).strip(), column)
+                for column in candidate.label_columns
+                if column != indicator_column
+                and column <= len(row)
+                and isinstance(row[column - 1], str)
+                and str(row[column - 1]).strip()
+            ]
+            distinct_parents = {label for label, _ in parent_labels}
+            if len(distinct_parents) == 1:
+                input_sales_channel = indicator
+                indicator, indicator_column = parent_labels[0]
+            elif row_number in channel_parents:
+                input_sales_channel = indicator
+                indicator, indicator_column, indicator_row = channel_parents[row_number]
+        target_month_cells = tuple(
+            f"{get_column_letter(candidate.columns[f'month_{month}'])}{row_number}"
+            for month in range(1, 13)
+        )
+        value_row = value_rows.get(row_number)
+        uses_value_sheet = bool(
+            value_row is not None
+            and candidate.bdr_value_sheet
+            and all(
+                f"month_{month}" in candidate.bdr_value_columns
+                for month in range(1, 13)
+            )
+        )
+        month_cells = (
+            tuple(
+                f"{get_column_letter(candidate.bdr_value_columns[f'month_{month}'])}"
+                f"{value_row}"
+                for month in range(1, 13)
+            )
+            if uses_value_sheet
+            else target_month_cells
+        )
+        month_values = tuple(
+            cached_formula_values.get(
+                target_cell,
+                row[candidate.columns[f"month_{month}"] - 1],
+            )
+            for month, target_cell in enumerate(target_month_cells, start=1)
+        )
+        if not any(value not in (None, "") for value in month_values):
+            continue
+        article_cell = f"{get_column_letter(indicator_column)}{indicator_row}"
+        department_column = candidate.columns.get("department")
+        kpi_department = (
+            row[department_column - 1]
+            if indicator_type == IndicatorType.KPI
+            and department_column is not None
+            and department_column <= len(row)
+            else ""
+        )
+        department_cell = (
+            f"{get_column_letter(department_column)}{row_number}"
+            if kpi_department and department_column is not None
+            else candidate.reporting_unit_cell or article_cell
+        )
+        cells = {
+            "article": article_cell,
+            "indicator_type": article_cell,
+            "cfo": department_cell,
+            "reporting_unit": candidate.reporting_unit_cell or article_cell,
+            **({"department": department_cell} if kpi_department else {}),
+            **{
+                f"month_{month}": month_cells[month - 1]
+                for month in range(1, 13)
+            },
+        }
+        if input_sales_channel:
+            cells["input_sales_channel"] = (
+                f"{get_column_letter(labelled[1])}{row_number}"
+            )
+        result.append(
+            SourceRow(
+                source_file=source_file,
+                sheet=candidate.sheet,
+                row_number=row_number,
+                reporting_unit=candidate.source_cfo,
+                expense_type="",
+                department=kpi_department,
+                organization_type="",
+                cfo=kpi_department or candidate.source_cfo,
+                tax=None,
+                expense_group="",
+                article=indicator,
+                months=month_values,
+                cells=cells,
+                indicator_type=indicator_type.value,
+                input_sales_channel=input_sales_channel,
+                source_kind="bdr_full",
+                cell_sheets=(
+                    {
+                        f"month_{month}": candidate.bdr_value_sheet
+                        for month in range(1, 13)
+                    }
+                    if uses_value_sheet
+                    else {}
+                ),
+            )
+        )
+    # Component worksheets can reuse row numbers.  A deterministic run-local
+    # offset keeps UI corrections and diagnostics independent, while exact
+    # source sheet/cell coordinates remain unchanged in ``cells``.
+    for component_index, component in enumerate(candidate.bdr_components, start=1):
+        component_rows = read_source_rows(workbook, component, source_file)
+        offset = component_index * 1_000_000
+        result.extend(
+            replace(
+                row,
+                row_number=offset + row.row_number,
+                months=tuple(
+                    cached_formula_values.get(
+                        f"{component.sheet}!{row.cells[f'month_{month}']}",
+                        row.months[month - 1],
+                    )
+                    for month in range(1, 13)
+                ),
+                indicator_type=(
+                    IndicatorType.EXPENSE.value
+                    if component.source_kind == "prepared_budget"
+                    and not row.indicator_type
+                    else row.indicator_type
+                ),
+            )
+            for row in component_rows
+        )
+    return result
+
+
+def _read_income_source_rows(
+    workbook: Any,
+    candidate: CandidateRange,
+    source_file: str,
+) -> list[SourceRow]:
+    sheet = workbook[candidate.sheet]
+    result: list[SourceRow] = []
+    relevant = list(candidate.columns.values())
+    min_column = min(relevant)
+    max_column = max(relevant)
+    rows = sheet.iter_rows(
+        min_row=candidate.first_data_row,
+        max_row=candidate.last_data_row,
+        min_col=min_column,
+        max_col=max_column,
+        values_only=True,
+    )
+    for row_number, row in enumerate(rows, start=candidate.first_data_row):
+        def value(field: str) -> Any:
+            return row[candidate.columns[field] - min_column]
+
+        def optional_value(field: str) -> Any:
+            return value(field) if field in candidate.columns else None
+
+        month_values = tuple(value(f"month_{month}") for month in range(1, 13))
+        revenue_type = value("revenue_type")
+        revenue_group = value("revenue_group")
+        article = value("article")
+        analytics = value("analytics")
+        indicator_values = {
+            field: value(field) if field in candidate.columns else ""
+            for field in INDICATOR_ALIASES
+        }
+        indicator_values["indicator_type"] = "REVENUE"
+        indicator_values["revenue_group"] = revenue_group
+        indicator_values["analytics"] = analytics
+        if all(
+            item is None or item == ""
+            for item in (
+                revenue_type,
+                revenue_group,
+                article,
+                analytics,
+                *indicator_values.values(),
+                *month_values,
+            )
+        ):
+            continue
+
+        cells = {
+            field: f"{get_column_letter(column)}{row_number}"
+            for field, column in candidate.columns.items()
+        }
+        cells["expense_type"] = cells["revenue_type"]
+        cells["expense_group"] = cells["revenue_group"]
+        result.append(
+            SourceRow(
+                source_file=source_file,
+                sheet=candidate.sheet,
+                row_number=row_number,
+                reporting_unit=optional_value("reporting_unit"),
+                expense_type=revenue_type,
+                department=optional_value("department"),
+                organization_type=optional_value("organization_type"),
+                cfo=optional_value("cfo"),
+                tax=optional_value("tax"),
+                expense_group=revenue_group,
+                article=article,
+                months=month_values,
+                cells=cells,
+                source_kind="prepared_income_budget",
+                **indicator_values,
+            )
+        )
+    return result
+
+
+def _read_bdr_revenue_rows(
+    workbook: Any,
+    candidate: CandidateRange,
+    source_file: str,
+) -> list[SourceRow]:
+    sheet = workbook[candidate.sheet]
+    result: list[SourceRow] = []
+    relevant = list(candidate.columns.values())
+    min_column = min(relevant)
+    max_column = max(relevant)
+    rows = sheet.iter_rows(
+        min_row=candidate.first_data_row,
+        max_row=candidate.last_data_row,
+        min_col=min_column,
+        max_col=max_column,
+        values_only=True,
+    )
+    for row_number, row in enumerate(rows, start=candidate.first_data_row):
+        def value(field: str) -> Any:
+            return row[candidate.columns[field] - min_column]
+
+        revenue_group = value("revenue_group")
+        article = value("article")
+        input_sales_channel = value("input_sales_channel")
+        month_values = tuple(value(f"month_{month}") for month in range(1, 13))
+        cells = {
+            field: f"{get_column_letter(column)}{row_number}"
+            for field, column in candidate.columns.items()
+        }
+        cells["expense_group"] = cells["revenue_group"]
+        result.append(
+            SourceRow(
+                source_file=source_file,
+                sheet=candidate.sheet,
+                row_number=row_number,
+                reporting_unit=None,
+                expense_type=None,
+                department=None,
+                organization_type=None,
+                cfo=None,
+                tax=None,
+                expense_group=revenue_group,
+                article=article,
+                months=month_values,
+                cells=cells,
+                indicator_type="REVENUE",
+                revenue_group=revenue_group,
+                input_sales_channel=input_sales_channel,
             )
         )
     return result
 
 
 def _intalev_month_values(sheet: Any, candidate: CandidateRange, row_number: int) -> tuple[Any, ...]:
-    return tuple(
-        0
-        if sheet.cell(row_number, candidate.columns[f"month_{month}"]).value in (None, "")
-        else sheet.cell(row_number, candidate.columns[f"month_{month}"]).value
-        for month in range(1, 13)
-    )
+    result: list[Any] = []
+    for month in range(1, 13):
+        column = candidate.columns.get(f"month_{month}")
+        if column is None:
+            result.append(None)
+            continue
+        value = sheet.cell(row_number, column).value
+        result.append(0 if value in (None, "") else value)
+    return tuple(result)
 
 
 def _intalev_cells(
@@ -440,9 +1499,10 @@ def _intalev_cells(
         "article": article_cell,
         **{
             f"month_{month}": (
-                f"{get_column_letter(candidate.columns[f'month_{month}'])}{row_number}"
+                f"{get_column_letter(column)}{row_number}"
             )
             for month in range(1, 13)
+            if (column := candidate.columns.get(f"month_{month}")) is not None
         },
     }
 

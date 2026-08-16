@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/final-owner-smoke-fitera-v2
+      - codex/task-06-08-bdr-kpi-context-value
   workflow_dispatch:
 
 permissions:
@@ -103,21 +104,27 @@ jobs:
       - name: Smoke packaged launcher, HTTP owner flow, baselines, transform, restart and stop
         shell: pwsh
         run: |
-          $package = Join-Path $PWD "dist\EXCEL_TO_OPIU_LIGHT_USER"
+          $builtPackage = Join-Path $PWD "dist\EXCEL_TO_OPIU_LIGHT_USER"
+          $longParent = Join-Path $env:RUNNER_TEMP "fitera-final-v2-long-path\first-long-directory-name\second-long-directory-name\third-long-directory-name"
+          Remove-Item -LiteralPath $longParent -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $longParent -Force | Out-Null
+          Copy-Item -LiteralPath $builtPackage -Destination $longParent -Recurse
+          $package = Join-Path $longParent "EXCEL_TO_OPIU_LIGHT_USER"
           $startPs = Join-Path $package "START_SERVICE.ps1"
           $stopPs = Join-Path $package "STOP_SERVICE.ps1"
           foreach ($required in @($startPs, $stopPs, (Join-Path $package "README_USER_RU.md"))) {
             if (-not (Test-Path -LiteralPath $required)) { throw "Missing package file: $required" }
           }
 
-          $runtime = Join-Path $env:RUNNER_TEMP "fitera-final-v2-runtime"
+          $runtime = Join-Path $env:LOCALAPPDATA "FITERA\ExcelToOpiuLight\runtime"
           Remove-Item -LiteralPath $runtime -Recurse -Force -ErrorAction SilentlyContinue
           $env:OPIU_PORT = "8765"
-          $env:OPIU_RUNTIME_DIR = $runtime
+          Remove-Item Env:OPIU_RUNTIME_DIR -ErrorAction SilentlyContinue
           $env:OPIU_NONINTERACTIVE = "1"
 
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startPs
           if ($LASTEXITCODE -ne 0) { throw "First launcher run failed" }
+          $env:OPIU_RUNTIME_DIR = $runtime
           $url = (Get-Content -LiteralPath (Join-Path $runtime "service.url") -Raw).Trim()
           $firstPid = [int](Get-Content -LiteralPath (Join-Path $runtime "service.pid") -Raw)
           $health = Invoke-RestMethod -Uri "$url/health" -TimeoutSec 5
@@ -127,7 +134,13 @@ jobs:
             if ($homeResponse.Content -notmatch [regex]::Escape($marker)) { throw "Home marker missing: $marker" }
           }
 
-          $venvPython = Join-Path $package ".venv\Scripts\python.exe"
+          $packageVenv = Join-Path $package ".venv"
+          if ($packageVenv.Length -le 100) { throw "Long-path package smoke did not create a sufficiently deep path" }
+          $packageBuildText = Get-Content -LiteralPath (Join-Path $package "PACKAGE_BUILD.txt") -Raw
+          $packageBuildKey = [regex]::Match($packageBuildText, "(?m)^commit=([A-Za-z0-9._-]+)\s*$").Groups[1].Value
+          if ($packageBuildKey.Length -gt 16) { $packageBuildKey = $packageBuildKey.Substring(0, 16) }
+          $venvPython = Join-Path $env:LOCALAPPDATA "FITERA\ExcelToOpiuLight\venvs\$packageBuildKey\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $venvPython)) { throw "Long-path fallback environment was not created" }
           & $venvPython -c "import excel_transform_1c,fastapi,openpyxl,msoffcrypto,olefile,xlrd"
           if ($LASTEXITCODE -ne 0) { throw "Installed component import failed" }
 
@@ -144,12 +157,14 @@ jobs:
 
           runtime = Path(os.environ["OPIU_RUNTIME_DIR"])
           service = WorkflowService(runtime)
-          assert service.reference_counts() == {
-              "erp_articles": 271,
-              "organizations": 357,
-              "scenarios": 12,
-              "intalev_cfos": 16,
-          }
+          counts = service.reference_counts()
+          # The preceding HTTP smoke deliberately supplements the organization
+          # catalog.  Packaged baselines must remain present, while the total is
+          # allowed to grow after an explicit user import.
+          assert counts["erp_articles"] >= 271
+          assert counts["organizations"] >= 357
+          assert counts["scenarios"] >= 12
+          assert counts["intalev_cfos"] >= 16
           scenario = next(item for item in service.store.list_scenarios() if item.name == "ПЛАН 2026" and item.year == 2026)
           node = service.organization_nodes()[0]
           context = service.build_context("ТЕСТ", node.node_id, scenario.scenario_id, 2026, [])
@@ -185,8 +200,12 @@ jobs:
               assert check["OPIU Light"].max_row == 13
               assert check["ОПИУ"].max_row == 13
               assert check["Показатели"].max_row == 13
-              assert check["Показатели"]["G2"].value == "Услуги связи"
-              assert check["Показатели"]["H2"].value == 100
+              headers = {
+                  cell.value: cell.column
+                  for cell in check["Показатели"][1]
+              }
+              assert check["Показатели"].cell(2, headers["Показатель"]).value == "Услуги связи"
+              assert check["Показатели"].cell(2, headers["Значение"]).value == 100
           finally:
               check.close()
           print("package functional smoke PASS")

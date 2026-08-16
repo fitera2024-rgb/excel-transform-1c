@@ -8,7 +8,11 @@ from excel_transform_1c.core.indicator_matching import (
     ExactArticleIndicatorMatcher,
     aggregate_indicator_rows,
 )
-from excel_transform_1c.core.models import ArticleIndicatorRule, PreviewRecord
+from excel_transform_1c.core.models import (
+    ArticleIndicatorRule,
+    IndicatorType,
+    PreviewRecord,
+)
 
 
 def rule(
@@ -195,3 +199,14 @@ def test_indicator_rows_aggregate_equal_keys_and_keep_zero_and_negative():
         "Отрицательный": Decimal("-5"),
     }
     assert "Ошибка месяца" not in amounts
+
+
+def test_matched_non_sales_revenue_exports_with_empty_channel():
+    revenue = record("1", amount=Decimal("10"), channel="", indicator="Прочие доходы")
+    revenue.indicator_type = IndicatorType.REVENUE
+
+    rows = aggregate_indicator_rows([revenue])
+
+    assert len(rows) == 1
+    assert rows[0].sales_channel == ""
+    assert rows[0].indicator == "Прочие доходы"

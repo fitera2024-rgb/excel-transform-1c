@@ -122,7 +122,7 @@ def test_preview_shows_compact_indicator_counts_without_rules_workflow(client):
     assert "Требует внимания:" in response.text
     assert "Не найдено:" in response.text
     assert "Классификатор:" in response.text
-    assert "не загружен" in response.text
+    assert "встроен и применён" in response.text
     assert 'data-testid="indicator-classifier-form"' in response.text
     assert "Rules" not in response.text
 
@@ -143,7 +143,9 @@ def test_preview_shows_compact_indicator_counts_without_rules_workflow(client):
     assert re.search(r"Найдено автоматически:</dt><dd>2</dd>", response.text)
     assert re.search(r"Требует внимания:</dt><dd>0</dd>", response.text)
     assert re.search(r"Не найдено:</dt><dd>0</dd>", response.text)
-    assert re.search(r"Классификатор:</dt><dd>загружен</dd>", response.text)
+    assert re.search(
+        r"Классификатор:</dt><dd>встроен и применён</dd>", response.text
+    )
 
 
 def test_legacy_delegation_is_cleared_and_all_nodes_remain_available(tmp_path):
@@ -222,6 +224,29 @@ def test_attention_path_with_manual_erp_correction(client):
     )
     assert "Исправление применено без повторного запуска" in corrected.text
     assert "ERP-001" in corrected.text
+
+
+def test_bulk_confirm_tax(client):
+    response = upload(client, workbook_bytes(tax_error=True))
+    run_id = run_id_from(response)
+
+    confirmed = client.post(
+        f"/runs/{run_id}/confirm-tax-not-required",
+        data={"confirmed": "1", "source_rows": "[3]"},
+        follow_redirects=True,
+    )
+    run = client.app.state.workflow.get_run(run_id)
+    row_records = [record for record in run.records if record.source_row == 3]
+
+    assert confirmed.status_code == 200
+    assert "Налогообложение отмечено как не требующееся: 1 строк" in confirmed.text
+    assert len(row_records) == 12
+    assert {record.tax for record in row_records} == {"Не требуется"}
+    assert not any(
+        issue.kind == "tax" and issue.pointer.row == 3
+        for issue in run.unresolved_issues
+    )
+    assert run.rerun_count == 0
 
 
 def test_attention_editor_is_grouped_by_source_row_and_shows_business_context(client):
@@ -408,7 +433,7 @@ def test_add_scenario_shows_erp_unconfirmed_marker(client):
 def test_blocked_no_range_state_has_reset_action(client):
     response = upload(client, workbook_bytes(no_range=True))
     assert response.status_code == 200
-    assert "Подготовленный диапазон не найден" in response.text
+    assert "Бизнес-источник не распознан" in response.text
     assert "Сбросить и выбрать другой файл" in response.text
     upload_id = next(iter(client.app.state.workflow.pending))
     reset = client.post(f"/uploads/{upload_id}/reset", follow_redirects=True)
@@ -417,7 +442,7 @@ def test_blocked_no_range_state_has_reset_action(client):
 
 def test_multiple_ranges_are_not_selected_silently(client):
     response = upload(client, workbook_bytes(two_candidates=True))
-    assert "Выберите подготовленный диапазон" in response.text
+    assert "Выберите бизнес-источник" in response.text
     assert response.text.count('name="candidate_id"') == 2
     assert "Файл загружается и анализируется; не закрывайте страницу" in response.text
     assert 'data-candidate-processing-form' in response.text

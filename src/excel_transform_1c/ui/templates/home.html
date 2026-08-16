@@ -34,6 +34,11 @@
       <div><dt>Организации и узлы</dt><dd>{{ counts.organizations }}</dd></div>
       <div><dt>Сценарии</dt><dd>{{ counts.scenarios }}</dd></div>
       <div><dt>ЦФО Инталев</dt><dd>{{ counts.intalev_cfos }}</dd></div>
+      <div><dt>Связи показателей</dt><dd>{{ counts.article_indicators }}</dd></div>
+      <div><dt>Показатели ОПИУ</dt><dd>{{ counts.opiu_report_indicators }}</dd></div>
+      <div><dt>Отборы источников ОПИУ</dt><dd>{{ counts.opiu_source_rules }}</dd></div>
+      <div><dt>Формулы / аналитики</dt><dd>{{ counts.opiu_formulas }} / {{ counts.opiu_analytics }}</dd></div>
+      <div><dt>Регионы / сети</dt><dd>{{ counts.regions }} / {{ counts.sales_networks }}</dd></div>
     </dl>
     <form method="post" action="/references" enctype="multipart/form-data" data-testid="reference-form" class="reference-form">
       <label>Тип справочника
@@ -48,7 +53,7 @@
         <input type="file" name="reference_file" accept=".xlsx,.xls,.xlsm" required>
         <span>Выберите Excel, чтобы дополнить базовый каталог</span>
       </label>
-      <p class="hint">Справочники хранятся локально и используются для всех организаций и следующих запусков. Повторная загрузка дополняет список и обновляет записи по точному коду.</p>
+      <p class="hint">Все исходные классификаторы ОПИУ, формулы, аналитики, отборы MXL, регионы и сети уже включены в поставку. Загрузка здесь нужна только для последующего точного дополнения.</p>
       <button type="submit">Загрузить / дополнить</button>
     </form>
   </article>
@@ -105,9 +110,9 @@
     </fieldset>
 
     <div class="form-section-title file-section-title"><span class="form-section-index">2.2</span><div><strong>Исходный файл</strong><span>Обычный, защищённый или поддерживаемый старый Excel</span></div></div>
-    <label class="budget-file file-drop prominent">Бюджетный Excel
+    <label class="budget-file file-drop prominent">Бизнес-источник Excel
       <input type="file" name="budget_file" accept=".xlsx,.xls,.xlsm" required>
-      <span>Выберите исходный файл для локального анализа</span>
+      <span>Выберите БДР 2026 ИТОГ или другой поддерживаемый бизнес-документ</span>
     </label>
     <label class="budget-password">Пароль защищённой книги — необязательно
       <input type="password" name="workbook_password" autocomplete="off" placeholder="Вводится только для текущего файла">

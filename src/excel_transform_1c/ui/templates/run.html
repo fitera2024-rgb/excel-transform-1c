@@ -24,10 +24,42 @@
   <div><span>Полных перезапусков</span><strong>{{ run.rerun_count }}</strong><small>после правок</small></div>
 </section>
 
+{% if bdr_diagnostics %}
+<section class="card reference-card" data-testid="bdr-diagnostics">
+  <div class="section-heading">
+    <div><p class="eyebrow ink">БДР 2026 ИТОГ</p><h2>Диагностика перед экспортом</h2></div>
+    <p>Доходы, расходы и KPI обработаны одним потоком. Непопавшие показатели перечислены с причиной.</p>
+  </div>
+  <dl class="catalog-stats">
+    <div><dt>Прочитано строк БДР:</dt><dd>{{ bdr_diagnostics.rows_read }}</dd></div>
+    <div><dt>Месячных ячеек прочитано:</dt><dd>{{ bdr_diagnostics.monthly_cells_read }}</dd></div>
+    <div><dt>Числовых значений:</dt><dd>{{ bdr_diagnostics.numeric_values }}</dd></div>
+    <div><dt>Ошибок Excel:</dt><dd>{{ bdr_diagnostics.excel_errors }}</dd></div>
+    <div><dt>Строк требует внимания:</dt><dd>{{ bdr_diagnostics.attention_rows }}</dd></div>
+    <div><dt>Доходные показатели:</dt><dd>{{ bdr_diagnostics.income }}</dd></div>
+    <div><dt>Расходные показатели:</dt><dd>{{ bdr_diagnostics.expense }}</dd></div>
+    <div><dt>KPI найдено:</dt><dd>{{ bdr_diagnostics.kpi_found }}</dd></div>
+    <div><dt>KPI с организацией:</dt><dd>{{ bdr_diagnostics.kpi_with_organization }}</dd></div>
+    <div><dt>KPI с периодом:</dt><dd>{{ bdr_diagnostics.kpi_with_period }}</dd></div>
+    <div><dt>KPI со значением:</dt><dd>{{ bdr_diagnostics.kpi_with_value }}</dd></div>
+    <div><dt>KPI экспортировано:</dt><dd>{{ bdr_diagnostics.kpi_exported }}</dd></div>
+    <div><dt>Количество показателей:</dt><dd>{{ bdr_diagnostics.indicators }}</dd></div>
+    <div><dt>Сопоставлено:</dt><dd>{{ bdr_diagnostics.matched }}</dd></div>
+    <div><dt>Экспортировано:</dt><dd>{{ bdr_diagnostics.exported }} <small>показателей / {{ bdr_diagnostics.exported_period_rows }} строк по периодам</small></dd></div>
+  </dl>
+  {% if bdr_diagnostics.exclusions %}
+  <div class="indicator-unresolved-list" data-testid="bdr-exclusions">
+    {% for item in bdr_diagnostics.exclusions %}<article class="indicator-unresolved-row"><strong>Строка {{ item.source_row }} · {{ item.indicator }}</strong><span>{{ item.reason }}</span></article>{% endfor %}
+  </div>
+  {% else %}<p class="hint">Все прочитанные показатели имеют экспортируемые значения.</p>{% endif %}
+</section>
+{% endif %}
+
+{% if run.candidate.source_kind != "bdr_full" %}
 <section class="card reference-card" data-testid="indicator-classifier-summary">
   <div class="section-heading">
     <div>
-      <p class="eyebrow ink">Статья → показатель</p>
+      <p class="eyebrow ink">Показатели ОПИУ</p>
       <h2>Автоматические соответствия</h2>
     </div>
     <p>Сервис применяет только один точный кандидат. Остальные строки не угадываются.</p>
@@ -36,17 +68,19 @@
     <div><dt>Найдено автоматически:</dt><dd>{{ indicator_counts.automatic }}</dd></div>
     <div><dt>Требует внимания:</dt><dd>{{ indicator_counts.attention }}</dd></div>
     <div><dt>Не найдено:</dt><dd>{{ indicator_counts.not_found }}</dd></div>
-    <div><dt>Классификатор:</dt><dd>{{ 'загружен' if run.indicator_classifier_loaded else 'не загружен' }}</dd></div>
+    <div><dt>Классификатор:</dt><dd>{{ 'встроен и применён' if run.indicator_classifier_loaded else 'не загружен' }}</dd></div>
   </dl>
   <form method="post" action="/runs/{{ run.run_id }}/indicator-classifier" enctype="multipart/form-data" class="reference-form" data-testid="indicator-classifier-form">
     <label>
-      Загрузить / дополнить классификатор
+      Дополнить точные соответствия — необязательно
       <input type="file" name="classifier_file" accept=".xlsx,.xls,.xlsm" required>
     </label>
-    <button type="submit">Повторить автоматический поиск</button>
+    <p class="hint">Исходные справочники уже встроены. Дополнение принимается только в подготовленной таблице с показателем, каналом сбыта и точным ключом статьи.</p>
+    <button type="submit">Дополнить и повторить поиск</button>
   </form>
-  {% if indicator_unresolved_rows %}<div class="indicator-unresolved-list" data-testid="indicator-unresolved-list">{% for item in indicator_unresolved_rows %}<article class="indicator-unresolved-row" data-testid="indicator-unresolved-row"><strong>{{ item.source_line }}</strong><span>{{ item.expense_type }} → {{ item.expense_group }} → {{ item.source_article }}</span>{% if item.erp_code %}<span>ERP-код: {{ item.erp_code }}</span>{% endif %}<span><b>{{ item.status }}</b> — {{ item.reason }}</span><span>{{ item.action }}</span></article>{% endfor %}</div>{% endif %}
+  {% if indicator_unresolved_rows %}<div class="indicator-unresolved-list" data-testid="indicator-unresolved-list">{% for item in indicator_unresolved_rows %}<article class="indicator-unresolved-row" data-testid="indicator-unresolved-row"><strong>{{ item.source_line }}</strong><span>{{ item.expense_type }} → {{ item.expense_group }} → {{ item.source_article }}</span><span>Тип: {{ item.indicator_type }}</span>{% if item.erp_code %}<span>ERP-код: {{ item.erp_code }}</span>{% endif %}{% if item.indicator %}<span>Показатель: <b>{{ item.indicator }}</b></span>{% endif %}<span><b>{{ item.status }}</b> — {{ item.reason }}</span><span>{{ item.action }}</span></article>{% endfor %}</div>{% endif %}
 </section>
+{% endif %}
 
 {% if run.cfo_mapping_enabled %}
 <section class="card cfo-mapping-section" data-testid="cfo-mapping-section"><div class="section-heading"><div><p class="eyebrow ink">ЦФО</p><h2>Исходный ЦФО → ЦФО Инталев → узел 1С</h2></div></div><form method="post" action="/runs/{{ run.run_id }}/confirm-filled-cfo" class="bulk-confirm-card cfo-bulk-card" data-cfo-bulk-form data-testid="cfo-bulk-form"><input type="hidden" name="selections" value="[]" data-cfo-bulk-selections><label><input type="checkbox" name="confirmed" value="1" data-cfo-bulk-confirm disabled>Подтверждаю все заполненные сопоставления ЦФО</label><p data-cfo-bulk-count>Будет применено: 0 ЦФО</p><p data-cfo-bulk-empty>Сначала заполните хотя бы одно новое соответствие.</p><button type="submit" data-cfo-bulk-submit disabled>Нет заполненных соответствий</button></form><div class="cfo-mapping-list">{% for entry in cfo_mapping_entries %}<article class="cfo-mapping-row{% if entry.confirmed %} is-confirmed{% endif %}" data-cfo-entry data-entry-key="{{ entry.entry_key }}" data-source-reporting-unit="{{ entry.source_reporting_unit }}" data-source-cfo="{{ entry.source_cfo }}" data-confirmed="{{ 'true' if entry.confirmed else 'false' }}" data-eligible="true"><div class="cfo-source-card"><strong>{{ entry.source_label }}</strong><span>{{ entry.row_count }} исходных строк</span>{% if entry.intalev_confirmed %}<small>ЦФО Инталев: {{ entry.intalev_label }}</small>{% endif %}</div>{% if entry.confirmed %}<div class="business-status cfo-confirmed-status"><strong>Сопоставление ЦФО подтверждено</strong><span>{{ entry.intalev_label }} → {{ entry.target_label }}</span></div>{% else %}<form method="post" action="/runs/{{ run.run_id }}/map-cfo" class="cfo-mapping-form" data-cfo-form><input type="hidden" name="source_reporting_unit" value="{{ entry.source_reporting_unit }}"><input type="hidden" name="source_cfo" value="{{ entry.source_cfo }}"><label>ЦФО Инталев<select name="intalev_source_key" data-cfo-intalev><option value="">Выберите точный ЦФО Инталев</option>{% for option in intalev_cfo_options %}<option value="{{ option.source_key }}"{% if option.source_key == entry.intalev_source_key %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label><label>ЦФО / подразделение / узел 1С<select name="target_node_id" data-cfo-target><option value="">Выберите точный узел 1С</option>{% for option in organization_options %}<option value="{{ option.node_id }}"{% if option.node_id == entry.target_node_id %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label><label><input type="checkbox" name="confirmed" value="1" data-cfo-confirm disabled>Подтверждаю оба соответствия ЦФО</label><button type="submit" data-cfo-submit disabled>Сначала выберите оба значения и поставьте галку</button><small>{{ entry.status }}</small></form>{% endif %}</article>{% else %}<p class="hint">В текущем файле не найдены ЦФО для сопоставления.</p>{% endfor %}</div></section>
@@ -127,7 +161,7 @@
         <h3>{{ record.source_article or "Статья не указана" }}</h3>
         <p class="business-path">{{ record.expense_type or "Тип не указан" }} → {{ record.expense_group or "Группа не указана" }} → {{ record.source_article or "Статья не указана" }}</p>
       </div>
-      <span class="source-row-reference">Источник: {{ record.pointers.amount.sheet }}, строка Excel {{ issue_group.grouper }}</span>
+      <span class="source-row-reference">Источник: {{ record.pointers.amount.sheet }}, строка Excel {{ record.source_excel_row }}</span>
     </header>
 
     <dl class="attention-facts">
@@ -234,10 +268,10 @@
 
 <section class="card table-card">
   <h2>Максимально полный preview</h2>
-  <div class="table-wrap"><table data-testid="preview-table"><thead><tr><th>Строка</th><th>Ячейка</th><th>Период</th><th>Тип → группа → статья</th><th>ERP</th><th>ЦФО</th><th>Налог</th><th>Сумма</th><th>Статус</th><th>Комментарий</th></tr></thead><tbody>
+  <div class="table-wrap"><table data-testid="preview-table"><thead><tr><th>Строка</th><th>Ячейка</th><th>Период</th><th>Тип → группа → статья</th><th>ERP</th><th>Показатель</th><th>Тип показателя</th><th>ЦФО</th><th>Налог</th><th>Сумма</th><th>Статус</th><th>Комментарий</th></tr></thead><tbody>
   {% for record in records %}
   {% set status_class = 'ok' if record.status == 'ОК' else ('skipped' if record.status == 'Пропущено' else 'attention') %}
-  <tr class="status-{{ status_class }}"><td>{{ record.source_row }}</td><td>{{ record.pointers.amount.sheet }} · {{ record.pointers.amount.cell }}</td><td>{{ record.month_name }} {{ record.year }}</td><td>{{ record.expense_type }} → {{ record.expense_group }} → {{ record.source_article }}</td><td>{{ record.erp_code }} {{ record.erp_article_name }}</td><td>{{ record.cfo }}</td><td>{{ record.tax }}</td><td>{{ record.amount if record.amount is not none else '' }}</td><td><span class="pill">{{ record.status }}</span></td><td>{{ record.comment }}</td></tr>
+  <tr class="status-{{ status_class }}"><td>{{ record.source_excel_row }}</td><td>{{ record.pointers.amount.sheet }} · {{ record.pointers.amount.cell }}</td><td>{{ record.month_name }} {{ record.year }}</td><td>{{ record.expense_type }} → {{ record.expense_group }} → {{ record.source_article }}</td><td>{{ record.erp_code }} {{ record.erp_article_name }}</td><td>{{ record.indicator or "Не определён" }}</td><td>{{ record.indicator_type_label }}</td><td>{{ record.cfo }}</td><td>{{ record.tax }}</td><td>{{ record.amount if record.amount is not none else '' }}</td><td><span class="pill">{{ record.status }}</span></td><td>{{ record.comment }}</td></tr>
   {% endfor %}
   </tbody></table></div>
 </section>
@@ -245,7 +279,7 @@
 <section class="card table-card">
   <h2>Реестр ошибок и внимания</h2>
   <div class="table-wrap"><table data-testid="issue-table"><thead><tr><th>Источник</th><th>Поле</th><th>Контекст</th><th>Значение</th><th>Описание</th></tr></thead><tbody>
-  {% for issue in unresolved %}<tr><td>{{ issue.pointer.file_name }} · {{ issue.pointer.sheet }} · {{ issue.pointer.cell }} · строка {{ issue.pointer.row }}</td><td>{{ issue.pointer.field }}{% if issue.pointer.month %} · месяц {{ issue.pointer.month }}{% endif %}</td><td>{{ issue.reporting_unit }} · {{ issue.department }} · {{ issue.cfo }} · {{ issue.expense_type }} → {{ issue.expense_group }} → {{ issue.article }}</td><td>{{ issue.raw_value }}</td><td>{{ issue.description }}</td></tr>{% endfor %}
+  {% for issue in unresolved %}<tr><td>{{ issue.pointer.file_name }} · {{ issue.pointer.sheet }} · {{ issue.pointer.cell }} · строка {{ issue.pointer.excel_row }}</td><td>{{ issue.pointer.field }}{% if issue.pointer.month %} · месяц {{ issue.pointer.month }}{% endif %}</td><td>{{ issue.reporting_unit }} · {{ issue.department }} · {{ issue.cfo }} · {{ issue.expense_type }} → {{ issue.expense_group }} → {{ issue.article }}</td><td>{{ issue.raw_value }}</td><td>{{ issue.description }}</td></tr>{% endfor %}
   </tbody></table></div>
 </section>
 

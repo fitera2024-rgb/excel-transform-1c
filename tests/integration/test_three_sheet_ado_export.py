@@ -23,11 +23,11 @@ def _record() -> PreviewRecord:
         month=1,
         year=2026,
         reporting_unit="АЮ",
-        organization="Организация 1",
+        organization="4 Владивосток → 4 Владивосток (000000041)",
         scenario="ПЛАН 2026",
-        department="Подразделение 1",
+        department="Департамент обеспечения",
         organization_type="ТК",
-        cfo="ЦФО 1",
+        cfo="АЮ Отдел обеспечения",
         expense_type="Административные расходы",
         expense_group="Хозяйственные расходы",
         source_article="Перчатки",
@@ -35,7 +35,19 @@ def _record() -> PreviewRecord:
         erp_article_name="Перчатки",
         tax="БЕЗ НДС",
         amount=Decimal("123.45"),
+        erp_department="АЮ Отдел обеспечения",
+        cfo_code="000000175",
+        organization_unit="4 Владивосток",
+        organization_unit_code="000000041",
     )
+
+
+def _indicator_record() -> PreviewRecord:
+    record = _record()
+    record.indicator_match_status = "matched"
+    record.indicator = "Административные расходы"
+    record.sales_channel = "Основной канал"
+    return record
 
 
 def test_export_keeps_legacy_sheet_and_adds_two_ado_sheets():
@@ -47,22 +59,26 @@ def test_export_keeps_legacy_sheet_and_adds_two_ado_sheets():
         legacy = workbook["OPIU Light"]
         assert tuple(cell.value for cell in legacy[1]) == EXPORT_HEADERS
         assert legacy.max_row == 2
-        assert legacy["M2"].value == "00-000169"
-        assert legacy["P2"].value == 123.45
+        assert legacy["S2"].value == "00-000169"
+        assert legacy["V2"].value == 123.45
 
         ado = workbook["ОПИУ"]
         assert tuple(cell.value for cell in ado[1]) == ADO_OPIU_HEADERS
         assert ado.max_row == 2
         assert tuple(cell.value for cell in ado[2]) == (
-            "Организация 1",
+            "4 Владивосток",
+            "000000041",
             "ПЛАН 2026",
             2026,
             1,
             "01.2026",
-            "Подразделение 1",
+            "Департамент обеспечения",
+            "АЮ Отдел обеспечения",
+            "АЮ Отдел обеспечения",
+            "000000175",
+            "Расход",
             None,
-            "ЦФО 1",
-            None,
+            "Перчатки",
             "Административные расходы",
             "00-000169",
             "Перчатки",
@@ -72,9 +88,9 @@ def test_export_keeps_legacy_sheet_and_adds_two_ado_sheets():
             None,
             123.45,
         )
-        assert ado["K2"].data_type == "s"
-        assert ado["K2"].number_format == "@"
-        assert isinstance(ado["Q2"].value, (int, float))
+        assert ado["O2"].data_type == "s"
+        assert ado["O2"].number_format == "@"
+        assert isinstance(ado["U2"].value, (int, float))
 
         indicators = workbook["Показатели"]
         assert tuple(cell.value for cell in indicators[1]) == ADO_INDICATOR_HEADERS
@@ -93,10 +109,71 @@ def test_ado_opiu_keeps_rows_when_reference_codes_are_missing():
     try:
         ado = workbook["ОПИУ"]
         assert ado.max_row == 2
-        assert ado["G2"].value is None
-        assert ado["I2"].value is None
-        assert ado["K2"].value is None
-        assert ado["L2"].value == "Перчатки"
-        assert ado["Q2"].value == 123.45
+        assert ado["J2"].value == "000000175"
+        assert ado["O2"].value is None
+        assert ado["P2"].value == "Перчатки"
+        assert ado["U2"].value == 123.45
+    finally:
+        workbook.close()
+
+
+def test_export_organization_name_without_code() -> None:
+    payload = export_opiu_light([_indicator_record()])
+    workbook = load_workbook(BytesIO(payload), data_only=True)
+    try:
+        for sheet_name in ("OPIU Light", "ОПИУ", "Показатели"):
+            sheet = workbook[sheet_name]
+            headers = [cell.value for cell in sheet[1]]
+            organization_column = headers.index("Организация") + 1
+            assert sheet.cell(2, organization_column).value == "4 Владивосток"
+    finally:
+        workbook.close()
+
+
+def test_sales_channel_is_kept_on_all_applicable_export_sheets() -> None:
+    payload = export_opiu_light([_indicator_record()])
+    workbook = load_workbook(BytesIO(payload), data_only=True)
+    try:
+        for sheet_name in ("OPIU Light", "ОПИУ", "Показатели"):
+            sheet = workbook[sheet_name]
+            headers = [cell.value for cell in sheet[1]]
+            channel_column = headers.index("Канал сбыта") + 1
+            assert sheet.cell(2, channel_column).value == "Основной канал"
+    finally:
+        workbook.close()
+
+
+def test_export_cfo_code_separate() -> None:
+    payload = export_opiu_light([_record()])
+    workbook = load_workbook(BytesIO(payload), data_only=True)
+    try:
+        for sheet_name in ("OPIU Light", "ОПИУ"):
+            sheet = workbook[sheet_name]
+            headers = [cell.value for cell in sheet[1]]
+            cfo_column = headers.index("ЦФО") + 1
+            cfo_code_column = headers.index("Код ЦФО") + 1
+            assert sheet.cell(2, cfo_column).value == "АЮ Отдел обеспечения"
+            cfo_code = sheet.cell(2, cfo_code_column)
+            assert cfo_code.value == "000000175"
+            assert cfo_code.data_type == "s"
+            assert cfo_code.number_format == "@"
+    finally:
+        workbook.close()
+
+
+def test_export_selected_organization_code() -> None:
+    record = _indicator_record()
+    record.organization = "Контекст → Не головная организация (999999999)"
+    payload = export_opiu_light([record])
+    workbook = load_workbook(BytesIO(payload), data_only=True)
+    try:
+        for sheet_name in ("OPIU Light", "ОПИУ", "Показатели"):
+            sheet = workbook[sheet_name]
+            headers = [cell.value for cell in sheet[1]]
+            code_column = headers.index("Код организации") + 1
+            code = sheet.cell(2, code_column)
+            assert code.value == "999999999"
+            assert code.data_type == "s"
+            assert code.number_format == "@"
     finally:
         workbook.close()

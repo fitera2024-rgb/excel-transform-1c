@@ -5,8 +5,10 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import uuid4
 
+from .indicator_resolvers import detect_indicator_type
 from .models import (
     ERPArticle,
+    IndicatorType,
     Issue,
     PreviewRecord,
     REPORT_TYPE_CODE,
@@ -117,18 +119,19 @@ def _amount(value: Any) -> Decimal:
 
 def _pointer(row: SourceRow, field: str, month: int | None = None) -> SourcePointer:
     source_key = f"month_{month}" if month else ("article" if field == "source_article" else field)
+    cell = row.cells.get(source_key) or row.cells["article"]
     return SourcePointer(
         file_name=row.source_file,
-        sheet=row.sheet,
+        sheet=row.cell_sheets.get(source_key, row.sheet),
         row=row.row_number,
-        cell=row.cells[source_key],
+        cell=cell,
         field=field,
         month=month,
     )
 
 
 def _record_pointers(row: SourceRow, month: int) -> dict[str, SourcePointer]:
-    return {
+    pointers = {
         "reporting_unit": _pointer(row, "reporting_unit"),
         "expense_type": _pointer(row, "expense_type"),
         "department": _pointer(row, "department"),
@@ -139,6 +142,21 @@ def _record_pointers(row: SourceRow, month: int) -> dict[str, SourcePointer]:
         "source_article": _pointer(row, "source_article"),
         "amount": _pointer(row, "amount", month),
     }
+    for field in (
+        "indicator_type",
+        "revenue_group",
+        "formula_condition",
+        "analytics",
+        "nomenclature",
+        "unit",
+        "counterparty",
+        "input_sales_channel",
+        "sales_network",
+        "sales_region",
+    ):
+        if field in row.cells:
+            pointers[field] = _pointer(row, field)
+    return pointers
 
 
 def transform_rows(
@@ -161,8 +179,57 @@ def transform_rows(
             "article": as_text(row.article),
         }
         shared_reasons: list[str] = []
+        try:
+            indicator_type = detect_indicator_type(
+                indicator_type=row.indicator_type,
+                revenue_group=row.revenue_group,
+                formula_condition=row.formula_condition,
+                analytics=row.analytics,
+                nomenclature=row.nomenclature,
+                unit=row.unit,
+                counterparty=row.counterparty,
+                input_sales_channel=row.input_sales_channel,
+                sales_network=row.sales_network,
+                sales_region=row.sales_region,
+            )
+        except ValueError as exc:
+            indicator_type = IndicatorType.EXPENSE
+            type_reason = str(exc)
+            shared_reasons.append(type_reason)
+            issues.append(
+                _issue(
+                    row,
+                    "indicator-type",
+                    type_reason,
+                    "indicator_type",
+                    row.indicator_type,
+                )
+            )
+
+        indicator_fields = {
+            "indicator_type": indicator_type,
+            "revenue_group": as_text(row.revenue_group),
+            "formula_condition": as_text(row.formula_condition),
+            "analytics": as_text(row.analytics),
+            "nomenclature": as_text(row.nomenclature),
+            "unit": as_text(row.unit),
+            "counterparty": as_text(row.counterparty),
+            "input_sales_channel": as_text(row.input_sales_channel),
+            "sales_network": as_text(row.sales_network),
+            "sales_region": as_text(row.sales_region),
+        }
+
+        required_shared_fields = set(SHARED_FIELDS)
+        if row.source_kind == "bdr_full":
+            required_shared_fields = {"article"}
+        elif indicator_type == IndicatorType.REVENUE:
+            required_shared_fields = {"article"}
+        elif indicator_type in {IndicatorType.QUANTITY, IndicatorType.KPI}:
+            required_shared_fields = set()
 
         for field, value in shared.items():
+            if field not in required_shared_fields:
+                continue
             if value == "":
                 reason = f"Не заполнено поле: {SHARED_FIELDS[field]}"
                 shared_reasons.append(reason)
@@ -186,14 +253,21 @@ def transform_rows(
                 )
             )
 
-        tax, tax_reason = normalize_tax(row.tax, allowed_tax_values)
+        tax, tax_reason = (
+            ("", None)
+            if indicator_type != IndicatorType.EXPENSE or row.source_kind == "bdr_full"
+            else normalize_tax(row.tax, allowed_tax_values)
+        )
         if tax_reason:
             shared_reasons.append(tax_reason)
             issues.append(_issue(row, "tax", tax_reason, "tax", row.tax))
 
-        mapped, mapping_reason = mapper.resolve(
-            shared["expense_type"], shared["expense_group"], shared["article"]
-        )
+        mapped: ERPArticle | None = None
+        mapping_reason: str | None = None
+        if indicator_type == IndicatorType.EXPENSE and row.source_kind != "bdr_full":
+            mapped, mapping_reason = mapper.resolve(
+                shared["expense_type"], shared["expense_group"], shared["article"]
+            )
         if mapping_reason:
             shared_reasons.append(mapping_reason)
             issues.append(
@@ -253,6 +327,8 @@ def transform_rows(
                             f"{skip_reason} ({pointers['amount'].sheet}!{pointers['amount'].cell})",
                         ],
                         pointers=pointers,
+                        source_kind=row.source_kind,
+                        **indicator_fields,
                     )
                 )
                 continue
@@ -295,6 +371,8 @@ def transform_rows(
                     status=STATUS_ATTENTION if reasons else STATUS_OK,
                     reasons=reasons,
                     pointers=pointers,
+                    source_kind=row.source_kind,
+                    **indicator_fields,
                 )
             )
 

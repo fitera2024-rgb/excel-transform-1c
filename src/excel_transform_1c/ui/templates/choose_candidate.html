@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Выбор диапазона · Excel → OPIU Light{% endblock %}
+{% block title %}Выбор бизнес-источника · Excel → OPIU Light{% endblock %}
 {% block content %}
 <section class="card narrow" data-testid="candidate-choice">
-  <div class="section-heading page-section-heading"><div class="section-title-block"><span class="section-step">1</span><div><p class="eyebrow ink">Найдено несколько диапазонов</p><h1>Выберите подготовленный диапазон</h1><p>Сервис не угадывает источник молча. Выберите бизнес-таблицу, которую нужно обработать.</p></div></div></div>
+  <div class="section-heading page-section-heading"><div class="section-title-block"><span class="section-step">1</span><div><p class="eyebrow ink">Найдено несколько бизнес-источников</p><h1>Выберите бизнес-источник</h1><p>Для БДР выберите «БДР 2026 ИТОГ». Внутренние блоки сервис определит сам.</p></div></div></div>
   <form method="post" action="/uploads/{{ pending.upload_id }}/process" data-candidate-processing-form>
     {% for candidate in pending.candidates %}<label class="choice"><input type="radio" name="candidate_id" value="{{ candidate.candidate_id }}" required><span>{{ candidate.label }}</span></label>{% endfor %}
     <p class="processing-state" data-testid="candidate-processing-state" aria-live="polite" hidden><span class="spinner" aria-hidden="true"></span>Файл загружается и анализируется; не закрывайте страницу</p>

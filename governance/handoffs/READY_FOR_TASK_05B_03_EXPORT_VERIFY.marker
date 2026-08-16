@@ -1,0 +1,11 @@
+READY_FOR_TASK_05B_03_EXPORT_VERIFY
+task=TASK-05B-03-EXPORT-REFERENCE-COLUMNS-20260816-001
+branch=codex/task-05b-03-export-reference-columns
+base=2a2d6e0db1b914e7aa99fbc4c72b32cb2c7f073d
+implementation=b8a8750ec83caf5103368c9a643f6bf2e2c072ad
+tests=188_passed_6_skipped
+compile=PASS
+node_check=PASS
+diff_check=PASS
+xlsx_tracked=false
+no_live_write=true
