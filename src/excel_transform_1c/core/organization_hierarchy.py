@@ -17,8 +17,8 @@ class OrganizationReferenceResolution:
     department: str
     cfo: str
     cfo_code: str
-    organization: str
-    organization_code: str
+    root_organization: str
+    root_organization_code: str
 
 
 @dataclass(frozen=True)
@@ -264,8 +264,8 @@ class ExactOrganizationReferenceResolver:
             department=node.name,
             cfo=node.name,
             cfo_code=node.code,
-            organization=root.name,
-            organization_code=root.code,
+            root_organization=root.name,
+            root_organization_code=root.code,
         )
 
 
@@ -304,10 +304,12 @@ class ExactOrganizationHierarchyResolver:
         )
         if reference is None:
             return None
-        missing_code = not reference.organization_code or not reference.cfo_code
+        missing_code = (
+            not reference.root_organization_code or not reference.cfo_code
+        )
         return OrganizationHierarchyResolution(
-            organization_unit=reference.organization,
-            organization_unit_code=reference.organization_code,
+            organization_unit=reference.root_organization,
+            organization_unit_code=reference.root_organization_code,
             department=reference.department,
             cfo=reference.cfo,
             cfo_code=reference.cfo_code,

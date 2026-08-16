@@ -1,9 +1,12 @@
+from dataclasses import asdict
+
 import pytest
 
 from excel_transform_1c.adapters.references import (
     organization_nodes,
     parse_reference_workbook,
 )
+from excel_transform_1c.baselines import load_baseline_catalogs
 from excel_transform_1c.core.organization_hierarchy import (
     DEPARTMENT_NODE_TYPE,
     ERPOrganizationHierarchyReader,
@@ -11,6 +14,7 @@ from excel_transform_1c.core.organization_hierarchy import (
     ExactOrganizationReferenceResolver,
     MISSING_ERP_ELEMENT_CODE_REASON,
     ORGANIZATION_NODE_TYPE,
+    OrganizationReferenceResolution,
     PARENT_NODE_TYPE,
 )
 from tests.helpers.workbooks import erp_organization_hierarchy_bytes
@@ -200,20 +204,39 @@ def test_root_organization_resolution() -> None:
     assert root.type == ORGANIZATION_NODE_TYPE
 
 
-def test_reference_resolver_returns_exact_codes() -> None:
-    reader = _acceptance_reader(
-        cfo_name="АЮ Отдел обеспечения",
-        source_department="Департамент обеспечения",
-        cfo_code="000000173",
+def _ay_support_resolution() -> OrganizationReferenceResolution | None:
+    reader = ERPOrganizationHierarchyReader(
+        organization_nodes(load_baseline_catalogs()["organizations"]),
+        organization_node_id="000000001",
     )
+    return ExactOrganizationReferenceResolver(reader).resolve("АЮ Отдел обеспечения")
 
-    resolution = ExactOrganizationReferenceResolver(reader).resolve(
-        "АЮ Отдел обеспечения"
-    )
+
+def test_cfo_code_resolution_from_hierarchy_reader() -> None:
+    resolution = _ay_support_resolution()
 
     assert resolution is not None
     assert resolution.department == "АЮ Отдел обеспечения"
     assert resolution.cfo == "АЮ Отдел обеспечения"
-    assert resolution.cfo_code == "000000173"
-    assert resolution.organization == "ООО Айс Юнион"
-    assert resolution.organization_code == "000000001"
+    assert resolution.cfo_code == "000000175"
+
+
+def test_root_organization_code_resolution_from_hierarchy_reader() -> None:
+    resolution = _ay_support_resolution()
+
+    assert resolution is not None
+    assert resolution.root_organization == 'ООО "Айс Юнион"'
+    assert resolution.root_organization_code == "000000001"
+
+
+def test_reference_code_resolution_dto_fields() -> None:
+    resolution = _ay_support_resolution()
+
+    assert resolution is not None
+    assert asdict(resolution) == {
+        "department": "АЮ Отдел обеспечения",
+        "cfo": "АЮ Отдел обеспечения",
+        "cfo_code": "000000175",
+        "root_organization": 'ООО "Айс Юнион"',
+        "root_organization_code": "000000001",
+    }
