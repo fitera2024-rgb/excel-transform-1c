@@ -104,6 +104,13 @@ def test_start_service_upload_rules_preview_confirm_export_stop_service(tmp_path
         assert by_source_row[3].indicator_type == IndicatorType.EXPENSE
         assert by_source_row[4].indicator_type == IndicatorType.REVENUE
         assert by_source_row[5].indicator_type == IndicatorType.QUANTITY
+        revenue = by_source_row[4]
+        assert revenue.counterparty == 'ООО "Покупатель"'
+        assert revenue.input_sales_channel == "Сети Федеральные"
+        assert revenue.sales_network == "Сеть 1"
+        assert revenue.sales_region == "Приморский край"
+        assert revenue.indicator == "Выручка"
+        assert revenue.sales_channel == "Основной канал"
 
         response = client.post(
             f"/runs/{run_id}/confirm-tax-not-required",
