@@ -155,12 +155,15 @@ def test_indicator_export_populates_all_result_sheets_without_changing_financial
     for sheet_name in ("OPIU Light", "ОПИУ"):
         before_rows = workbook_rows(before, sheet_name)
         after_rows = workbook_rows(after, sheet_name)
-        indicator_column = before_rows[0].index("Показатель")
+        changed_columns = {
+            before_rows[0].index("Показатель"),
+            before_rows[0].index("Канал сбыта"),
+        }
         assert [
-            row[:indicator_column] + row[indicator_column + 1 :]
+            tuple(value for index, value in enumerate(row) if index not in changed_columns)
             for row in after_rows
         ] == [
-            row[:indicator_column] + row[indicator_column + 1 :]
+            tuple(value for index, value in enumerate(row) if index not in changed_columns)
             for row in before_rows
         ]
 

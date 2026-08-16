@@ -356,27 +356,35 @@ class WorkflowService:
         run: ProcessedRun,
         source_rows: set[int] | None = None,
     ) -> None:
-        if run.candidate.source_kind == "bdr_full":
-            for record in run.records:
-                if source_rows is not None and record.source_row not in source_rows:
-                    continue
-                previous_reason = record.indicator_match_reason
-                if previous_reason:
-                    record.reasons = [
-                        reason for reason in record.reasons if reason != previous_reason
-                    ]
-                record.indicator = record.source_article
-                record.sales_channel = ""
-                record.indicator_match_status = INDICATOR_MATCHED
-                record.indicator_match_reason = ""
-                if record.status != STATUS_SKIPPED:
-                    record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
-            return
+        direct_bdr_records = {
+            record.record_id
+            for record in run.records
+            if run.candidate.source_kind == "bdr_full"
+            and record.source_kind == "bdr_full"
+        }
+        for record in run.records:
+            if record.record_id not in direct_bdr_records:
+                continue
+            if source_rows is not None and record.source_row not in source_rows:
+                continue
+            previous_reason = record.indicator_match_reason
+            if previous_reason:
+                record.reasons = [
+                    reason for reason in record.reasons if reason != previous_reason
+                ]
+            record.indicator = record.source_article
+            record.sales_channel = record.input_sales_channel
+            record.indicator_match_status = INDICATOR_MATCHED
+            record.indicator_match_reason = ""
+            if record.status != STATUS_SKIPPED:
+                record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
 
         rules = self.article_indicator_rules()
         engine = IndicatorResolverEngine(rules)
         run.indicator_classifier_loaded = bool(rules)
         for record in run.records:
+            if record.record_id in direct_bdr_records:
+                continue
             if source_rows is not None and record.source_row not in source_rows:
                 continue
             previous_reason = record.indicator_match_reason
@@ -434,7 +442,11 @@ class WorkflowService:
             pointer = record.pointers.get("source_article")
             result.append({
                 "source_row": source_row,
-                "source_line": f"{pointer.sheet if pointer else run.candidate.sheet}!{source_row}",
+                "source_line": (
+                    f"{pointer.sheet}!{pointer.cell}"
+                    if pointer
+                    else f"{run.candidate.sheet}!{source_row}"
+                ),
                 "expense_type": record.expense_type or "Без типа",
                 "expense_group": record.expense_group or "Без группы",
                 "source_article": record.source_article or "Без статьи",
@@ -511,7 +523,8 @@ class WorkflowService:
             )
             exclusions.append(
                 {
-                    "source_row": source_row,
+                    "source_row": records[0].source_excel_row,
+                    "source_sheet": records[0].pointers["source_article"].sheet,
                     "indicator": records[0].source_article,
                     "reason": "; ".join(reasons)
                     or "Нет числовых значений ни за один период",

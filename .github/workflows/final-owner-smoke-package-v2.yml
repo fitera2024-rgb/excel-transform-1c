@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/final-owner-smoke-fitera-v2
+      - codex/task-06-08-bdr-kpi-context-value
   workflow_dispatch:
 
 permissions:
@@ -185,8 +186,12 @@ jobs:
               assert check["OPIU Light"].max_row == 13
               assert check["ОПИУ"].max_row == 13
               assert check["Показатели"].max_row == 13
-              assert check["Показатели"]["G2"].value == "Услуги связи"
-              assert check["Показатели"]["H2"].value == 100
+              headers = {
+                  cell.value: cell.column
+                  for cell in check["Показатели"][1]
+              }
+              assert check["Показатели"].cell(2, headers["Показатель"]).value == "Услуги связи"
+              assert check["Показатели"].cell(2, headers["Значение"]).value == 100
           finally:
               check.close()
           print("package functional smoke PASS")

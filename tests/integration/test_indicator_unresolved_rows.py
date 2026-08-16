@@ -67,7 +67,7 @@ def assert_business_row(tmp_path, status: str, expected_label: str):
     service, _ = make_run(tmp_path, status, "Понятная бизнес-причина")
     rows = service.indicator_unresolved_rows("run-1")
     assert len(rows) == 1
-    assert rows[0]["source_line"] == "Бюджет!7"
+    assert rows[0]["source_line"] == "Бюджет!H7"
     assert rows[0]["expense_group"] == "Без группы"
     assert rows[0]["erp_code"] == "ERP-7"
     assert rows[0]["status"] == expected_label

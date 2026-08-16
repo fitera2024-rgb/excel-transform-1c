@@ -41,6 +41,7 @@ EXPORT_HEADERS = (
     "ЦФО",
     "Код ЦФО",
     "Тип показателя",
+    "Канал сбыта",
     "Показатель",
     "Тип расходов",
     "Группа расходов",
@@ -69,6 +70,7 @@ ADO_OPIU_HEADERS = (
     "ЦФО",
     "Код ЦФО",
     "Тип показателя",
+    "Канал сбыта",
     "Показатель",
     "Тип расходов",
     "Код статьи",
@@ -114,37 +116,20 @@ def _separate_organization_reference(value: str) -> tuple[str, str]:
 
 
 def _record_organization_reference(record: PreviewRecord) -> tuple[str, str]:
-    """Prefer the exact root reference produced by the hierarchy resolver."""
+    """Return the exact organization selected for this processing run."""
 
-    if record.organization_unit or record.organization_unit_code:
-        return (
-            record.organization_unit.strip(),
-            record.organization_unit_code.strip(),
-        )
     return _separate_organization_reference(record.organization)
 
 
 def _indicator_organization_references(
     records: list[PreviewRecord],
 ) -> dict[str, tuple[str, str]]:
-    """Resolve one exact root reference for every aggregated context value."""
+    """Keep selected organization names and codes separate after aggregation."""
 
-    candidates: dict[str, set[tuple[str, str]]] = {}
-    for record in records:
-        if not (record.organization_unit or record.organization_unit_code):
-            continue
-        candidates.setdefault(record.organization, set()).add(
-            _record_organization_reference(record)
-        )
-
-    resolved: dict[str, tuple[str, str]] = {}
-    for organization, references in candidates.items():
-        if len(references) != 1:
-            raise ValueError(
-                "Для одного контекста экспорта найдены разные exact ERP-организации"
-            )
-        resolved[organization] = next(iter(references))
-    return resolved
+    return {
+        record.organization: _separate_organization_reference(record.organization)
+        for record in records
+    }
 
 
 @contextmanager
@@ -309,6 +294,30 @@ def _bdr_cached_formula_values(
                         for source_coordinate, value in source_values.items()
                     }
                 )
+
+            for component in candidate.bdr_components:
+                component_cells = {
+                    f"{get_column_letter(component.columns[f'month_{month}'])}"
+                    f"{row_number}"
+                    for row_number in range(
+                        component.first_data_row,
+                        component.last_data_row + 1,
+                    )
+                    for month in range(1, 13)
+                }
+                component_values = _ooxml_cached_cell_values(
+                    archive,
+                    component.sheet,
+                    component_cells,
+                    formulas_only=False,
+                    use_display_precision=True,
+                )
+                result.update(
+                    {
+                        f"{component.sheet}!{coordinate}": value
+                        for coordinate, value in component_values.items()
+                    }
+                )
     except (OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError):
         return {}
     return result
@@ -418,14 +427,18 @@ def _apply_display_precision(
 
     positive_section = number_format.split(";", 1)[0]
     simplified = re.sub(r'"[^"]*"|\\.', "", positive_section)
-    if not simplified or "%" in simplified or re.search(r"[dmyhs]", simplified, re.I):
+    if not simplified or re.search(r"[dmyhs]", simplified, re.I):
         return value
     placeholders = re.sub(r"\[[^]]*]", "", simplified)
     if not re.search(r"[0#]", placeholders):
         return value
     decimal_part = placeholders.split(".", 1)[1] if "." in placeholders else ""
     decimal_places = len(re.match(r"[0#]*", decimal_part).group(0))
-    quantum = Decimal(1).scaleb(-decimal_places)
+    # A percentage format displays the stored fraction after multiplying by
+    # 100. Thus ``0%`` proves two decimal places in the stored value and
+    # ``0.0%`` proves three. Keep the fraction while applying Excel precision.
+    stored_decimal_places = decimal_places + (2 if "%" in simplified else 0)
+    quantum = Decimal(1).scaleb(-stored_decimal_places)
     return value.quantize(quantum, rounding=ROUND_HALF_UP)
 
 
@@ -499,7 +512,7 @@ def _style_header(sheet, headers: tuple[str, ...], last_column: str) -> None:
 
 def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
     sheet.title = "OPIU Light"
-    _style_header(sheet, EXPORT_HEADERS, "X")
+    _style_header(sheet, EXPORT_HEADERS, "Y")
     for record in records:
         organization, organization_code = _record_organization_reference(record)
         department = record.department or None
@@ -519,6 +532,7 @@ def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
                 cfo,
                 record.cfo_code or None,
                 record.indicator_type_label,
+                record.sales_channel or None,
                 record.indicator or record.source_article,
                 record.expense_type,
                 record.expense_group,
@@ -529,34 +543,34 @@ def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
                 float(record.amount) if record.amount is not None else None,
                 record.status,
                 record.comment,
-                record.source_row,
+                record.source_excel_row,
             )
         )
-    sheet.auto_filter.ref = f"A1:X{max(len(records) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:Y{max(len(records) + 1, 1)}"
     sheet.column_dimensions["A"].width = 18
     sheet.column_dimensions["B"].width = 28
     sheet.column_dimensions["C"].width = 18
     sheet.column_dimensions["D"].width = 18
     sheet.column_dimensions["G"].width = 12
     for column in (
-        "H", "I", "J", "K", "M", "N", "O", "P", "Q", "S", "T", "V", "W"
+        "H", "I", "J", "K", "M", "N", "O", "P", "Q", "R", "T", "U", "W", "X"
     ):
         sheet.column_dimensions[column].width = 22
     sheet.column_dimensions["L"].width = 16
-    sheet.column_dimensions["R"].width = 18
-    sheet.column_dimensions["U"].width = 16
-    sheet.column_dimensions["X"].width = 18
-    for column in ("C", "L", "R"):
+    sheet.column_dimensions["S"].width = 18
+    sheet.column_dimensions["V"].width = 16
+    sheet.column_dimensions["Y"].width = 18
+    for column in ("C", "L", "S"):
         for cell in sheet[column]:
             cell.number_format = "@"
-    sheet["U1"].alignment = Alignment(horizontal="center", vertical="center")
-    for cell in sheet["U"][1:]:
+    sheet["V1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["V"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
 def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
     sheet.title = "ОПИУ"
-    _style_header(sheet, ADO_OPIU_HEADERS, "T")
+    _style_header(sheet, ADO_OPIU_HEADERS, "U")
     for record in records:
         organization, organization_code = _record_organization_reference(record)
         department = record.department or None
@@ -574,6 +588,7 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
                 cfo,
                 record.cfo_code or None,
                 record.indicator_type_label,
+                record.sales_channel or None,
                 record.indicator or record.source_article,
                 record.expense_type,
                 record.erp_code or None,
@@ -585,7 +600,7 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
                 float(record.amount) if record.amount is not None else None,
             )
         )
-    sheet.auto_filter.ref = f"A1:T{max(len(records) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:U{max(len(records) + 1, 1)}"
     widths = {
         "A": 28,
         "B": 20,
@@ -598,22 +613,23 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
         "I": 28,
         "J": 16,
         "K": 18,
-        "L": 30,
-        "M": 24,
-        "N": 18,
-        "O": 30,
-        "P": 24,
-        "Q": 18,
-        "R": 20,
-        "S": 18,
-        "T": 16,
+        "L": 26,
+        "M": 30,
+        "N": 24,
+        "O": 18,
+        "P": 30,
+        "Q": 24,
+        "R": 18,
+        "S": 20,
+        "T": 18,
+        "U": 16,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
-    for column in ("B", "J", "N", "Q", "S"):
+    for column in ("B", "J", "O", "R", "T"):
         for cell in sheet[column]:
             cell.number_format = "@"
-    for cell in sheet["T"][1:]:
+    for cell in sheet["U"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 

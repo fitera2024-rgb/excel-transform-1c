@@ -85,7 +85,8 @@ def test_bdr_full_start_preview_export_stop(tmp_path) -> None:
             assert tuple(cell.value for cell in workbook["OPIU Light"][1]) == EXPORT_HEADERS
             assert tuple(cell.value for cell in workbook["ОПИУ"][1]) == ADO_OPIU_HEADERS
             assert tuple(cell.value for cell in workbook["Показатели"][1]) == ADO_INDICATOR_HEADERS
-            assert workbook["OPIU Light"].max_row == len(BDR_FULL_INDICATORS) * 12 + 1
+            expected_source_rows = len(BDR_FULL_INDICATORS) - 5 + 1
+            assert workbook["OPIU Light"].max_row == expected_source_rows * 12 + 1
             assert workbook["Показатели"].max_row > 1
             headers = {
                 cell.value: cell.column
@@ -115,5 +116,19 @@ def test_bdr_full_start_preview_export_stop(tmp_path) -> None:
             assert first[headers["Показатель"] - 1].value == "Оборот в кг"
             assert first[headers["Период"] - 1].value == "01.2026"
             assert first[headers["Значение"] - 1].value == 593845
+
+            expense = next(
+                row
+                for row in workbook["OPIU Light"].iter_rows(min_row=2)
+                if row[headers["Исходное название статьи"] - 1].value == "Интернет"
+                and row[headers["Месяц"] - 1].value == 1
+            )
+            assert expense[headers["Тип расходов"] - 1].value == "Административные расходы"
+            assert expense[headers["Группа расходов"] - 1].value == "Связь"
+            assert expense[headers["ERP-код статьи"] - 1].value == "00-000069"
+            assert expense[headers["Департамент"] - 1].value == "Административный департамент"
+            assert expense[headers["ЦФО"] - 1].value == "АЮ Административный Отдел"
+            assert expense[headers["Код ЦФО"] - 1].value == "000000173"
+            assert expense[headers["Значение"] - 1].value == 1
         finally:
             workbook.close()

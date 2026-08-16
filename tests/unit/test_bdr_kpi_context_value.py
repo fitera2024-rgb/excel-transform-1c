@@ -3,7 +3,11 @@ from io import BytesIO
 
 from openpyxl import load_workbook
 
-from excel_transform_1c.adapters.excel import detect_path, read_path
+from excel_transform_1c.adapters.excel import (
+    _apply_display_precision,
+    detect_path,
+    read_path,
+)
 from excel_transform_1c.application.service import WorkflowService
 from excel_transform_1c.core.detection import detect_candidate_ranges, read_source_rows
 from excel_transform_1c.core.models import IndicatorType
@@ -20,6 +24,11 @@ PARENT_DEPARTMENT = "Департамент обеспечения"
 ORGANIZATION = "4 Владивосток"
 ORGANIZATION_CODE = "000000041"
 CFO_CODE = "000000175"
+
+
+def test_excel_percentage_display_precision_is_applied_to_stored_fraction() -> None:
+    assert _apply_display_precision(Decimal("0.29552632736915746"), "0%") == Decimal("0.30")
+    assert _apply_display_precision(Decimal("0.2061655757682545"), "0.0%") == Decimal("0.206")
 
 
 def _configured_service(tmp_path) -> WorkflowService:
@@ -129,7 +138,8 @@ def test_kpi_month_value_uses_exact_summary_indicator_and_month(tmp_path) -> Non
     assert candidate.bdr_value_sheet == "Сводные значения БДР"
     assert row.months[0] == Decimal("593845")
     assert not str(row.months[0]).startswith("=")
-    assert row.cells["month_1"] == "J10"
+    assert row.cells["month_1"] == "W10"
+    assert row.cell_sheets["month_1"] == "Сводные значения БДР"
     revenue_per_kg = next(
         item
         for item in read_path(path, candidate, path.name)
@@ -154,6 +164,7 @@ def test_kpi_export_mapping(tmp_path) -> None:
                 "ЦФО",
                 "Код ЦФО",
                 "Тип показателя",
+                "Канал сбыта",
                 "Показатель",
                 "Период",
                 "Значение",

@@ -161,7 +161,7 @@
         <h3>{{ record.source_article or "Статья не указана" }}</h3>
         <p class="business-path">{{ record.expense_type or "Тип не указан" }} → {{ record.expense_group or "Группа не указана" }} → {{ record.source_article or "Статья не указана" }}</p>
       </div>
-      <span class="source-row-reference">Источник: {{ record.pointers.amount.sheet }}, строка Excel {{ issue_group.grouper }}</span>
+      <span class="source-row-reference">Источник: {{ record.pointers.amount.sheet }}, строка Excel {{ record.source_excel_row }}</span>
     </header>
 
     <dl class="attention-facts">
@@ -271,7 +271,7 @@
   <div class="table-wrap"><table data-testid="preview-table"><thead><tr><th>Строка</th><th>Ячейка</th><th>Период</th><th>Тип → группа → статья</th><th>ERP</th><th>Показатель</th><th>Тип показателя</th><th>ЦФО</th><th>Налог</th><th>Сумма</th><th>Статус</th><th>Комментарий</th></tr></thead><tbody>
   {% for record in records %}
   {% set status_class = 'ok' if record.status == 'ОК' else ('skipped' if record.status == 'Пропущено' else 'attention') %}
-  <tr class="status-{{ status_class }}"><td>{{ record.source_row }}</td><td>{{ record.pointers.amount.sheet }} · {{ record.pointers.amount.cell }}</td><td>{{ record.month_name }} {{ record.year }}</td><td>{{ record.expense_type }} → {{ record.expense_group }} → {{ record.source_article }}</td><td>{{ record.erp_code }} {{ record.erp_article_name }}</td><td>{{ record.indicator or "Не определён" }}</td><td>{{ record.indicator_type_label }}</td><td>{{ record.cfo }}</td><td>{{ record.tax }}</td><td>{{ record.amount if record.amount is not none else '' }}</td><td><span class="pill">{{ record.status }}</span></td><td>{{ record.comment }}</td></tr>
+  <tr class="status-{{ status_class }}"><td>{{ record.source_excel_row }}</td><td>{{ record.pointers.amount.sheet }} · {{ record.pointers.amount.cell }}</td><td>{{ record.month_name }} {{ record.year }}</td><td>{{ record.expense_type }} → {{ record.expense_group }} → {{ record.source_article }}</td><td>{{ record.erp_code }} {{ record.erp_article_name }}</td><td>{{ record.indicator or "Не определён" }}</td><td>{{ record.indicator_type_label }}</td><td>{{ record.cfo }}</td><td>{{ record.tax }}</td><td>{{ record.amount if record.amount is not none else '' }}</td><td><span class="pill">{{ record.status }}</span></td><td>{{ record.comment }}</td></tr>
   {% endfor %}
   </tbody></table></div>
 </section>
@@ -279,7 +279,7 @@
 <section class="card table-card">
   <h2>Реестр ошибок и внимания</h2>
   <div class="table-wrap"><table data-testid="issue-table"><thead><tr><th>Источник</th><th>Поле</th><th>Контекст</th><th>Значение</th><th>Описание</th></tr></thead><tbody>
-  {% for issue in unresolved %}<tr><td>{{ issue.pointer.file_name }} · {{ issue.pointer.sheet }} · {{ issue.pointer.cell }} · строка {{ issue.pointer.row }}</td><td>{{ issue.pointer.field }}{% if issue.pointer.month %} · месяц {{ issue.pointer.month }}{% endif %}</td><td>{{ issue.reporting_unit }} · {{ issue.department }} · {{ issue.cfo }} · {{ issue.expense_type }} → {{ issue.expense_group }} → {{ issue.article }}</td><td>{{ issue.raw_value }}</td><td>{{ issue.description }}</td></tr>{% endfor %}
+  {% for issue in unresolved %}<tr><td>{{ issue.pointer.file_name }} · {{ issue.pointer.sheet }} · {{ issue.pointer.cell }} · строка {{ issue.pointer.excel_row }}</td><td>{{ issue.pointer.field }}{% if issue.pointer.month %} · месяц {{ issue.pointer.month }}{% endif %}</td><td>{{ issue.reporting_unit }} · {{ issue.department }} · {{ issue.cfo }} · {{ issue.expense_type }} → {{ issue.expense_group }} → {{ issue.article }}</td><td>{{ issue.raw_value }}</td><td>{{ issue.description }}</td></tr>{% endfor %}
   </tbody></table></div>
 </section>
 

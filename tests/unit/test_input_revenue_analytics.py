@@ -83,6 +83,48 @@ def _prepared_income_range() -> bytes:
     return output.getvalue()
 
 
+def _prepared_income_range_with_context() -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Доход с доказанным контекстом"
+    sheet.append(
+        [
+            "ПОДРАЗДЕЛЕНИЕ (ЦФО 1)",
+            "ТИП ДОХОДОВ",
+            "ДЕПАРТАМЕНТ (ЦФО 2)",
+            "Вид организации",
+            "ОТДЕЛ",
+            "НАЛОГООБЛОЖЕНИЕ",
+            "ГРУППА ДОХОДОВ",
+            "СТАТЬЯ",
+            "АНАЛИТИКА",
+            *[name.upper() for name in (
+                "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
+                "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь",
+            )],
+        ]
+    )
+    sheet.append(
+        [
+            "АЮ",
+            "Прочие доходы по основной деятельности",
+            "Финансовый департамент",
+            "ХК",
+            "ХП Финансовый Отдел",
+            "НДС 22%",
+            "Услуги предоставленные внутрихолдинговые",
+            "Услуги аренды",
+            None,
+            100,
+            *([0] * 11),
+        ]
+    )
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
+
+
 def _context() -> RunContext:
     return RunContext(
         reporting_unit="ПС",
@@ -132,6 +174,22 @@ def test_prepared_income_range_uses_schema_not_sheet_name() -> None:
     assert [row.analytics for row in rows] == ["Аби Продакт", None]
     assert all(len(row.months) == 12 for row in rows)
     assert all(row.indicator_type == "REVENUE" for row in rows)
+
+
+def test_prepared_income_preserves_exact_optional_source_context() -> None:
+    workbook = load_workbook(
+        BytesIO(_prepared_income_range_with_context()), data_only=True
+    )
+    candidate = detect_candidate_ranges(workbook)[0]
+    row = read_source_rows(workbook, candidate, "income-context.xlsx")[0]
+
+    assert row.reporting_unit == "АЮ"
+    assert row.department == "Финансовый департамент"
+    assert row.organization_type == "ХК"
+    assert row.cfo == "ХП Финансовый Отдел"
+    assert row.tax == "НДС 22%"
+    assert row.cells["department"] == "C2"
+    assert row.cells["cfo"] == "E2"
 
 
 def test_prepared_income_range_transforms_without_expense_only_fields() -> None:

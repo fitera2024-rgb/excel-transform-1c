@@ -1,7 +1,8 @@
 from decimal import Decimal
 from io import BytesIO
 
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment
 
 from excel_transform_1c.core.detection import detect_candidate_ranges, read_source_rows
 from excel_transform_1c.core.models import ERPArticle, RunContext, STATUS_ATTENTION, STATUS_SKIPPED
@@ -90,3 +91,40 @@ def test_maximum_completeness_preserves_zero_negative_and_monthly_error():
     assert skipped.amount is None
     assert "I10" in skipped.comment
     assert any(issue.kind == "monthly-error" and issue.pointer.cell == "I10" for issue in issues)
+
+
+def test_structural_single_month_intalev_opiu_is_supported():
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Любой лист"
+    sheet["A2"] = "ЦФО: ЦМД Сахалин"
+    sheet["A4"] = "Показатели"
+    sheet["E4"] = "01.01.2025 - 31.01.2025"
+    rows = (
+        (7, "Расходы по основной деятельности ИТОГО", 0),
+        (8, "Административные расходы", 2),
+        (9, "Связь", 4),
+        (10, "Интернет", 6),
+        (11, "EBITDA", 0),
+    )
+    for row_number, name, indent in rows:
+        sheet.cell(row_number, 1, name).alignment = Alignment(indent=indent)
+        sheet.row_dimensions[row_number].outlineLevel = indent // 2
+        sheet.cell(row_number, 5, 593845 if row_number == 10 else 0)
+
+    candidates = detect_candidate_ranges(workbook)
+    assert len(candidates) == 1
+    candidate = candidates[0]
+    assert candidate.source_kind == "intalev_opiu"
+    assert candidate.source_year == 2025
+    assert candidate.columns["month_1"] == 5
+    assert "month_2" not in candidate.columns
+
+    source_rows = read_source_rows(workbook, candidate, "monthly-intalev.xlsx")
+    assert len(source_rows) == 1
+    assert source_rows[0].cfo == "ЦМД Сахалин"
+    assert source_rows[0].months[0] == 593845
+    assert source_rows[0].months[1:] == (None,) * 11
+    assert source_rows[0].cells["month_1"] == "E10"
+    assert "month_2" not in source_rows[0].cells
+    workbook.close()

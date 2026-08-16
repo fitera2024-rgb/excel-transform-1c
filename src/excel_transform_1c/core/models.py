@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
@@ -54,6 +55,13 @@ class SourcePointer:
     field: str
     month: int | None = None
 
+    @property
+    def excel_row(self) -> int:
+        """Return the visible worksheet row without changing the RUN identity."""
+
+        match = re.search(r"(\d+)$", self.cell)
+        return int(match.group(1)) if match else self.row
+
 
 @dataclass(frozen=True)
 class CandidateRange:
@@ -77,6 +85,10 @@ class CandidateRange:
     bdr_value_sheet: str = ""
     bdr_value_columns: dict[str, int] = field(default_factory=dict)
     bdr_value_rows: tuple[tuple[int, int], ...] = ()
+    # A full BDR is one business input even when the workbook keeps exact
+    # expense/income facts in internal prepared ranges.  Those ranges remain
+    # hidden from the user and are read as components of this candidate.
+    bdr_components: tuple[CandidateRange, ...] = ()
 
     @property
     def label(self) -> str:
@@ -100,6 +112,11 @@ class SourceRow:
     article: Any
     months: tuple[Any, ...]
     cells: dict[str, str]
+    # Most fields live on ``sheet``.  Composite BDR rows can take their
+    # calculated month values from a separate saved-value sheet, so keep the
+    # exceptional sheet identity per field instead of pretending that the
+    # formula/planning cell was the numeric source.
+    cell_sheets: dict[str, str] = field(default_factory=dict)
     indicator_type: Any = ""
     revenue_group: Any = ""
     formula_condition: Any = ""
@@ -265,6 +282,19 @@ class PreviewRecord:
     @property
     def month_name(self) -> str:
         return MONTH_NAMES[self.month - 1]
+
+    @property
+    def source_excel_row(self) -> int:
+        """Return the real worksheet row even when an internal id is used.
+
+        Composite BDR ranges can contain the same row number on different
+        sheets.  ``source_row`` therefore remains the run-local unique id,
+        while the exact worksheet identity is preserved by the pointer.
+        """
+
+        pointer = self.pointers.get("source_article") or self.pointers.get("amount")
+        match = re.search(r"(\d+)$", pointer.cell) if pointer else None
+        return int(match.group(1)) if match else self.source_row
 
     @property
     def mapping_key(self) -> tuple[str, str, str, str]:

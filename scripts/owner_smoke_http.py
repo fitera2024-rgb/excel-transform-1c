@@ -11,46 +11,7 @@ from urllib.request import Request, build_opener
 
 from openpyxl import Workbook, load_workbook
 
-
-ADO_OPIU_HEADERS = (
-    "Организация",
-    "Код организации",
-    "Сценарий",
-    "Год",
-    "Месяц",
-    "Период",
-    "Департамент",
-    "Отдел",
-    "ЦФО",
-    "Код ЦФО",
-    "Тип показателя",
-    "Показатель",
-    "Тип расходов",
-    "Код статьи",
-    "Название статьи",
-    "Инт Номенклатура",
-    "Код номенклатуры",
-    "Регион продаж",
-    "Код региона продаж",
-    "Значение",
-)
-
-ADO_INDICATOR_HEADERS = (
-    "Организация",
-    "Код организации",
-    "Департамент",
-    "Отдел",
-    "ЦФО",
-    "Код ЦФО",
-    "Сценарий",
-    "Год",
-    "Месяц",
-    "Период",
-    "Тип показателя",
-    "Канал сбыта",
-    "Показатель",
-    "Значение",
-)
+from excel_transform_1c.adapters.excel import ADO_INDICATOR_HEADERS, ADO_OPIU_HEADERS
 
 
 class SelectOptionsParser(HTMLParser):
@@ -323,7 +284,7 @@ def assert_export(payload: bytes) -> None:
         assert workbook.sheetnames == ["OPIU Light", "ОПИУ", "Показатели"]
         assert tuple(cell.value for cell in workbook["ОПИУ"][1]) == ADO_OPIU_HEADERS
         assert tuple(cell.value for cell in workbook["Показатели"][1]) == ADO_INDICATOR_HEADERS
-        assert workbook["ОПИУ"].max_column == 20
+        assert workbook["ОПИУ"].max_column == len(ADO_OPIU_HEADERS)
         assert workbook["Показатели"].max_column == 14
         assert workbook["Показатели"].max_row == 14 * 12 + 1
         rows = list(

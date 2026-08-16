@@ -122,7 +122,7 @@ def _pointer(row: SourceRow, field: str, month: int | None = None) -> SourcePoin
     cell = row.cells.get(source_key) or row.cells["article"]
     return SourcePointer(
         file_name=row.source_file,
-        sheet=row.sheet,
+        sheet=row.cell_sheets.get(source_key, row.sheet),
         row=row.row_number,
         cell=cell,
         field=field,

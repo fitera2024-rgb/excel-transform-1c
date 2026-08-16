@@ -157,15 +157,19 @@ def test_skipped_month_stays_in_preview_and_export_with_pointer(tmp_path):
     payload = service.export_run(run.run_id)
     workbook = load_workbook(BytesIO(payload), data_only=True)
     sheet = workbook["OPIU Light"]
+    columns = {
+        cell.value: index for index, cell in enumerate(sheet[1])
+    }
     exported = [
         tuple(cell.value for cell in row)
         for row in sheet.iter_rows(min_row=2)
-        if row[23].value == 3 and row[5].value == 5
+        if row[columns["Номер исходной строки"]].value == 3
+        and row[columns["Месяц"]].value == 5
     ]
     assert len(exported) == 1
-    assert exported[0][20] is None
-    assert exported[0][21] == STATUS_SKIPPED
-    assert "M3" in exported[0][22]
+    assert exported[0][columns["Значение"]] is None
+    assert exported[0][columns["Статус"]] == STATUS_SKIPPED
+    assert "M3" in exported[0][columns["Комментарий"]]
 
 
 def test_field_specific_correction_keeps_other_missing_field_attention(tmp_path):
