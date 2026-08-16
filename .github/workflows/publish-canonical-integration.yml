@@ -21,7 +21,7 @@ jobs:
           ref: automation/canonical-integration-publish
           fetch-depth: 0
 
-      - name: Reconstruct, verify and publish exact two-parent commit
+      - name: Reconstruct, verify and publish exact two-parent code commit
         shell: bash
         run: |
           set -euo pipefail
@@ -54,28 +54,38 @@ jobs:
 
           cat "${parts[@]}" | tr -d '\r\n' > /tmp/canonical-payload.b64
           payload_sha=$(sha256sum /tmp/canonical-payload.b64 | awk '{print $1}')
-          echo "payload_sha256=$payload_sha"
           test "$payload_sha" = e0dca2476aae8b2170fc878e8b34823f7fc0ff9d4e893cf2379d6e805740f785
 
           base64 --decode /tmp/canonical-payload.b64 | gzip --decompress > /tmp/canonical-merge.patch
           patch_sha=$(sha256sum /tmp/canonical-merge.patch | awk '{print $1}')
-          echo "patch_sha256=$patch_sha"
           test "$patch_sha" = ab4d7919cee0ff2b840c10959dbade852ad94aa1e58f8037ad202b53e055ac42
 
           git fetch origin \
             refs/heads/integration/canonical-preview-export-v1:refs/remotes/origin/integration/canonical-preview-export-v1
           remote_head=$(git rev-parse refs/remotes/origin/integration/canonical-preview-export-v1)
-          echo "canonical_remote_head=$remote_head"
           test "$remote_head" = ab4513ed6923f56a8e8ee6dd36cfbf0e8ff04465
 
           git fetch origin 77645317b673b2e57dea803410126a61cdaf6d83
           git checkout --detach ab4513ed6923f56a8e8ee6dd36cfbf0e8ff04465
           git apply --index --binary /tmp/canonical-merge.patch
+
+          # Workflow changes are published separately through the GitHub App,
+          # which has the required workflow-file permission. The code merge
+          # intentionally retires the PR #24 stream-specific workflow and does
+          # not yet add the canonical workflow, avoiding competing authorities.
+          git rm --cached --ignore-unmatch \
+            .github/workflows/canonical-preview-export.yml \
+            .github/workflows/opiu-rules-final-package.yml
+          rm -f \
+            .github/workflows/canonical-preview-export.yml \
+            .github/workflows/opiu-rules-final-package.yml
+
           git diff --cached --check
+          test -z "$(git diff --cached --name-only -- .github/workflows)"
 
           tree=$(git write-tree)
           echo "tree=$tree"
-          test "$tree" = 167abac81bbc9a4bcb6a7962b3f3a367b6efc561
+          test "$tree" = dee05355c1624dd36ec6e7f4e464ea13bfba1d09
 
           export GIT_AUTHOR_NAME='ChatGPT Coordinator'
           export GIT_AUTHOR_EMAIL='chatgpt-coordinator@users.noreply.github.com'
@@ -90,7 +100,7 @@ jobs:
               -p 77645317b673b2e57dea803410126a61cdaf6d83)
 
           echo "commit=$commit"
-          test "$commit" = b449fdf1533131560bfe7e1f7917b14b2d3de61c
+          test "$commit" = b5bf1d4b481a996cbf7f8b1c72e939f655670f81
           test "$(git show -s --format='%P' "$commit")" = \
             'ab4513ed6923f56a8e8ee6dd36cfbf0e8ff04465 77645317b673b2e57dea803410126a61cdaf6d83'
           git merge-base --is-ancestor c713cee112e4b935b3a5b2c319d23fc6cbf180cb "$commit"
@@ -104,6 +114,7 @@ jobs:
             echo "parents=$(git show -s --format='%P' "$commit")"
             echo "payload_sha256=$payload_sha"
             echo "patch_sha256=$patch_sha"
+            echo "workflow_changes=published_separately"
           } | tee publish-result.txt
 
       - uses: actions/upload-artifact@v4
