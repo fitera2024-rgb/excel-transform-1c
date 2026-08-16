@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import re
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -128,24 +129,97 @@ def bdr_formula_workbook_bytes(
     )
 
 
+def bdr_split_kpi_value_workbook_bytes(
+    *,
+    reporting_unit: str = "АЮ Отдел обеспечения",
+    cached_value: int = 593845,
+) -> bytes:
+    """Department-aware BDR plus one exact aggregate KPI value sheet."""
+
+    workbook = Workbook()
+    planning = workbook.active
+    planning.title = "Строки БДР с отделом"
+    planning.cell(2, 1, reporting_unit)
+    planning.cell(2, 5, "Отдел")
+    for month in range(1, 13):
+        planning.cell(2, 9 + month, datetime(2026, month, 1))
+        planning.cell(3, 9 + month, "план")
+    for row_number, indicator in BDR_FULL_INDICATORS:
+        planning.cell(row_number, 5, reporting_unit)
+        planning.cell(row_number, 7, indicator)
+        for month in range(1, 13):
+            planning.cell(row_number, 9 + month, 0)
+
+    summary = workbook.create_sheet("Сводные значения БДР")
+    summary.cell(2, 1, "АЮ")
+    for month in range(1, 13):
+        summary.cell(2, 22 + month, datetime(2026, month, 1))
+        summary.cell(3, 22 + month, "план")
+    for row_number, indicator in BDR_FULL_INDICATORS:
+        summary.cell(row_number, 7, indicator)
+        for month in range(1, 13):
+            summary.cell(row_number, 22 + month, row_number * month)
+            summary.cell(row_number, 22 + month).number_format = "#,##0"
+    # The owner summary contains a repeated expense total after the KPI tail.
+    # It must not invalidate the exact expense-block anchor before EBITDA.
+    summary.cell(42, 7, "Расходы по основной деятельности ИТОГО")
+    for month in range(1, 13):
+        summary.cell(42, 22 + month, 42 * month)
+
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    raw = output.getvalue()
+    row_number = next(
+        row for row, name in BDR_FULL_INDICATORS if name == "Оборот в кг"
+    )
+    raw = _replace_numeric_cell_with_cached_formula(
+        raw,
+        f"W{row_number}",
+        row_number,
+        f"SUM({cached_value},0)",
+        cached_value,
+        sheet_name="xl/worksheets/sheet2.xml",
+    )
+    revenue_per_kg_row = next(
+        row for row, name in BDR_FULL_INDICATORS if name == "Выручка за 1 кг"
+    )
+    return _replace_numeric_cell_with_cached_formula(
+        raw,
+        f"W{revenue_per_kg_row}",
+        revenue_per_kg_row,
+        "469.5283132972408",
+        469.5283132972408,
+        sheet_name="xl/worksheets/sheet2.xml",
+    )
+
+
 def _replace_numeric_cell_with_cached_formula(
     workbook_bytes: bytes,
     coordinate: str,
     original_value: int,
     formula: str,
-    cached_value: int,
+    cached_value: int | float,
+    *,
+    sheet_name: str = "xl/worksheets/sheet1.xml",
 ) -> bytes:
     with ZipFile(BytesIO(workbook_bytes), "r") as source:
         members = {name: source.read(name) for name in source.namelist()}
-    sheet_name = "xl/worksheets/sheet1.xml"
     xml = members[sheet_name].decode("utf-8")
-    original = f'<c r="{coordinate}" t="n"><v>{original_value}</v></c>'
-    replacement = (
-        f'<c r="{coordinate}"><f>{formula}</f><v>{cached_value}</v></c>'
+    pattern = re.compile(
+        rf'<c r="{re.escape(coordinate)}"(?P<attrs>[^>]*)>'
+        rf'<v>{re.escape(str(original_value))}</v></c>'
     )
-    if original not in xml:
+    match = pattern.search(xml)
+    if match is None:
         raise AssertionError(f"Fixture cell not found: {coordinate}")
-    members[sheet_name] = xml.replace(original, replacement, 1).encode("utf-8")
+    style = re.search(r'\s+s="[^"]+"', match.group("attrs"))
+    style_attribute = style.group(0) if style else ""
+    replacement = (
+        f'<c r="{coordinate}"{style_attribute}>'
+        f'<f>{formula}</f><v>{cached_value}</v></c>'
+    )
+    members[sheet_name] = pattern.sub(replacement, xml, count=1).encode("utf-8")
     output = BytesIO()
     with ZipFile(output, "w", ZIP_DEFLATED) as target:
         for name, data in members.items():

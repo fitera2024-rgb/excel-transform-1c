@@ -69,6 +69,14 @@ class CandidateRange:
     indicator_blocks: tuple[tuple[IndicatorType, int, int], ...] = ()
     label_columns: tuple[int, ...] = ()
     reporting_unit_cell: str = ""
+    # Some owner workbooks keep the department-aware BDR rows on one sheet
+    # and the saved KPI/revenue totals on a separate summary sheet. Detection
+    # records
+    # the exact row/month relationship here; readers never infer it by filename
+    # or by a partial indicator match.
+    bdr_value_sheet: str = ""
+    bdr_value_columns: dict[str, int] = field(default_factory=dict)
+    bdr_value_rows: tuple[tuple[int, int], ...] = ()
 
     @property
     def label(self) -> str:

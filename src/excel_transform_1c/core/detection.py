@@ -256,6 +256,23 @@ def _one_exact_row(
     return matches[0] if len(matches) == 1 else None
 
 
+def _one_exact_row_between(
+    labelled_rows: list[tuple[int, str]],
+    label: str,
+    *,
+    after: int,
+    before: int,
+) -> int | None:
+    """Return the single exact anchor inside an already proven block order."""
+
+    matches = [
+        row_number
+        for row_number, value in labelled_rows
+        if value == label and after < row_number < before
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _bdr_full_candidate(
     sheet: Any,
     scanned_rows: list[tuple[Any, ...]],
@@ -302,8 +319,17 @@ def _bdr_full_candidate(
                 business_rows.append(row_number)
 
         income_start = _one_exact_row(labelled_rows, BDR_INCOME_START)
-        expense_start = _one_exact_row(labelled_rows, BDR_EXPENSE_START)
         kpi_tail_start = _one_exact_row(labelled_rows, BDR_KPI_TAIL_START)
+        expense_start = (
+            _one_exact_row_between(
+                labelled_rows,
+                BDR_EXPENSE_START,
+                after=income_start,
+                before=kpi_tail_start,
+            )
+            if income_start is not None and kpi_tail_start is not None
+            else None
+        )
         if (
             income_start is None
             or expense_start is None
@@ -368,6 +394,87 @@ def _bdr_full_candidate(
 
     # Multiple full schemas are an ambiguity, not an invitation to take the first.
     return matches[0] if len(matches) == 1 else None
+
+
+def _bdr_value_label_rows(
+    sheet: Any,
+    candidate: CandidateRange,
+) -> dict[int, str]:
+    """Return exact KPI/revenue labels keyed by their source row."""
+
+    result: dict[int, str] = {}
+    rows = sheet.iter_rows(
+        min_row=candidate.first_data_row,
+        max_row=candidate.last_data_row,
+        min_col=1,
+        max_col=max(candidate.label_columns),
+        values_only=True,
+    )
+    for row_number, row in enumerate(rows, start=candidate.first_data_row):
+        if _bdr_indicator_type(candidate, row_number) not in {
+            IndicatorType.KPI,
+            IndicatorType.REVENUE,
+        }:
+            continue
+        labelled = _bdr_row_label(row, candidate.label_columns)
+        if labelled is not None:
+            result[row_number] = labelled[0]
+    return result
+
+
+def _attach_exact_bdr_value_source(
+    workbook: Any,
+    candidate: CandidateRange,
+    summaries: list[CandidateRange],
+) -> CandidateRange:
+    """Bind department-aware rows to one exact summary indicator/month grid."""
+
+    same_year = [
+        summary
+        for summary in summaries
+        if summary.source_year == candidate.source_year
+    ]
+    if len(same_year) != 1:
+        return candidate
+    summary = same_year[0]
+    target_rows = _bdr_value_label_rows(workbook[candidate.sheet], candidate)
+    source_rows = _bdr_value_label_rows(workbook[summary.sheet], summary)
+    mapping: dict[int, int] = {
+        target_row: target_row
+        for target_row, label in target_rows.items()
+        if source_rows.get(target_row) == label
+    }
+
+    target_by_label: dict[str, list[int]] = {}
+    source_by_label: dict[str, list[int]] = {}
+    for row_number, label in target_rows.items():
+        target_by_label.setdefault(label, []).append(row_number)
+    for row_number, label in source_rows.items():
+        source_by_label.setdefault(label, []).append(row_number)
+    for label, target_row_numbers in target_by_label.items():
+        source_row_numbers = source_by_label.get(label, [])
+        if len(target_row_numbers) == 1 and len(source_row_numbers) == 1:
+            mapping.setdefault(target_row_numbers[0], source_row_numbers[0])
+
+    target_labels = set(target_rows.values())
+    if not BDR_KPI_HEAD_ANCHORS.intersection(target_labels) or not (
+        BDR_KPI_TAIL_ANCHORS.issubset(target_labels)
+    ):
+        return candidate
+    if len(mapping) < len(BDR_KPI_HEAD_ANCHORS.intersection(target_labels)) + len(
+        BDR_KPI_TAIL_ANCHORS
+    ):
+        return candidate
+    return replace(
+        candidate,
+        bdr_value_sheet=summary.sheet,
+        bdr_value_columns={
+            field: column
+            for field, column in summary.columns.items()
+            if field.startswith("month_")
+        },
+        bdr_value_rows=tuple(sorted(mapping.items())),
+    )
 
 
 def detect_candidate_ranges(
@@ -438,9 +545,34 @@ def detect_candidate_ranges(
             )
 
     if full_bdr_candidates:
+        # A real owner workbook can contain both a department-aware planning
+        # grid and an aggregate BDR summary.  The planning grid remains the
+        # business candidate because it proves ``Отдел`` exactly; the summary
+        # is retained only as the exact saved-value source for matching
+        # KPI/revenue indicator/month pairs.
+        department_candidates = [
+            candidate
+            for candidate in full_bdr_candidates
+            if "department" in candidate.columns
+        ]
+        summary_candidates = [
+            candidate
+            for candidate in full_bdr_candidates
+            if "department" not in candidate.columns
+        ]
+        selected = department_candidates or full_bdr_candidates
+        if department_candidates and summary_candidates:
+            selected = [
+                _attach_exact_bdr_value_source(
+                    workbook,
+                    candidate,
+                    summary_candidates,
+                )
+                for candidate in department_candidates
+            ]
         return [
             replace(candidate, candidate_id=f"candidate-{index}")
-            for index, candidate in enumerate(full_bdr_candidates, start=1)
+            for index, candidate in enumerate(selected, start=1)
         ]
 
     candidates: list[CandidateRange] = []
@@ -903,9 +1035,10 @@ def _read_bdr_full_rows(
             for month in range(1, 13)
         )
         month_values = tuple(
-            cached_formula_values.get(cell, row[candidate.columns[f"month_{month}"] - 1])
-            if indicator_type == IndicatorType.KPI
-            else row[candidate.columns[f"month_{month}"] - 1]
+            cached_formula_values.get(
+                cell,
+                row[candidate.columns[f"month_{month}"] - 1],
+            )
             for month, cell in enumerate(month_cells, start=1)
         )
         if not any(value not in (None, "") for value in month_values):

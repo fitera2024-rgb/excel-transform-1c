@@ -4,7 +4,7 @@ import re
 import tempfile
 import zipfile
 from contextlib import contextmanager
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO
 from pathlib import Path
 from posixpath import normpath
@@ -13,6 +13,7 @@ from xml.etree import ElementTree
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles.numbers import BUILTIN_FORMATS
 from openpyxl.utils import get_column_letter
 
 from excel_transform_1c.adapters.workbook_repair import prepare_workbook
@@ -227,7 +228,7 @@ def read_path(path: str | Path, candidate: CandidateRange, source_file: str):
     # omits row_dimensions; prepared-budget workbooks stay streaming/read-only.
     read_only = candidate.source_kind != "intalev_opiu"
     cached_formula_values = (
-        _bdr_kpi_cached_formula_values(path, candidate)
+        _bdr_cached_formula_values(path, candidate)
         if candidate.source_kind == "bdr_full"
         else {}
     )
@@ -240,7 +241,7 @@ def read_path(path: str | Path, candidate: CandidateRange, source_file: str):
         )
 
 
-def _bdr_kpi_cached_formula_values(
+def _bdr_cached_formula_values(
     path: str | Path,
     candidate: CandidateRange,
 ) -> dict[str, object]:
@@ -269,47 +270,163 @@ def _bdr_kpi_cached_formula_values(
     try:
         prepared_path = prepare_workbook(source_path).working_path
         with zipfile.ZipFile(prepared_path) as archive:
-            sheet_part = _worksheet_part(archive, candidate.sheet)
-            if not sheet_part:
-                return {}
-            with archive.open(sheet_part) as sheet_xml:
-                for _, cell in ElementTree.iterparse(sheet_xml, events=("end",)):
-                    element_name = _local_name(cell.tag)
-                    if element_name != "c":
-                        if element_name == "row":
-                            cell.clear()
-                        continue
-                    coordinate = cell.attrib.get("r", "")
-                    if coordinate in target_cells:
-                        formula = next(
-                            (
-                                child
-                                for child in cell
-                                if _local_name(child.tag) == "f"
-                            ),
-                            None,
+            result.update(
+                _ooxml_cached_cell_values(
+                    archive,
+                    candidate.sheet,
+                    target_cells,
+                    formulas_only=True,
+                )
+            )
+
+            if (
+                candidate.bdr_value_sheet
+                and candidate.bdr_value_columns
+                and candidate.bdr_value_rows
+            ):
+                source_to_target: dict[str, str] = {}
+                for target_row, source_row in candidate.bdr_value_rows:
+                    for month in range(1, 13):
+                        target_coordinate = (
+                            f"{get_column_letter(candidate.columns[f'month_{month}'])}"
+                            f"{target_row}"
                         )
-                        cached = next(
-                            (
-                                child
-                                for child in cell
-                                if _local_name(child.tag) == "v"
-                            ),
-                            None,
+                        source_coordinate = (
+                            f"{get_column_letter(candidate.bdr_value_columns[f'month_{month}'])}"
+                            f"{source_row}"
                         )
-                        if (
-                            cached is not None
-                            and cached.text is not None
-                            and formula is not None
-                        ):
-                            result[coordinate] = _cached_formula_scalar(
-                                cell.attrib.get("t", "n"),
-                                cached.text,
-                            )
-                    cell.clear()
+                        source_to_target[source_coordinate] = target_coordinate
+                source_values = _ooxml_cached_cell_values(
+                    archive,
+                    candidate.bdr_value_sheet,
+                    set(source_to_target),
+                    formulas_only=False,
+                    use_display_precision=True,
+                )
+                result.update(
+                    {
+                        source_to_target[source_coordinate]: value
+                        for source_coordinate, value in source_values.items()
+                    }
+                )
     except (OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError):
         return {}
     return result
+
+
+def _ooxml_cached_cell_values(
+    archive: zipfile.ZipFile,
+    sheet_name: str,
+    coordinates: set[str],
+    *,
+    formulas_only: bool,
+    use_display_precision: bool = False,
+) -> dict[str, object]:
+    """Read saved OOXML scalars from one relationship-resolved worksheet."""
+
+    sheet_part = _worksheet_part(archive, sheet_name)
+    if not sheet_part:
+        return {}
+    result: dict[str, object] = {}
+    number_formats = (
+        _number_formats_by_style(archive) if use_display_precision else {}
+    )
+    with archive.open(sheet_part) as sheet_xml:
+        for _, cell in ElementTree.iterparse(sheet_xml, events=("end",)):
+            element_name = _local_name(cell.tag)
+            if element_name != "c":
+                if element_name == "row":
+                    cell.clear()
+                continue
+            coordinate = cell.attrib.get("r", "")
+            if coordinate in coordinates:
+                has_formula = any(
+                    _local_name(child.tag) == "f" for child in cell
+                )
+                cached = next(
+                    (
+                        child
+                        for child in cell
+                        if _local_name(child.tag) == "v"
+                    ),
+                    None,
+                )
+                if (
+                    cached is not None
+                    and cached.text is not None
+                    and (has_formula or not formulas_only)
+                ):
+                    value = _cached_formula_scalar(
+                        cell.attrib.get("t", "n"),
+                        cached.text,
+                    )
+                    if number_formats and isinstance(value, Decimal):
+                        try:
+                            style_id = int(cell.attrib.get("s", "0"))
+                        except ValueError:
+                            style_id = 0
+                        value = _apply_display_precision(
+                            value,
+                            number_formats.get(style_id, ""),
+                        )
+                    result[coordinate] = value
+            cell.clear()
+    return result
+
+
+def _number_formats_by_style(archive: zipfile.ZipFile) -> dict[int, str]:
+    """Resolve worksheet style indexes to Excel number-format codes."""
+
+    try:
+        root = ElementTree.fromstring(archive.read("xl/styles.xml"))
+    except (KeyError, ElementTree.ParseError):
+        return {}
+    custom_formats: dict[int, str] = {}
+    cell_xfs = None
+    for element in root.iter():
+        name = _local_name(element.tag)
+        if name == "numFmt":
+            try:
+                custom_formats[int(element.attrib["numFmtId"])] = element.attrib.get(
+                    "formatCode",
+                    "",
+                )
+            except (KeyError, ValueError):
+                continue
+        elif name == "cellXfs":
+            cell_xfs = element
+    if cell_xfs is None:
+        return {}
+    result: dict[int, str] = {}
+    for style_id, style in enumerate(cell_xfs):
+        try:
+            number_format_id = int(style.attrib.get("numFmtId", "0"))
+        except ValueError:
+            continue
+        result[style_id] = custom_formats.get(
+            number_format_id,
+            BUILTIN_FORMATS.get(number_format_id, ""),
+        )
+    return result
+
+
+def _apply_display_precision(
+    value: Decimal,
+    number_format: str,
+) -> Decimal:
+    """Apply plain-number display precision without converting dates/percentages."""
+
+    positive_section = number_format.split(";", 1)[0]
+    simplified = re.sub(r'"[^"]*"|\\.', "", positive_section)
+    if not simplified or "%" in simplified or re.search(r"[dmyhs]", simplified, re.I):
+        return value
+    placeholders = re.sub(r"\[[^]]*]", "", simplified)
+    if not re.search(r"[0#]", placeholders):
+        return value
+    decimal_part = placeholders.split(".", 1)[1] if "." in placeholders else ""
+    decimal_places = len(re.match(r"[0#]*", decimal_part).group(0))
+    quantum = Decimal(1).scaleb(-decimal_places)
+    return value.quantize(quantum, rounding=ROUND_HALF_UP)
 
 
 def _worksheet_part(archive: zipfile.ZipFile, sheet_name: str) -> str:

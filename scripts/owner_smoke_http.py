@@ -346,6 +346,10 @@ def initial_owner_smoke(opener, base_url: str) -> None:
     assert 'data-testid="bdr-diagnostics"' in initial_html
     for marker in (
         "Прочитано строк БДР:",
+        "Месячных ячеек прочитано:",
+        "Числовых значений:",
+        "Ошибок Excel:",
+        "Строк требует внимания:",
         "Доходные показатели:",
         "Расходные показатели:",
         "KPI найдено:",

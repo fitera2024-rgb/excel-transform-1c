@@ -10,6 +10,7 @@ from excel_transform_1c.core.models import IndicatorType
 from tests.helpers.workbooks import (
     bdr_formula_workbook_bytes,
     bdr_full_workbook_bytes,
+    bdr_split_kpi_value_workbook_bytes,
     erp_organization_hierarchy_bytes,
 )
 
@@ -111,6 +112,31 @@ def test_kpi_month_value_from_formula_cell(tmp_path) -> None:
     assert row.months[0] == Decimal("593845")
     assert not str(row.months[0]).startswith("=")
     assert row.cells["month_1"] == "W10"
+
+
+def test_kpi_month_value_uses_exact_summary_indicator_and_month(tmp_path) -> None:
+    path = tmp_path / "owner-layout.xlsx"
+    path.write_bytes(bdr_split_kpi_value_workbook_bytes())
+    candidate = detect_path(path)[0]
+    row = next(
+        item
+        for item in read_path(path, candidate, path.name)
+        if item.indicator_type == IndicatorType.KPI.value
+        and item.article == "Оборот в кг"
+    )
+
+    assert candidate.sheet == "Строки БДР с отделом"
+    assert candidate.bdr_value_sheet == "Сводные значения БДР"
+    assert row.months[0] == Decimal("593845")
+    assert not str(row.months[0]).startswith("=")
+    assert row.cells["month_1"] == "J10"
+    revenue_per_kg = next(
+        item
+        for item in read_path(path, candidate, path.name)
+        if item.indicator_type == IndicatorType.KPI.value
+        and item.article == "Выручка за 1 кг"
+    )
+    assert revenue_per_kg.months[0] == Decimal("470")
 
 
 def test_kpi_export_mapping(tmp_path) -> None:

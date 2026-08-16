@@ -519,6 +519,21 @@ class WorkflowService:
             )
         return {
             "rows_read": len(by_row),
+            "monthly_cells_read": len(run.records),
+            "numeric_values": sum(
+                record.amount is not None for record in run.records
+            ),
+            "excel_errors": sum(
+                any(
+                    reason.startswith("Ошибка Excel в месячной ячейке")
+                    for reason in record.reasons
+                )
+                for record in run.records
+            ),
+            "attention_rows": sum(
+                any(record.status != STATUS_OK for record in records)
+                for records in by_row.values()
+            ),
             "income": sum(
                 value == IndicatorType.REVENUE for value in source_types.values()
             ),
@@ -529,7 +544,7 @@ class WorkflowService:
             "kpi_found": len(kpi_by_row),
             "kpi_with_organization": sum(
                 any(
-                    record.organization_unit and record.organization_unit_code
+                    bool(record.organization.strip())
                     for record in records
                 )
                 for records in kpi_by_row.values()

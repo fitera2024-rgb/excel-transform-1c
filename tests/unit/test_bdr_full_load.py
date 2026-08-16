@@ -133,6 +133,9 @@ def test_bdr_export_not_empty(tmp_path) -> None:
     diagnostics = service.bdr_diagnostics(run.run_id)
     assert diagnostics is not None
     assert diagnostics["rows_read"] == len(BDR_FULL_INDICATORS)
+    assert diagnostics["monthly_cells_read"] == len(BDR_FULL_INDICATORS) * 12
+    assert diagnostics["numeric_values"] == len(BDR_FULL_INDICATORS) * 12
+    assert diagnostics["excel_errors"] == 0
     assert diagnostics["income"] == 3
     assert diagnostics["expense"] == 5
     assert diagnostics["kpi"] == 6
@@ -176,6 +179,10 @@ def test_bdr_non_exported_indicator_has_reason(tmp_path) -> None:
 
     diagnostics = service.bdr_diagnostics(run.run_id)
     assert diagnostics is not None
+    assert diagnostics["monthly_cells_read"] == len(BDR_FULL_INDICATORS) * 12
+    assert diagnostics["numeric_values"] == (len(BDR_FULL_INDICATORS) - 1) * 12
+    assert diagnostics["excel_errors"] == 12
+    assert diagnostics["attention_rows"] >= 1
     assert diagnostics["exported"] == len(BDR_FULL_INDICATORS) - 1
     assert diagnostics["exclusions"] == [
         {
