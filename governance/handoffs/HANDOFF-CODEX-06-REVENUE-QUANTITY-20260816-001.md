@@ -5,7 +5,7 @@
 - Repository: `fitera2024-rgb/excel-transform-1c`
 - Branch: `feat/final-owner-smoke-fitera-v2`
 - Base SHA: `61c30fd2ed4a13c6bdb392bf2e614a7c40b60677`
-- Final SHA (implementation): `e306d89c4ed68addb42fbf164d3dd4ebef720d9a`
+- Final SHA (implementation): `8dc3007e1bed84031dbe7cbdab3608778e91301d`
 - The handoff is committed separately so the document can contain the immutable implementation SHA.
 - Merge, release, PR, ADO, ODBC, 1C write and live write were not performed.
 
@@ -17,6 +17,8 @@
 - Added type labels to Preview: `Расход`, `Доход`, `Количество`.
 - Missing, incomplete or ambiguous revenue/quantity links remain `Требует внимания`.
 - Kept the export contract unchanged: sheets `OPIU Light`, `ОПИУ`, `Показатели` and their existing columns.
+- Packaged all supplied OPIU reference content as normalized immutable baselines: 517 formulas, 517 analytics rows, 683 report indicators, 310 MXL selections, 22 regions and 233 networks.
+- Added 208 exact expense links derived from MXL hierarchy filters and full ERP disclosure paths. A clean install loads them automatically; the user no longer uploads the raw report-indicator export as a classifier.
 
 ## Resolver boundary
 
@@ -25,6 +27,8 @@
 - `RevenueResolver` uses one exact key: group of revenue + article + formula condition + analytics. It does not use fuzzy, contains, title-only matching or first-result selection.
 - `QuantityResolver` requires quantity in the source row, nomenclature, unit and one exact nomenclature/unit link to an indicator.
 - `IndicatorResolverEngine` routes each Preview record to exactly one resolver by its explicit/structurally detected type.
+- `SelectionExpenseResolver` handles only packaged filter-proven rules and requires the exact full path `expense type → disclosure group → article`; it never falls back to a title or selects a first candidate.
+- The legacy `ExpenseResolver` remains the unchanged direct matcher for existing/user-supplied rules. `src/excel_transform_1c/core/indicator_matching.py` is still unchanged.
 
 ## Source evidence used
 
@@ -43,21 +47,37 @@ Observed evidence used in the resolver contract:
 - the MXL supplies exact source/formula relationships for only part of the formula references;
 - the indicator catalog does not provide a filled, authoritative type value;
 - therefore type and resolution are structural and exact, and uncovered links are not guessed.
+- MXL contains no authoritative expense `Канал сбыта`. The packaged links keep that field empty, show the proven indicator in Preview and remain `Требует внимания`; no invented channel and no incomplete indicator-export row are produced.
 
 ## Changed implementation files
 
 - `src/excel_transform_1c/adapters/references.py`
+- `src/excel_transform_1c/adapters/persistence.py`
 - `src/excel_transform_1c/application/service.py`
+- `src/excel_transform_1c/baselines/__init__.py`
+- `src/excel_transform_1c/baselines/manifest.json`
+- `src/excel_transform_1c/baselines/article_indicators.json`
+- `src/excel_transform_1c/baselines/opiu_analytics.json`
+- `src/excel_transform_1c/baselines/opiu_formulas.json`
+- `src/excel_transform_1c/baselines/opiu_report_indicators.json`
+- `src/excel_transform_1c/baselines/opiu_source_rules.json`
+- `src/excel_transform_1c/baselines/regions.json`
+- `src/excel_transform_1c/baselines/sales_networks.json`
 - `src/excel_transform_1c/core/__init__.py`
 - `src/excel_transform_1c/core/detection.py`
 - `src/excel_transform_1c/core/indicator_resolvers.py`
 - `src/excel_transform_1c/core/models.py`
 - `src/excel_transform_1c/core/transform.py`
 - `src/excel_transform_1c/ui/templates/run.html`
+- `src/excel_transform_1c/ui/templates/home.html`
+- `packaging/user/README_USER_RU.md`
+- `scripts/build_opiu_baselines.py`
 - `tests/helpers/workbooks.py`
 - `tests/integration/test_article_indicator_workflow.py`
 - `tests/integration/test_revenue_quantity_workflow.py`
 - `tests/unit/test_revenue_quantity_resolvers.py`
+- `tests/unit/test_packaged_opiu_baselines.py`
+- `tests/integration/test_packaged_opiu_classifier_workflow.py`
 
 ## Tests
 
@@ -81,7 +101,7 @@ Added integration coverage for:
 ## Verification and smoke result
 
 - `python -m compileall -q src tests scripts` — PASS
-- `python -m pytest -q` — PASS: `148 passed, 5 skipped, 1 warning`
+- `python -m pytest -q` — PASS: `152 passed, 5 skipped, 1 warning`
 - `node --check src/excel_transform_1c/ui/static/run.js` — PASS
 - `git diff --check` — PASS
 - Revenue/quantity integration smoke (`START_SERVICE → upload Excel → upload rules → detect three types → Preview → Confirm → Export XLSX → STOP_SERVICE`) — PASS
@@ -97,4 +117,5 @@ PASS. Existing CFO, organizational-unit, ERP-code, bulk-confirmation, expense-re
 - The resolver accepts only complete exact keys; it deliberately does not normalize case, use fuzzy/contains matching or select the first candidate.
 - Supplied MXL evidence covers only part of the referenced formula vocabulary. Relationships absent from that evidence require an explicit classifier row and otherwise remain `Требует внимания`.
 - A quantity without an explicit unit or nomenclature-to-indicator link remains `Требует внимания`.
-- The supplied real source workbooks/MXL are evidence inputs and are not persisted in the repository or exposed as technical content in normal UI.
+- The source workbooks/MXL are not modified and are not shown as technical content in normal UI. Their normalized rows and SHA-256 evidence are packaged under `baselines`; raw owner files are not copied into Git.
+- The packaged MXL expense link can identify the indicator for 208 full paths, but cannot complete the eight-column `Показатели` row until an authoritative sales channel exists.
