@@ -11,6 +11,7 @@ from .indicator_matching import (
     INDICATOR_MISSING,
     ExactArticleIndicatorMatcher,
     IndicatorMatch,
+    full_article_path,
 )
 from .models import ArticleIndicatorRule, IndicatorType, PreviewRecord
 
@@ -93,17 +94,70 @@ def _resolved_candidate(
         )
     rule = candidates[0]
     if not rule.indicator.strip() or not rule.sales_channel.strip():
+        if rule.indicator.strip() and not rule.sales_channel.strip():
+            reason = "В точной связи не заполнен канал сбыта"
+        elif rule.sales_channel.strip() and not rule.indicator.strip():
+            reason = "В точной связи не заполнен показатель"
+        else:
+            reason = "В точной связи не заполнены показатель и канал сбыта"
         return IndicatorMatch(
             status=INDICATOR_INCOMPLETE,
             rule=rule,
             matched_by=matched_by,
-            reason="В точном соответствии не заполнен показатель или канал сбыта",
+            reason=reason,
         )
     return IndicatorMatch(
         status=INDICATOR_MATCHED,
         rule=rule,
         matched_by=matched_by,
     )
+
+
+class SelectionExpenseResolver:
+    """Resolve packaged expense rules proven by exact MXL hierarchy filters.
+
+    These rules intentionally require the complete disclosure-group path and
+    never fall back to an ERP code or a globally unique article title. The
+    legacy ``ExpenseResolver`` remains unchanged for uploaded direct rules.
+    """
+
+    def __init__(self, rules: list[ArticleIndicatorRule]):
+        self.by_path: dict[str, list[ArticleIndicatorRule]] = defaultdict(list)
+        for rule in dict.fromkeys(rules):
+            if _rule_type(rule) != IndicatorType.EXPENSE:
+                continue
+            if not rule.formula_condition.strip():
+                continue
+            if path := rule.article_path.strip():
+                self.by_path[path].append(rule)
+
+    def resolve(
+        self,
+        *,
+        expense_type: str,
+        expense_group: str,
+        article_name: str,
+    ) -> IndicatorMatch:
+        if not expense_group.strip():
+            return IndicatorMatch(
+                status=INDICATOR_MISSING,
+                reason="Для расхода не заполнена группа раскрытия",
+            )
+        path = full_article_path(expense_type, expense_group, article_name)
+        candidates = self.by_path.get(path, [])
+        if not candidates:
+            return IndicatorMatch(
+                status=INDICATOR_MISSING,
+                reason="Точная связь группы, статьи и условий формулы не найдена",
+            )
+        return _resolved_candidate(
+            candidates,
+            matched_by="expense_group_formula",
+            ambiguous_reason=(
+                "Найдено несколько точных показателей по группе, статье "
+                "и условиям формулы"
+            ),
+        )
 
 
 class RevenueResolver:
@@ -220,7 +274,14 @@ class IndicatorResolverEngine:
         expense_rules = [
             rule for rule in rules if _rule_type(rule) == IndicatorType.EXPENSE
         ]
-        self.expense = ExpenseResolver(expense_rules)
+        selection_rules = [
+            rule for rule in expense_rules if rule.formula_condition.strip()
+        ]
+        direct_rules = [
+            rule for rule in expense_rules if not rule.formula_condition.strip()
+        ]
+        self.expense = ExpenseResolver(direct_rules)
+        self.selection_expense = SelectionExpenseResolver(selection_rules)
         self.revenue = RevenueResolver(rules)
         self.quantity = QuantityResolver(rules)
 
@@ -238,8 +299,15 @@ class IndicatorResolverEngine:
                 unit=record.unit,
                 quantity=record.amount,
             )
-        return self.expense.resolve(
+        direct = self.expense.resolve(
             erp_code=record.erp_code,
+            expense_type=record.expense_type,
+            expense_group=record.expense_group,
+            article_name=record.source_article,
+        )
+        if direct.status != INDICATOR_MISSING:
+            return direct
+        return self.selection_expense.resolve(
             expense_type=record.expense_type,
             expense_group=record.expense_group,
             article_name=record.source_article,

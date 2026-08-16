@@ -17,7 +17,12 @@ from excel_transform_1c.core.models import Scenario
 
 BASELINE_CATALOG_SOURCE = "baseline"
 USER_CATALOG_SOURCE = "user"
-REFERENCE_KINDS = ("erp_articles", "organizations", "intalev_cfos")
+REFERENCE_KINDS = (
+    "erp_articles",
+    "organizations",
+    "intalev_cfos",
+    "article_indicators",
+)
 SCENARIO_KIND = "scenarios"
 
 

@@ -10,6 +10,16 @@ BASELINE_KINDS = (
     "organizations",
     "scenarios",
     "intalev_cfos",
+    "article_indicators",
+)
+
+OPIU_SUPPORT_KINDS = (
+    "opiu_formulas",
+    "opiu_analytics",
+    "regions",
+    "sales_networks",
+    "opiu_report_indicators",
+    "opiu_source_rules",
 )
 
 
@@ -36,3 +46,11 @@ def load_baseline_catalogs() -> dict[str, list[dict[str, Any]]]:
             )
         catalogs[kind] = payload
     return catalogs
+
+
+def baseline_counts() -> dict[str, int]:
+    manifest = load_manifest()
+    return {
+        kind: int(metadata["count"])
+        for kind, metadata in manifest["catalogs"].items()
+    }

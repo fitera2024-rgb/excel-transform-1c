@@ -36,16 +36,17 @@
     <div><dt>Найдено автоматически:</dt><dd>{{ indicator_counts.automatic }}</dd></div>
     <div><dt>Требует внимания:</dt><dd>{{ indicator_counts.attention }}</dd></div>
     <div><dt>Не найдено:</dt><dd>{{ indicator_counts.not_found }}</dd></div>
-    <div><dt>Классификатор:</dt><dd>{{ 'загружен' if run.indicator_classifier_loaded else 'не загружен' }}</dd></div>
+    <div><dt>Классификатор:</dt><dd>{{ 'встроен и применён' if run.indicator_classifier_loaded else 'не загружен' }}</dd></div>
   </dl>
   <form method="post" action="/runs/{{ run.run_id }}/indicator-classifier" enctype="multipart/form-data" class="reference-form" data-testid="indicator-classifier-form">
     <label>
-      Загрузить / дополнить классификатор
+      Дополнить точные соответствия — необязательно
       <input type="file" name="classifier_file" accept=".xlsx,.xls,.xlsm" required>
     </label>
-    <button type="submit">Повторить автоматический поиск</button>
+    <p class="hint">Исходные справочники уже встроены. Дополнение принимается только в подготовленной таблице с показателем, каналом сбыта и точным ключом статьи.</p>
+    <button type="submit">Дополнить и повторить поиск</button>
   </form>
-  {% if indicator_unresolved_rows %}<div class="indicator-unresolved-list" data-testid="indicator-unresolved-list">{% for item in indicator_unresolved_rows %}<article class="indicator-unresolved-row" data-testid="indicator-unresolved-row"><strong>{{ item.source_line }}</strong><span>{{ item.expense_type }} → {{ item.expense_group }} → {{ item.source_article }}</span><span>Тип: {{ item.indicator_type }}</span>{% if item.erp_code %}<span>ERP-код: {{ item.erp_code }}</span>{% endif %}<span><b>{{ item.status }}</b> — {{ item.reason }}</span><span>{{ item.action }}</span></article>{% endfor %}</div>{% endif %}
+  {% if indicator_unresolved_rows %}<div class="indicator-unresolved-list" data-testid="indicator-unresolved-list">{% for item in indicator_unresolved_rows %}<article class="indicator-unresolved-row" data-testid="indicator-unresolved-row"><strong>{{ item.source_line }}</strong><span>{{ item.expense_type }} → {{ item.expense_group }} → {{ item.source_article }}</span><span>Тип: {{ item.indicator_type }}</span>{% if item.erp_code %}<span>ERP-код: {{ item.erp_code }}</span>{% endif %}{% if item.indicator %}<span>Показатель: <b>{{ item.indicator }}</b></span>{% endif %}<span><b>{{ item.status }}</b> — {{ item.reason }}</span><span>{{ item.action }}</span></article>{% endfor %}</div>{% endif %}
 </section>
 
 {% if run.cfo_mapping_enabled %}

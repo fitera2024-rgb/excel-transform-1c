@@ -33,6 +33,7 @@ from excel_transform_1c.core.indicator_matching import (
     INDICATOR_MISSING,
     apply_indicator_match,
 )
+from excel_transform_1c.baselines import baseline_counts
 from excel_transform_1c.core.indicator_resolvers import IndicatorResolverEngine
 from excel_transform_1c.core.models import (
     ArticleIndicatorRule,
@@ -88,11 +89,21 @@ class WorkflowService:
         self.run_keys: dict[str, str] = {}
 
     def reference_counts(self) -> dict[str, int]:
+        packaged = baseline_counts()
         return {
             "erp_articles": len(self.store.load_reference("erp_articles")),
             "organizations": len(self.store.load_reference("organizations")),
             "scenarios": len(self.store.list_scenarios()),
             "intalev_cfos": len(self.store.load_reference("intalev_cfos")),
+            "article_indicators": len(
+                self.store.load_reference("article_indicators")
+            ),
+            "opiu_formulas": packaged["opiu_formulas"],
+            "opiu_analytics": packaged["opiu_analytics"],
+            "regions": packaged["regions"],
+            "sales_networks": packaged["sales_networks"],
+            "opiu_report_indicators": packaged["opiu_report_indicators"],
+            "opiu_source_rules": packaged["opiu_source_rules"],
         }
 
     def upload_reference(self, kind: str, content: bytes) -> int:
@@ -347,6 +358,15 @@ class WorkflowService:
             previous_reason = record.indicator_match_reason
             match = engine.resolve(record)
             apply_indicator_match(record, match)
+            if (
+                match.status == INDICATOR_INCOMPLETE
+                and match.rule is not None
+                and match.rule.indicator.strip()
+            ):
+                # Keep the proven business result visible while the missing
+                # output dimension remains attention-only and non-exportable.
+                record.indicator = match.rule.indicator
+                record.sales_channel = match.rule.sales_channel
             if record.indicator_type != IndicatorType.EXPENSE:
                 if previous_reason:
                     record.reasons = [
@@ -395,10 +415,16 @@ class WorkflowService:
                 "expense_group": record.expense_group or "Без группы",
                 "source_article": record.source_article or "Без статьи",
                 "indicator_type": record.indicator_type_label,
+                "indicator": record.indicator,
+                "sales_channel": record.sales_channel,
                 "erp_code": record.erp_code,
                 "status": labels[status],
                 "reason": record.indicator_match_reason,
-                "action": "Загрузить / дополнить классификатор",
+                "action": (
+                    "Дополнить точную связь значением канала сбыта"
+                    if record.indicator and not record.sales_channel
+                    else "Загрузить / дополнить классификатор"
+                ),
             })
         return result
 

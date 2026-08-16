@@ -1,0 +1,4114 @@
+[
+  {
+    "source_row": 2,
+    "line": "Показатели по кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 3,
+    "line": "Оборот в кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 4,
+    "line": "Опт",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 5,
+    "line": "Розница",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 6,
+    "line": "HoReCa",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 7,
+    "line": "Сети ДВ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 8,
+    "line": "Сети Федеральные",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 9,
+    "line": "Дискаунтеры ДВ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 10,
+    "line": "Дискаунтеры Федеральные",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 11,
+    "line": "Выручка за 1 кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 12,
+    "line": "Опт",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 13,
+    "line": "Розница",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 14,
+    "line": "HoReCa",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 15,
+    "line": "Сети ДВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 16,
+    "line": "Сети Федеральные",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 17,
+    "line": "Дискаунтеры ДВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 18,
+    "line": "Дискаунтеры Федеральные",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 19,
+    "line": "Себестоимость 1 кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 20,
+    "line": "Опт",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 21,
+    "line": "Розница",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 22,
+    "line": "HoReCa",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 23,
+    "line": "Сети ДВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 24,
+    "line": "Сети Федеральные",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 25,
+    "line": "Дискаунтеры ДВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 26,
+    "line": "Дискаунтеры Федеральные",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 27,
+    "line": "Коммерческие показатели",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 28,
+    "line": "Наценка ИТОГО, %",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 29,
+    "line": "Наценка_продажи внешние",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 30,
+    "line": "Опт",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 31,
+    "line": "Розница",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 32,
+    "line": "HoReCa",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 33,
+    "line": "Сети ДВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 34,
+    "line": "Сети Федеральные",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 35,
+    "line": "Дискаунтеры ДВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 36,
+    "line": "Дискаунтеры Федеральные",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 37,
+    "line": "Наценка_продажи внутренние",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 38,
+    "line": "Отчет о Прибылях и Убытках",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 39,
+    "line": "Выручка ИТОГО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 40,
+    "line": "Выручка_продажи внешние",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 41,
+    "line": "Опт",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 42,
+    "line": "Розница",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 43,
+    "line": "HoReCa",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 44,
+    "line": "Сети ДВ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 45,
+    "line": "Сети Федеральные",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 46,
+    "line": "Дискаунтеры ДВ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 47,
+    "line": "Дискаунтеры Федеральные",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 48,
+    "line": "Выручка_продажи внутренние",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 49,
+    "line": "Скидки ЖЦ (справочно)",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 50,
+    "line": "Доля ЖЦ в сетевой с/с продаж",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 51,
+    "line": "Выручка до скидок ЖЦ (справочно)",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 52,
+    "line": "Себестоимость продаж",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 53,
+    "line": "Себестоимость_продажи внешние",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 54,
+    "line": "Опт",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 55,
+    "line": "Розница",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 56,
+    "line": "HoReCa",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 57,
+    "line": "Сети ДВ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 58,
+    "line": "Сети Федеральные",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 59,
+    "line": "Дискаунтеры ДВ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 60,
+    "line": "Дискаунтеры Федеральные",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 61,
+    "line": "Себестоимость_продажи внутренние",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 62,
+    "line": "Валовая прибыль",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 63,
+    "line": "Валовая прибыль продажи внешние",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 64,
+    "line": "Опт",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 65,
+    "line": "Розница",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 66,
+    "line": "HoReCa",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 67,
+    "line": "Сети ДВ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 68,
+    "line": "Сети Федеральные",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 69,
+    "line": "Дискаунтеры ДВ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 70,
+    "line": "Дискаунтеры Федеральные",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 71,
+    "line": "Валовая прибыль_продажи внутренние",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Регион продаж",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 72,
+    "line": "Валовая рентабельность %",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 73,
+    "line": "Продажи внешние",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 74,
+    "line": "Опт",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 75,
+    "line": "Розница",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 76,
+    "line": "HoReCa",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 77,
+    "line": "Сети ДВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 78,
+    "line": "Сети Федеральные",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 79,
+    "line": "Дискаунтеры ДВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 80,
+    "line": "Дискаунтеры Федеральные",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 81,
+    "line": "Продажи внутренние",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 82,
+    "line": "Прочие доходы по основной деятельности",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 83,
+    "line": "Компенсации потери наценки от поставщиков",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 84,
+    "line": "Компенсации ЖЦ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 85,
+    "line": "доля компенсации в предоставленных ЖЦ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 86,
+    "line": "Прочие компенсации от поставщика",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 87,
+    "line": "Отклонение по себестоимости",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 88,
+    "line": "По транспортным и прочее",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 89,
+    "line": "Скидки, бонусы полученные внешние",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 90,
+    "line": "Скидки, бонусы полученные внутренние",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 91,
+    "line": "Услуги Аренды (переменная часть)",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 92,
+    "line": "Услуги Аренды (постоянная часть)",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 93,
+    "line": "Услуги ответхранения",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 94,
+    "line": "Валовая прибыль итого (с учетом прочих доходов)",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 95,
+    "line": "Валовая рентабельность итого, %",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 96,
+    "line": "Расходы по основной деятельности ИТОГО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 97,
+    "line": "Административные расходы",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 98,
+    "line": "Доля расходов в выручке,%",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 99,
+    "line": "Доля административных расходов в выручке % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 100,
+    "line": "Коммерческие расходы",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 101,
+    "line": "Доля расходов в выручке,%",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 102,
+    "line": "Доля коммерческих расходов в выручке % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 103,
+    "line": "Расходы на транспортную логистику",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 104,
+    "line": "Доля расходов в выручке,%",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 105,
+    "line": "Доля расходов на транспортную логистику в выручке % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 106,
+    "line": "Расходы на складскую логистику",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 107,
+    "line": "Доля расходов в выручке,%",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 108,
+    "line": "Доля расходов на складскую логистику в выручке % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 109,
+    "line": "Доля расходов ИТОГО в выручке, %",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 110,
+    "line": "EBITDA",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 111,
+    "line": "Рентабельность EBITDA, %",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 112,
+    "line": "Амортизация",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 113,
+    "line": "Налоги с доходов текущего периода",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 114,
+    "line": "Налоги с доходов прошлого периода",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 115,
+    "line": "Налоговая нагрузка, %",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 116,
+    "line": "Операционная прибыль",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 117,
+    "line": "Рентабельность операционной прибыли, %",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 118,
+    "line": "Итоги по финансовой деятельности",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 119,
+    "line": "Доходы по финансовой деятельности",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 120,
+    "line": "Расходы по финансовой деятельности",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 121,
+    "line": "Итоги по внереализационной деятельности",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 122,
+    "line": "Внутрихолдинговые проценты",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 123,
+    "line": "Прочие внереализационные доходы",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 124,
+    "line": "Прочие внереализационные расходы",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 125,
+    "line": "Убытки прошлых периодов",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "Статьи доходов и расходов",
+      "Расшифровка",
+      "Расшифровка2"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 126,
+    "line": "Чистая прибыль",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 127,
+    "line": "Чистая рентабельность, %",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 128,
+    "line": "Внутрихолдинговые дивиденды",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 129,
+    "line": "Дивиденды начисленные",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 130,
+    "line": "Дивиденды учредителям",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 131,
+    "line": "НДФЛ с дивидендов",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 132,
+    "line": "Нераспределенная прибыль",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 133,
+    "line": "Натуральные показатели",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 134,
+    "line": "Оборот в кг (Запад)",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 135,
+    "line": "ИНТ Номенклатура в разрезе регионов продаж",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 136,
+    "line": "ВЭД",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 137,
+    "line": "Москва",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 138,
+    "line": "Москва ФС",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 139,
+    "line": "Приволжский ФО",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 140,
+    "line": "Сев-Зап ФО",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 141,
+    "line": "Северо-Кавказский ФО",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 142,
+    "line": "Сибирь",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 143,
+    "line": "СПБ",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 144,
+    "line": "УФО",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 145,
+    "line": "Центр ФО",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 146,
+    "line": "Юг ФО",
+    "analytics": [
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 147,
+    "line": "Выручка за 1 кг (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 148,
+    "line": "ИНТ Номенклатура в разрезе регионов продаж",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 149,
+    "line": "ВЭД",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 150,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 151,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 152,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 153,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 154,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 155,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 156,
+    "line": "Москва",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 157,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 158,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 159,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 160,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 161,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 162,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 163,
+    "line": "Москва ФС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 164,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 165,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 166,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 167,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 168,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 169,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 170,
+    "line": "Приволжский ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 171,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 172,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 173,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 174,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 175,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 176,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 177,
+    "line": "Сев-Зап ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 178,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 179,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 180,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 181,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 182,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 183,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 184,
+    "line": "Северо-Кавказский ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 185,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 186,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 187,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 188,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 189,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 190,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 191,
+    "line": "Сибирь",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 192,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 193,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 194,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 195,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 196,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 197,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 198,
+    "line": "СПБ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 199,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 200,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 201,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 202,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 203,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 204,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 205,
+    "line": "УФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 206,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 207,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 208,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 209,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 210,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 211,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 212,
+    "line": "Центр ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 213,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 214,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 215,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 216,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 217,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 218,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 219,
+    "line": "Юг ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 220,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 221,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 222,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 223,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 224,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 225,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 226,
+    "line": "Себестоимость 1 кг (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 227,
+    "line": "ИНТ Номенклатура в разрезе регионов продаж",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 228,
+    "line": "ВЭД",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 229,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 230,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 231,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 232,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 233,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 234,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 235,
+    "line": "Москва",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 236,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 237,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 238,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 239,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 240,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 241,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 242,
+    "line": "Москва ФС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 243,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 244,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 245,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 246,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 247,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 248,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 249,
+    "line": "Приволжский ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 250,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 251,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 252,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 253,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 254,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 255,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 256,
+    "line": "Сев-Зап ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 257,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 258,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 259,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 260,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 261,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 262,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 263,
+    "line": "Северо-Кавказский ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 264,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 265,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 266,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 267,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 268,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 269,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 270,
+    "line": "Сибирь",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 271,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 272,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 273,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 274,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 275,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 276,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 277,
+    "line": "СПБ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 278,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 279,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 280,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 281,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 282,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 283,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 284,
+    "line": "УФО  заменить формулу",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 285,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 286,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 287,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 288,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 289,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 290,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 291,
+    "line": "Центр ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 292,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 293,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 294,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 295,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 296,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 297,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 298,
+    "line": "Юг ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 299,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 300,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 301,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 302,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 303,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 304,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 305,
+    "line": "Коммерческие показатели",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 306,
+    "line": "Наценка ИТОГО, % (Запад) проверить формулы",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 307,
+    "line": "Наценка продажи внешние (Запад) проверить формулы",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 308,
+    "line": "ВЭД",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 309,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 310,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 311,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 312,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 313,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 314,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 315,
+    "line": "Москва",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 316,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 317,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 318,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 319,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 320,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 321,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 322,
+    "line": "Москва ФС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 323,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 324,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 325,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 326,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 327,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 328,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 329,
+    "line": "Приволжский ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 330,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 331,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 332,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 333,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 334,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 335,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 336,
+    "line": "Сев-Зап ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 337,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 338,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 339,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 340,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 341,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 342,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 343,
+    "line": "Северо-Кавказский ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 344,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 345,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 346,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 347,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 348,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 349,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 350,
+    "line": "Сибирь",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 351,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 352,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 353,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 354,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 355,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 356,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 357,
+    "line": "СПБ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 358,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 359,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 360,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 361,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 362,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 363,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 364,
+    "line": "УФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 365,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 366,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 367,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 368,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 369,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 370,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 371,
+    "line": "Центр ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 372,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 373,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 374,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 375,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 376,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 377,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 378,
+    "line": "Юг ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 379,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 380,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 381,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 382,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 383,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 384,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 385,
+    "line": "Наценка продажи внутренние (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 386,
+    "line": "Выручка ИТОГО (Запад) проверить формулы",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 387,
+    "line": "Выручка ИТОГО продажи внешние (Запад) проверить формулы",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 388,
+    "line": "ВЭД",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 389,
+    "line": "Москва",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 390,
+    "line": "Москва ФС",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 391,
+    "line": "Приволжский ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 392,
+    "line": "Сев-Зап ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 393,
+    "line": "Северо-Кавказский ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 394,
+    "line": "Сибирь",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 395,
+    "line": "СПБ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 396,
+    "line": "УФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 397,
+    "line": "Центр ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 398,
+    "line": "Юг ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 399,
+    "line": "Выручка ИТОГО продажи внутренние (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 400,
+    "line": "Себестоимость продаж (Запад) проверить формулы",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 401,
+    "line": "Себестоимость продажи внешние (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 402,
+    "line": "ВЭД",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 403,
+    "line": "Москва",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 404,
+    "line": "Москва ФС",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 405,
+    "line": "Приволжский ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 406,
+    "line": "Сев-Зап ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 407,
+    "line": "Северо-Кавказский ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 408,
+    "line": "Сибирь",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 409,
+    "line": "СПБ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 410,
+    "line": "УФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 411,
+    "line": "Центр ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 412,
+    "line": "Юг ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 413,
+    "line": "Себестоимость продажи внутренние (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 414,
+    "line": "Валовая прибыль (Запад) проверить формулы",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 415,
+    "line": "Валовая прибыль продажи внешние (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 416,
+    "line": "ВЭД",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 417,
+    "line": "Москва",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 418,
+    "line": "Москва ФС",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 419,
+    "line": "Приволжский ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 420,
+    "line": "Сев-Зап ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 421,
+    "line": "Северо-Кавказский ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 422,
+    "line": "Сибирь",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 423,
+    "line": "СПБ",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 424,
+    "line": "УФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 425,
+    "line": "Центр ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 426,
+    "line": "Юг ФО",
+    "analytics": [
+      "Организационные единицы",
+      "ЦФО (казначейство)",
+      "ИНТ номенклатура"
+    ],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 427,
+    "line": "Валовая прибыль продажи внутренние (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 428,
+    "line": "Валовая рентабельность % (Запад) проверить формулы",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 429,
+    "line": "Валовая рентабельность продажи внешние % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 430,
+    "line": "ВЭД",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 431,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 432,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 433,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 434,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 435,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 436,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 437,
+    "line": "Москва",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 438,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 439,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 440,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 441,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 442,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 443,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 444,
+    "line": "Москва ФС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 445,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 446,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 447,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 448,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 449,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 450,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 451,
+    "line": "Приволжский ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 452,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 453,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 454,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 455,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 456,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 457,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 458,
+    "line": "Сев-Зап ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 459,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 460,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 461,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 462,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 463,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 464,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 465,
+    "line": "Северо-Кавказский ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 466,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 467,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 468,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 469,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 470,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 471,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 472,
+    "line": "Сибирь",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 473,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 474,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 475,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 476,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 477,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 478,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 479,
+    "line": "СПБ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 480,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 481,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 482,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 483,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 484,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 485,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 486,
+    "line": "УФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 487,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 488,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 489,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 490,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 491,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 492,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 493,
+    "line": "Центр ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 494,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 495,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 496,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 497,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 498,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 499,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 500,
+    "line": "Юг ФО",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 501,
+    "line": "Картофель ПВ",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 502,
+    "line": "Планета Витаминов 1кг",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 503,
+    "line": "Планета Витаминов ФАС",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 504,
+    "line": "Гурманика",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 505,
+    "line": "Планета Витаминов вес",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 506,
+    "line": "Планета Витаминов Идея Микс",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 507,
+    "line": "Валовая рентабельность продажи внутренние % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 508,
+    "line": "Валовая прибыль итого (с учетом прочих доходов) (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 509,
+    "line": "Валовая рентабельность итого, % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 510,
+    "line": "Доля расходов ИТОГО в выручке, % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 511,
+    "line": "EBITDA (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 512,
+    "line": "Рентабельность EBITDA, % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 513,
+    "line": "Операционная прибыль (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 514,
+    "line": "Рентабельность операционной прибыли, % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 515,
+    "line": "Чистая прибыль (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 516,
+    "line": "Чистая рентабельность, % (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 517,
+    "line": "Нераспределенная прибыль (9 Управляющая)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  },
+  {
+    "source_row": 518,
+    "line": "Нераспределенная прибыль (Запад)",
+    "analytics": [],
+    "currency_disclosure": "",
+    "settings": ""
+  }
+]

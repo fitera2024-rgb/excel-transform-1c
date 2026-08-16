@@ -122,7 +122,7 @@ def test_preview_shows_compact_indicator_counts_without_rules_workflow(client):
     assert "Требует внимания:" in response.text
     assert "Не найдено:" in response.text
     assert "Классификатор:" in response.text
-    assert "не загружен" in response.text
+    assert "встроен и применён" in response.text
     assert 'data-testid="indicator-classifier-form"' in response.text
     assert "Rules" not in response.text
 
@@ -143,7 +143,9 @@ def test_preview_shows_compact_indicator_counts_without_rules_workflow(client):
     assert re.search(r"Найдено автоматически:</dt><dd>2</dd>", response.text)
     assert re.search(r"Требует внимания:</dt><dd>0</dd>", response.text)
     assert re.search(r"Не найдено:</dt><dd>0</dd>", response.text)
-    assert re.search(r"Классификатор:</dt><dd>загружен</dd>", response.text)
+    assert re.search(
+        r"Классификатор:</dt><dd>встроен и применён</dd>", response.text
+    )
 
 
 def test_legacy_delegation_is_cleared_and_all_nodes_remain_available(tmp_path):

@@ -70,7 +70,11 @@ def test_classifier_parser_and_persistence_use_direct_exact_keys(tmp_path):
     second = WorkflowService(tmp_path / "runtime")
 
     assert second.article_indicator_rules() == first.article_indicator_rules()
-    assert len(second.article_indicator_rules()) == 2
+    assert len(second.article_indicator_rules()) == 210
+    assert {rule.erp_code for rule in second.article_indicator_rules()} >= {
+        "ERP-001",
+        "ERP-002",
+    }
 
 
 def test_classifier_supplement_repeats_search_in_current_run_without_reading_excel(
@@ -84,7 +88,7 @@ def test_classifier_supplement_repeats_search_in_current_run_without_reading_exc
         "attention": 2,
         "not_found": 2,
     }
-    assert run.indicator_classifier_loaded is False
+    assert run.indicator_classifier_loaded is True
 
     def unexpected_read(*_args, **_kwargs):
         raise AssertionError("Исходный Excel не должен читаться повторно")
