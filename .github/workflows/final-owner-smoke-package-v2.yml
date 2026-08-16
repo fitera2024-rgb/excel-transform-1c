@@ -104,7 +104,12 @@ jobs:
       - name: Smoke packaged launcher, HTTP owner flow, baselines, transform, restart and stop
         shell: pwsh
         run: |
-          $package = Join-Path $PWD "dist\EXCEL_TO_OPIU_LIGHT_USER"
+          $builtPackage = Join-Path $PWD "dist\EXCEL_TO_OPIU_LIGHT_USER"
+          $longParent = Join-Path $env:RUNNER_TEMP "fitera-final-v2-long-path\first-long-directory-name\second-long-directory-name\third-long-directory-name"
+          Remove-Item -LiteralPath $longParent -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $longParent -Force | Out-Null
+          Copy-Item -LiteralPath $builtPackage -Destination $longParent -Recurse
+          $package = Join-Path $longParent "EXCEL_TO_OPIU_LIGHT_USER"
           $startPs = Join-Path $package "START_SERVICE.ps1"
           $stopPs = Join-Path $package "STOP_SERVICE.ps1"
           foreach ($required in @($startPs, $stopPs, (Join-Path $package "README_USER_RU.md"))) {
@@ -128,7 +133,13 @@ jobs:
             if ($homeResponse.Content -notmatch [regex]::Escape($marker)) { throw "Home marker missing: $marker" }
           }
 
-          $venvPython = Join-Path $package ".venv\Scripts\python.exe"
+          $packageVenv = Join-Path $package ".venv"
+          if ($packageVenv.Length -le 100) { throw "Long-path package smoke did not create a sufficiently deep path" }
+          $packageBuildText = Get-Content -LiteralPath (Join-Path $package "PACKAGE_BUILD.txt") -Raw
+          $packageBuildKey = [regex]::Match($packageBuildText, "(?m)^commit=([A-Za-z0-9._-]+)\s*$").Groups[1].Value
+          if ($packageBuildKey.Length -gt 16) { $packageBuildKey = $packageBuildKey.Substring(0, 16) }
+          $venvPython = Join-Path $env:LOCALAPPDATA "FITERA\ExcelToOpiuLight\venvs\$packageBuildKey\Scripts\python.exe"
+          if (-not (Test-Path -LiteralPath $venvPython)) { throw "Long-path fallback environment was not created" }
           & $venvPython -c "import excel_transform_1c,fastapi,openpyxl,msoffcrypto,olefile,xlrd"
           if ($LASTEXITCODE -ne 0) { throw "Installed component import failed" }
 

@@ -258,10 +258,7 @@ try {
     Write-Host "Найден: $($selectedPython.Label)"
     Write-Host "Python: $($selectedPython.Executable) $($selectedPython.PrefixArguments -join ' ')"
 
-    $venvDirectory = Join-Path $root ".venv"
-    $venvPython = Join-Path $venvDirectory "Scripts\python.exe"
     $packageMarker = Join-Path $root "PACKAGE_BUILD.txt"
-    $venvMarker = Join-Path $venvDirectory "PACKAGE_BUILD.txt"
     $wheelDirectory = Join-Path $root "wheels"
 
     if (-not (Test-Path -LiteralPath $packageMarker)) {
@@ -270,6 +267,35 @@ try {
     if (-not (Test-Path -LiteralPath $wheelDirectory)) {
         throw "В пакете отсутствует папка wheels. Распакуйте исходный ZIP полностью."
     }
+
+    # pip/setuptools still contain paths that can exceed the classic Windows
+    # MAX_PATH limit when the ZIP is unpacked deeply.  Keep the usual portable
+    # package-local environment for short paths, but automatically use a short,
+    # build-specific LocalAppData path when necessary.  The application runtime
+    # and all user data remain package-local unless OPIU_RUNTIME_DIR is explicit.
+    $packageVenvDirectory = Join-Path $root ".venv"
+    $packageBuildText = Get-Content -LiteralPath $packageMarker -Raw
+    $packageBuildMatch = [regex]::Match($packageBuildText, "(?m)^commit=([A-Za-z0-9._-]+)\s*$")
+    $packageBuildKey = "default"
+    if ($packageBuildMatch.Success) {
+        $packageBuildKey = [regex]::Replace($packageBuildMatch.Groups[1].Value, "[^A-Za-z0-9._-]", "")
+        if ($packageBuildKey.Length -gt 16) {
+            $packageBuildKey = $packageBuildKey.Substring(0, 16)
+        }
+    }
+    $fallbackVenvDirectory = $packageVenvDirectory
+    if ($env:LOCALAPPDATA) {
+        $fallbackVenvDirectory = Join-Path $env:LOCALAPPDATA "FITERA\ExcelToOpiuLight\venvs\$packageBuildKey"
+    }
+
+    $venvDirectory = $packageVenvDirectory
+    if ($packageVenvDirectory.Length -gt 100 -and $fallbackVenvDirectory -ne $packageVenvDirectory) {
+        $venvDirectory = $fallbackVenvDirectory
+        Write-Host "Путь распаковки длинный; локальное окружение будет создано в короткой системной папке."
+    }
+    $venvPython = Join-Path $venvDirectory "Scripts\python.exe"
+    $venvMarker = Join-Path $venvDirectory "PACKAGE_BUILD.txt"
+    Write-Host "Локальное окружение: $venvDirectory"
 
     $needInstall = -not (Test-Path -LiteralPath $venvPython)
     if (-not $needInstall) {
@@ -296,9 +322,30 @@ try {
     if ($needInstall) {
         Write-Stage "Подготовка локального окружения"
         if (-not (Test-Path -LiteralPath $venvPython)) {
+            if (Test-Path -LiteralPath $venvDirectory) {
+                Remove-Item -LiteralPath $venvDirectory -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path (Split-Path -Parent $venvDirectory) -Force | Out-Null
             $result = Invoke-PythonCandidate $selectedPython.Executable $selectedPython.PrefixArguments @("-m", "venv", $venvDirectory)
+
+            # A Python installation can otherwise be healthy while ensurepip
+            # fails only because the package-local path is too long.  Retry once
+            # in the short build-specific directory before reporting an error.
+            if (($result -ne 0 -or -not (Test-Path -LiteralPath $venvPython)) -and
+                $venvDirectory -ne $fallbackVenvDirectory) {
+                Remove-Item -LiteralPath $venvDirectory -Recurse -Force -ErrorAction SilentlyContinue
+                $venvDirectory = $fallbackVenvDirectory
+                $venvPython = Join-Path $venvDirectory "Scripts\python.exe"
+                $venvMarker = Join-Path $venvDirectory "PACKAGE_BUILD.txt"
+                Write-Host "Повторяю подготовку в короткой системной папке: $venvDirectory"
+                if (Test-Path -LiteralPath $venvDirectory) {
+                    Remove-Item -LiteralPath $venvDirectory -Recurse -Force
+                }
+                New-Item -ItemType Directory -Path (Split-Path -Parent $venvDirectory) -Force | Out-Null
+                $result = Invoke-PythonCandidate $selectedPython.Executable $selectedPython.PrefixArguments @("-m", "venv", $venvDirectory)
+            }
             if ($result -ne 0 -or -not (Test-Path -LiteralPath $venvPython)) {
-                throw "Не удалось создать .venv. Проверьте права записи в папку пакета и повторите запуск."
+                throw "Не удалось создать локальное окружение Python. Подробности находятся в startup.log."
             }
         }
 
