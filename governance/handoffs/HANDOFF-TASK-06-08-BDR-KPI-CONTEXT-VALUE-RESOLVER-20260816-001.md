@@ -127,7 +127,7 @@ OPIU Light: 744 KPI period rows, 744 numeric, 0 formula text
 
 ```text
 python -m pytest -q
-200 passed, 6 skipped, 1 warning in 72.73s
+200 passed, 6 skipped, 1 warning in 222.78s
 
 python -m pytest -q tests/unit/test_bdr_kpi_context_value.py tests/unit/test_bdr_full_load.py
 11 passed in 2.34s
