@@ -95,7 +95,7 @@ def test_unmatched_source_cfo_shows_two_explicit_selectors_and_can_be_confirmed(
     ] == "code:INT-CFO-2"
 
 
-def test_bulk_source_cfo_payload_confirms_two_stage_mappings(tmp_path):
+def test_bulk_confirm_cfo(tmp_path):
     client = _client(tmp_path)
     response = _upload(client, workbook_bytes(cfo_error=False, second_cfo="Исходный отдел"))
     run_id = _run_id(response)

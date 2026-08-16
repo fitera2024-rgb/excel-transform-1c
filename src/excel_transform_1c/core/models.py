@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from decimal import Decimal
+from enum import StrEnum
 from typing import Any
 
 
@@ -12,6 +14,21 @@ STATUS_OK = "ОК"
 STATUS_ATTENTION = "Требует внимания"
 STATUS_SKIPPED = "Пропущено"
 TAX_NOT_REQUIRED = "Не требуется"
+
+
+class IndicatorType(StrEnum):
+    EXPENSE = "EXPENSE"
+    REVENUE = "REVENUE"
+    QUANTITY = "QUANTITY"
+    KPI = "KPI"
+
+
+INDICATOR_TYPE_LABELS = {
+    IndicatorType.EXPENSE: "Расход",
+    IndicatorType.REVENUE: "Доход",
+    IndicatorType.QUANTITY: "Количество",
+    IndicatorType.KPI: "KPI",
+}
 
 MONTH_NAMES = (
     "Январь",
@@ -38,6 +55,13 @@ class SourcePointer:
     field: str
     month: int | None = None
 
+    @property
+    def excel_row(self) -> int:
+        """Return the visible worksheet row without changing the RUN identity."""
+
+        match = re.search(r"(\d+)$", self.cell)
+        return int(match.group(1)) if match else self.row
+
 
 @dataclass(frozen=True)
 class CandidateRange:
@@ -50,9 +74,26 @@ class CandidateRange:
     source_kind: str = "prepared_budget"
     source_cfo: str = ""
     source_year: int | None = None
+    indicator_blocks: tuple[tuple[IndicatorType, int, int], ...] = ()
+    label_columns: tuple[int, ...] = ()
+    reporting_unit_cell: str = ""
+    # Some owner workbooks keep the department-aware BDR rows on one sheet
+    # and the saved KPI/revenue totals on a separate summary sheet. Detection
+    # records
+    # the exact row/month relationship here; readers never infer it by filename
+    # or by a partial indicator match.
+    bdr_value_sheet: str = ""
+    bdr_value_columns: dict[str, int] = field(default_factory=dict)
+    bdr_value_rows: tuple[tuple[int, int], ...] = ()
+    # A full BDR is one business input even when the workbook keeps exact
+    # expense/income facts in internal prepared ranges.  Those ranges remain
+    # hidden from the user and are read as components of this candidate.
+    bdr_components: tuple[CandidateRange, ...] = ()
 
     @property
     def label(self) -> str:
+        if self.source_kind == "bdr_full":
+            return "БДР 2026 ИТОГ"
         return f"{self.sheet}: строки {self.first_data_row}–{self.last_data_row}"
 
 
@@ -71,6 +112,22 @@ class SourceRow:
     article: Any
     months: tuple[Any, ...]
     cells: dict[str, str]
+    # Most fields live on ``sheet``.  Composite BDR rows can take their
+    # calculated month values from a separate saved-value sheet, so keep the
+    # exceptional sheet identity per field instead of pretending that the
+    # formula/planning cell was the numeric source.
+    cell_sheets: dict[str, str] = field(default_factory=dict)
+    indicator_type: Any = ""
+    revenue_group: Any = ""
+    formula_condition: Any = ""
+    analytics: Any = ""
+    nomenclature: Any = ""
+    unit: Any = ""
+    counterparty: Any = ""
+    input_sales_channel: Any = ""
+    sales_network: Any = ""
+    sales_region: Any = ""
+    source_kind: str = "prepared_budget"
 
 
 @dataclass(frozen=True)
@@ -93,6 +150,21 @@ class OrganizationNode:
     name: str
     parent_id: str | None
     full_path: str
+    source_department: str = ""
+    cfo_name: str = ""
+    organization_unit_name: str = ""
+
+
+@dataclass(frozen=True)
+class OrganizationHierarchyNode:
+    """One node of the business organization hierarchy resolved from ERP."""
+
+    id: str
+    name: str
+    code: str
+    parent_id: str | None
+    level: int
+    type: str
 
 
 @dataclass(frozen=True)
@@ -117,6 +189,16 @@ class ArticleIndicatorRule:
     article_name: str
     indicator: str
     sales_channel: str
+    indicator_type: IndicatorType = IndicatorType.EXPENSE
+    revenue_group: str = ""
+    formula_condition: str = ""
+    analytics: str = ""
+    nomenclature: str = ""
+    unit: str = ""
+    counterparty: str = ""
+    input_sales_channel: str = ""
+    sales_network: str = ""
+    sales_region: str = ""
 
 
 @dataclass(frozen=True)
@@ -165,6 +247,8 @@ class PreviewRecord:
     erp_article_name: str
     tax: str
     amount: Decimal | None
+    region: str = ""
+    network: str = ""
     status: str = STATUS_OK
     reasons: list[str] = field(default_factory=list)
     pointers: dict[str, SourcePointer] = field(default_factory=dict)
@@ -177,6 +261,22 @@ class PreviewRecord:
     sales_channel: str = ""
     indicator_match_status: str = ""
     indicator_match_reason: str = ""
+    indicator_match_source: str = ""
+    organization_unit: str = ""
+    organization_unit_code: str = ""
+    erp_department: str = ""
+    cfo_code: str = ""
+    indicator_type: IndicatorType = IndicatorType.EXPENSE
+    revenue_group: str = ""
+    formula_condition: str = ""
+    analytics: str = ""
+    nomenclature: str = ""
+    unit: str = ""
+    counterparty: str = ""
+    input_sales_channel: str = ""
+    sales_network: str = ""
+    sales_region: str = ""
+    source_kind: str = "prepared_budget"
 
     @property
     def comment(self) -> str:
@@ -187,12 +287,45 @@ class PreviewRecord:
         return MONTH_NAMES[self.month - 1]
 
     @property
+    def source_excel_row(self) -> int:
+        """Return the real worksheet row even when an internal id is used.
+
+        Composite BDR ranges can contain the same row number on different
+        sheets.  ``source_row`` therefore remains the run-local unique id,
+        while the exact worksheet identity is preserved by the pointer.
+        """
+
+        pointer = self.pointers.get("source_article") or self.pointers.get("amount")
+        match = re.search(r"(\d+)$", pointer.cell) if pointer else None
+        return int(match.group(1)) if match else self.source_row
+
+    @property
     def mapping_key(self) -> tuple[str, str, str, str]:
         return (REPORT_TYPE_CODE, self.expense_type, self.expense_group, self.source_article)
 
     @property
     def tax_not_required(self) -> bool:
         return self.tax == TAX_NOT_REQUIRED
+
+    @property
+    def indicator_type_label(self) -> str:
+        return INDICATOR_TYPE_LABELS[self.indicator_type]
+
+
+@dataclass(frozen=True)
+class KPIResult:
+    """Business-safe resolved KPI value for one organization and period."""
+
+    organization: str
+    organization_code: str
+    department: str
+    department_name: str
+    cfo: str
+    cfo_code: str
+    indicator_type: str
+    indicator_name: str
+    period: str
+    value: Decimal | None
 
 
 @dataclass

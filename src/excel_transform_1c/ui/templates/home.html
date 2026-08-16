@@ -34,6 +34,11 @@
       <div><dt>Организации и узлы</dt><dd>{{ counts.organizations }}</dd></div>
       <div><dt>Сценарии</dt><dd>{{ counts.scenarios }}</dd></div>
       <div><dt>ЦФО Инталев</dt><dd>{{ counts.intalev_cfos }}</dd></div>
+      <div><dt>Связи показателей</dt><dd>{{ counts.article_indicators }}</dd></div>
+      <div><dt>Показатели ОПИУ</dt><dd>{{ counts.opiu_report_indicators }}</dd></div>
+      <div><dt>Отборы источников ОПИУ</dt><dd>{{ counts.opiu_source_rules }}</dd></div>
+      <div><dt>Формулы / аналитики</dt><dd>{{ counts.opiu_formulas }} / {{ counts.opiu_analytics }}</dd></div>
+      <div><dt>Регионы / сети</dt><dd>{{ counts.regions }} / {{ counts.sales_networks }}</dd></div>
     </dl>
     <form method="post" action="/references" enctype="multipart/form-data" data-testid="reference-form" class="reference-form">
       <label>Тип справочника
@@ -48,7 +53,7 @@
         <input type="file" name="reference_file" accept=".xlsx,.xls,.xlsm" required>
         <span>Выберите Excel, чтобы дополнить базовый каталог</span>
       </label>
-      <p class="hint">Справочники хранятся локально и используются для всех организаций и следующих запусков. Повторная загрузка дополняет список и обновляет записи по точному коду.</p>
+      <p class="hint">Все исходные классификаторы ОПИУ, формулы, аналитики, отборы MXL, регионы и сети уже включены в поставку. Загрузка здесь нужна только для последующего точного дополнения.</p>
       <button type="submit">Загрузить / дополнить</button>
     </form>
   </article>
@@ -63,6 +68,27 @@
     </form>
     <p class="hint">Полный список сценариев загружается один раз и сохраняется локально. Новый локальный сценарий помечается «Не подтверждён справочником ERP».</p>
   </article>
+</section>
+
+<section class="card reference-card opiu-rule-source-card" data-testid="opiu-rule-source-card">
+  <div class="card-heading">
+    <div><p class="eyebrow ink">Автоматические показатели</p><h3>Источники правил ОПИУ ERP</h3></div>
+    <span class="status-badge {{ 'ready' if opiu_rule_count else 'neutral' }}" data-testid="opiu-rule-status">{{ opiu_rule_count }} правил</span>
+  </div>
+  <p>Загрузите комплект ERP-настроек один раз. Сервис сохранит построенные точные правила локально и будет определять показатель по группе раскрытия, статье внутри группы и условиям формулы.</p>
+  <details>
+    <summary>Загрузить / обновить комплект источников ОПИУ</summary>
+    <form method="post" action="/opiu-rule-sources" enctype="multipart/form-data" class="reference-form opiu-rule-source-form" data-testid="opiu-rule-source-form">
+      <label>ОПИУ ФОРМУЛЫ<input type="file" name="formulas_file" accept=".xlsx" required></label>
+      <label>ОПИУ АНАЛИТИКИ<input type="file" name="analytics_file" accept=".xlsx" required></label>
+      <label>Показатели отчётов ERP<input type="file" name="indicators_file" accept=".xlsx" required></label>
+      <label>Источники ОПИУ ERP<input type="file" name="sources_file" accept=".mxl" required></label>
+      <label>Регионы<input type="file" name="regions_file" accept=".xlsx" required></label>
+      <label>Сети<input type="file" name="networks_file" accept=".xlsx" required></label>
+      <p class="hint">Автоматически применяется только одно точное соответствие. Неоднозначные и непокрытые связи останутся в preview как «Требует внимания».</p>
+      <button type="submit">Построить и сохранить правила</button>
+    </form>
+  </details>
 </section>
 
 <section class="section-heading page-section-heading">
@@ -105,9 +131,9 @@
     </fieldset>
 
     <div class="form-section-title file-section-title"><span class="form-section-index">2.2</span><div><strong>Исходный файл</strong><span>Обычный, защищённый или поддерживаемый старый Excel</span></div></div>
-    <label class="budget-file file-drop prominent">Бюджетный Excel
+    <label class="budget-file file-drop prominent">Бизнес-источник Excel
       <input type="file" name="budget_file" accept=".xlsx,.xls,.xlsm" required>
-      <span>Выберите исходный файл для локального анализа</span>
+      <span>Выберите БДР 2026 ИТОГ или другой поддерживаемый бизнес-документ</span>
     </label>
     <label class="budget-password">Пароль защищённой книги — необязательно
       <input type="password" name="workbook_password" autocomplete="off" placeholder="Вводится только для текущего файла">

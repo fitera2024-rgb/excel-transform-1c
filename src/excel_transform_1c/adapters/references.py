@@ -8,9 +8,11 @@ from typing import Any
 from excel_transform_1c.adapters.excel import load_cached_workbook
 from excel_transform_1c.core.detection import normalize_header
 from excel_transform_1c.core.indicator_matching import full_article_path
+from excel_transform_1c.core.indicator_resolvers import detect_indicator_type
 from excel_transform_1c.core.models import (
     ArticleIndicatorRule,
     ERPArticle,
+    IndicatorType,
     IntalevCFO,
     OrganizationNode,
 )
@@ -74,6 +76,17 @@ ARTICLE_INDICATOR_HEADERS = {
     "article_name": {"статья", "исходная статья", "наименование статьи"},
     "indicator": {"показатель", "тип расходов / показатель"},
     "sales_channel": {"канал сбыта"},
+    "indicator_type": {"тип показателя"},
+    "revenue_type": {"тип доходов источника", "тип доходов"},
+    "revenue_group": {"группа дохода", "группа доходов", "группа раскрытия"},
+    "formula_condition": {"условие формулы", "условия формулы"},
+    "analytics": {"аналитика", "аналитики"},
+    "nomenclature": {"номенклатура", "инт номенклатура"},
+    "unit": {"единица измерения", "ед. изм.", "единица"},
+    "counterparty": {"контрагент"},
+    "input_sales_channel": {"инт канал сбыта", "входной канал сбыта"},
+    "sales_network": {"сеть", "сеть продаж"},
+    "sales_region": {"регион продаж"},
 }
 
 REAL_EXPORT_HEADERS = {
@@ -107,6 +120,8 @@ REAL_EXPORT_HEADERS = {
 }
 
 PATH_ALIASES = {"полный путь", "путь", "полное наименование"}
+ORG_CFO_NAME_ALIASES = {"головная организация"}
+ORG_UNIT_NAME_ALIASES = {"верхний уровень иерархии"}
 MAX_HEADER_SCAN_ROWS = 120
 ERP_INDENT_UNITS_PER_LEVEL = 2
 
@@ -141,9 +156,8 @@ def _parse_reference_workbook_object(workbook: Any, kind: str) -> list[dict[str,
         result = _parse_article_indicators(workbook)
         if not result:
             raise ValueError(
-                "Не найден классификатор статья → показатель. Нужны колонки "
-                "«Показатель», «Канал сбыта» и хотя бы один точный ключ: "
-                "«ERP-код статьи», «Полный путь статьи» или «Статья»."
+                "Не найден классификатор показателей. Нужны колонки «Показатель», "
+                "и точные ключи расхода, дохода или количества."
             )
         return validate_reference_payload(kind, result)
 
@@ -229,6 +243,53 @@ def reference_exact_key(kind: str, item: dict[str, Any]) -> str:
         return f"intalev_cfo:{source_key}"
 
     if kind == "article_indicators":
+        indicator_type = detect_indicator_type(
+            indicator_type=_clean_scalar(item.get("indicator_type")),
+            revenue_group=_clean_scalar(item.get("revenue_group")),
+            formula_condition=_clean_scalar(item.get("formula_condition")),
+            analytics=_clean_scalar(item.get("analytics")),
+            nomenclature=_clean_scalar(item.get("nomenclature")),
+            unit=_clean_scalar(item.get("unit")),
+            counterparty=_clean_scalar(item.get("counterparty")),
+            input_sales_channel=_clean_scalar(item.get("input_sales_channel")),
+            sales_network=_clean_scalar(item.get("sales_network")),
+            sales_region=_clean_scalar(item.get("sales_region")),
+        )
+        if indicator_type == IndicatorType.REVENUE:
+            article = _clean_scalar(item.get("article_name"))
+            path = _clean_scalar(item.get("article_path"))
+            group = _clean_scalar(item.get("revenue_group"))
+            formula = _clean_scalar(item.get("formula_condition"))
+            if not article or not (path or group):
+                raise ValueError(
+                    "Доход не имеет точного ключа: нужны статья и группа дохода "
+                    "либо полный путь типа/группы/статьи"
+                )
+            analytics = tuple(
+                _clean_scalar(item.get(field))
+                for field in (
+                    "analytics",
+                    "counterparty",
+                    "input_sales_channel",
+                    "sales_network",
+                    "sales_region",
+                    "nomenclature",
+                )
+            )
+            key = (path, group, article, formula, *analytics)
+            return "article_indicator:revenue:" + repr(key)
+        if indicator_type == IndicatorType.QUANTITY:
+            nomenclature = _clean_scalar(item.get("nomenclature"))
+            unit = _clean_scalar(item.get("unit"))
+            indicator = _clean_scalar(item.get("indicator"))
+            if not nomenclature or not unit or not indicator:
+                raise ValueError(
+                    "Количество не имеет точного ключа: нужны конкретная "
+                    "номенклатура, единица измерения и показатель"
+                )
+            key = (nomenclature, unit, indicator)
+            return "article_indicator:quantity:" + repr(key)
+
         code = _clean_scalar(item.get("erp_code"))
         path = _clean_scalar(item.get("article_path"))
         name = _clean_scalar(item.get("article_name"))
@@ -298,7 +359,7 @@ def validate_reference_payload(
         elif kind == "intalev_cfos":
             item["source_key"] = key.removeprefix("intalev_cfo:")
         else:
-            item = {
+            normalized_item = {
                 field: _clean_scalar(item.get(field))
                 for field in (
                     "erp_code",
@@ -308,6 +369,31 @@ def validate_reference_payload(
                     "sales_channel",
                 )
             }
+            normalized_item["indicator_type"] = detect_indicator_type(
+                indicator_type=_clean_scalar(item.get("indicator_type")),
+                revenue_group=_clean_scalar(item.get("revenue_group")),
+                formula_condition=_clean_scalar(item.get("formula_condition")),
+                analytics=_clean_scalar(item.get("analytics")),
+                nomenclature=_clean_scalar(item.get("nomenclature")),
+                unit=_clean_scalar(item.get("unit")),
+                counterparty=_clean_scalar(item.get("counterparty")),
+                input_sales_channel=_clean_scalar(item.get("input_sales_channel")),
+                sales_network=_clean_scalar(item.get("sales_network")),
+                sales_region=_clean_scalar(item.get("sales_region")),
+            ).value
+            for field in (
+                "revenue_group",
+                "formula_condition",
+                "analytics",
+                "nomenclature",
+                "unit",
+                "counterparty",
+                "input_sales_channel",
+                "sales_network",
+                "sales_region",
+            ):
+                normalized_item[field] = _clean_scalar(item.get(field))
+            item = normalized_item
             key = reference_exact_key(kind, item)
 
         previous = by_key.get(key)
@@ -360,14 +446,43 @@ def _parse_article_indicators(workbook: Any) -> list[dict[str, Any]]:
                 _clean_scalar(values["expense_group"].value),
                 article_name,
             )
+        if not article_path and all(
+            field in values for field in ("revenue_type", "revenue_group", "article_name")
+        ):
+            article_path = full_article_path(
+                _clean_scalar(values["revenue_type"].value),
+                _clean_scalar(values["revenue_group"].value),
+                article_name,
+            )
 
         item = {
-            "erp_code": _code_text(values["erp_code"]) if "erp_code" in values else "",
-            "article_path": article_path,
-            "article_name": article_name,
-            "indicator": _clean_scalar(values["indicator"].value),
-            "sales_channel": _clean_scalar(values["sales_channel"].value),
+            field: _clean_scalar(values[field].value) if field in values else ""
+            for field in (
+                "indicator_type",
+                "revenue_group",
+                "formula_condition",
+                "analytics",
+                "nomenclature",
+                "unit",
+                "counterparty",
+                "input_sales_channel",
+                "sales_network",
+                "sales_region",
+            )
         }
+        item.update(
+            {
+                "erp_code": _code_text(values["erp_code"]) if "erp_code" in values else "",
+                "article_path": article_path,
+                "article_name": article_name,
+                "indicator": _clean_scalar(values["indicator"].value),
+                "sales_channel": (
+                    _clean_scalar(values["sales_channel"].value)
+                    if "sales_channel" in values
+                    else ""
+                ),
+            }
+        )
         try:
             reference_exact_key("article_indicators", item)
         except ValueError as exc:
@@ -392,9 +507,15 @@ def _match_article_indicator_headers(values: list[Any]) -> dict[str, int] | None
         if matches:
             columns[field] = matches[0]
 
-    if not {"indicator", "sales_channel"}.issubset(columns):
+    if "indicator" not in columns:
         return None
-    if not {"erp_code", "article_path", "article_name"}.intersection(columns):
+    expense_keys = {"erp_code", "article_path", "article_name"}.intersection(columns)
+    revenue_keys = {
+        "revenue_group",
+        "article_name",
+    }.issubset(columns)
+    quantity_keys = {"nomenclature", "unit"}.issubset(columns)
+    if not (expense_keys or revenue_keys or quantity_keys):
         return None
     return columns
 
@@ -590,6 +711,16 @@ def _parse_real_organizations(workbook: Any) -> list[dict[str, Any]]:
         PATH_ALIASES,
         excluded_columns={name_col, code_col},
     )
+    cfo_name_col = _find_exact_header_column(
+        sheet,
+        ORG_CFO_NAME_ALIASES,
+        excluded_columns={name_col, code_col},
+    )
+    organization_unit_col = _find_exact_header_column(
+        sheet,
+        ORG_UNIT_NAME_ALIASES,
+        excluded_columns={name_col, code_col},
+    )
 
     stack: list[str] = []
     coded_stack: dict[int, str] = {}
@@ -613,16 +744,33 @@ def _parse_real_organizations(workbook: Any) -> list[dict[str, Any]]:
         else:
             continue
 
-        code = _code_text(code_cell)
-        if not code or _looks_like_header(code, REAL_EXPORT_HEADERS["organizations"]["code"]):
-            continue
-        if code in seen_codes:
-            raise ValueError(f"Справочник организаций содержит повторяющийся код: {code}")
-
         explicit_path = ""
         if path_col is not None:
             explicit_path = _clean_scalar(sheet.cell(row_number, path_col).value)
         full_path = explicit_path or " → ".join(stack)
+        source_department = _clean_scalar(raw_name)
+        cfo_name = (
+            _clean_scalar(sheet.cell(row_number, cfo_name_col).value)
+            if cfo_name_col is not None
+            else ""
+        )
+        organization_unit_name = (
+            _clean_scalar(sheet.cell(row_number, organization_unit_col).value)
+            if organization_unit_col is not None
+            else ""
+        )
+        code = _code_text(code_cell)
+        if _looks_like_header(code, REAL_EXPORT_HEADERS["organizations"]["code"]):
+            continue
+        if not code and not (source_department and cfo_name and organization_unit_name):
+            continue
+        if code and code in seen_codes:
+            raise ValueError(f"Справочник организаций содержит повторяющийся код: {code}")
+        if not code:
+            full_path = " → ".join(
+                (organization_unit_name, cfo_name, source_department)
+            )
+        node_id = code or f"organization:path:{full_path}"
 
         parent_id = None
         for parent_level in range(level - 1, -1, -1):
@@ -632,17 +780,21 @@ def _parse_real_organizations(workbook: Any) -> list[dict[str, Any]]:
 
         raw_nodes.append(
             {
-                "node_id": code,
+                "node_id": node_id,
                 "code": code,
                 "name": name,
                 "parent_id": parent_id,
                 "full_path": full_path,
+                "source_department": source_department,
+                "cfo_name": cfo_name,
+                "organization_unit_name": organization_unit_name,
             }
         )
-        seen_codes.add(code)
-        coded_stack[level] = code
-        for deeper in [item for item in coded_stack if item > level]:
-            del coded_stack[deeper]
+        if code:
+            seen_codes.add(code)
+            coded_stack[level] = code
+            for deeper in [item for item in coded_stack if item > level]:
+                del coded_stack[deeper]
 
     if path_col is not None:
         by_path = {node["full_path"]: node["node_id"] for node in raw_nodes}
@@ -824,6 +976,24 @@ def _find_optional_column(
     return next(iter(best_columns)) if len(best_columns) == 1 else None
 
 
+def _find_exact_header_column(
+    sheet: Any,
+    aliases: set[str],
+    *,
+    excluded_columns: set[int] | None = None,
+) -> int | None:
+    normalized_aliases = {normalize_header(alias) for alias in aliases}
+    excluded = excluded_columns or set()
+    matches: set[int] = set()
+    for row_number in range(1, min(sheet.max_row, MAX_HEADER_SCAN_ROWS) + 1):
+        for column_number, cell in enumerate(sheet[row_number], start=1):
+            if column_number in excluded:
+                continue
+            if normalize_header(cell.value) in normalized_aliases:
+                matches.add(column_number)
+    return next(iter(matches)) if len(matches) == 1 else None
+
+
 def _row_level(sheet: Any, row_number: int, name_col: int, value: Any) -> int:
     cell = sheet.cell(row_number, name_col)
     indent = int(cell.alignment.indent or 0)
@@ -953,6 +1123,9 @@ def organization_nodes(payload: list[dict[str, Any]]) -> list[OrganizationNode]:
             name=item["name"],
             parent_id=item["parent_id"] or None,
             full_path=item["full_path"],
+            source_department=_clean_scalar(item.get("source_department")),
+            cfo_name=_clean_scalar(item.get("cfo_name")),
+            organization_unit_name=_clean_scalar(item.get("organization_unit_name")),
         )
         for item in validate_reference_payload("organizations", payload)
     ]
@@ -969,6 +1142,11 @@ def article_indicator_rules(
     payload: list[dict[str, Any]],
 ) -> list[ArticleIndicatorRule]:
     return [
-        ArticleIndicatorRule(**item)
+        ArticleIndicatorRule(
+            **{
+                **item,
+                "indicator_type": IndicatorType(item["indicator_type"]),
+            }
+        )
         for item in validate_reference_payload("article_indicators", payload)
     ]

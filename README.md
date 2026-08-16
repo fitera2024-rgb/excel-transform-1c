@@ -14,22 +14,26 @@ ADO и фактическая запись в 1С являются отдель�
 
 ## Current status
 
-`V1 INTEGRATED / OWNER-SMOKE PACKAGE PREPARATION / DRAFT / NO LIVE WRITE`
+`OWNER GATE ACCEPTED / PR #24 + PR #25 CANONICAL L INTEGRATION / DRAFT / NO MERGE / NO LIVE WRITE`
 
-Владелец принял User Flow первой vertical slice и расширил входы: встроенные базовые справочники, подготовленные бюджетные книги, legacy/repairable Excel и годовой Инталев ОПИУ. Реализация формирует preview и OPIU Light export; ADO/live write отсутствуют.
+Владелец `2026-08-17` принял единый canonical preview/export scope: подготовленные бюджеты, полный БДР с KPI/доходами/расходами, annual/monthly Intalev OPIU, exact formula/source indicator resolution и три листа `OPIU Light / ОПИУ / Показатели`.
+
+Каноническая работа ведётся в Issue #27 и Draft PR #28. Исходные PR #24 и PR #25 отдельно не merge-ятся. ADO, ODBC, SQL/1C write и live write отсутствуют и не разрешены.
 
 ## Start here
 
-1. `governance/handoffs/HANDOFF-OWNER-DECISIONS-20260812-002.md` — финальный пакет owner decisions и принятие User Flow.
-2. `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md` — карта реальных Excel, ERP-справочников и доказательств.
-3. `docs/PRODUCT.md`
-4. `docs/USER_FLOW.md`
-5. `governance/DECISIONS.md`
-6. `governance/FEATURE_BASELINE.md`
-7. `governance/ACTIVE_WORK.md`
-8. `docs/ARCHITECTURE.md`
-9. `AGENTS.md` — правила для Codex
-10. `docs/SERVICE_FACTORY_SKILLS_AND_PLUGINS_PLAN_RU.md` — справочный план reusable Skills и tooling; не является разрешением раздувать scope.
+1. `governance/handoffs/HANDOFF-OWNER-GATE-CANONICAL-PREVIEW-EXPORT-20260817-001.md` — owner gate на объединение PR #24 + PR #25.
+2. `governance/tasks/CODEX-TASK-CANONICAL-PREVIEW-EXPORT-INTEGRATION-20260817-001.md` — exact L-level integration contract.
+3. `governance/handoffs/HANDOFF-OWNER-DECISIONS-20260812-002.md` — исходные owner decisions и User Flow.
+4. `governance/handoffs/HANDOFF-EXCEL-LOGIC-20260812-001.md` — карта реальных Excel, ERP-справочников и доказательств.
+5. `docs/PRODUCT.md`
+6. `docs/USER_FLOW.md`
+7. `governance/DECISIONS.md`
+8. `governance/FEATURE_BASELINE.md`
+9. `governance/ACTIVE_WORK.md`
+10. `docs/ARCHITECTURE.md`
+11. `AGENTS.md` — правила для Codex
+12. `docs/SERVICE_FACTORY_SKILLS_AND_PLUGINS_PLAN_RU.md` — справочный план reusable Skills и tooling; не является разрешением раздувать scope.
 
 ## Product principle
 
@@ -45,7 +49,7 @@ ADO и фактическая запись в 1С являются отдель�
 
 OPIU используется только как visual/UX reference и источник отдельных проверенных reliability/safety patterns. Новый сервис не является fork OPIU.
 
-Первая vertical slice не пишет в 1С/БД. Live write по умолчанию запрещён и требует отдельного owner gate.
+Канонический preview/export candidate не пишет в 1С/БД. Live write по умолчанию запрещён и требует отдельного будущего owner gate.
 
 ## Локальный запуск V1
 
@@ -84,7 +88,15 @@ values; приложение не пересчитывает Excel.
 
 Фактический Excel-контейнер определяется по содержимому. Поддерживаются обычный OOXML, encrypted OOXML, legacy BIFF/XLS, SpreadsheetML XML и узко восстанавливаемый OOXML. Оригинал сохраняется неизменным; обработка использует отдельную working copy и не требует Excel COM.
 
-Наряду с подготовленным бюджетным диапазоном структурно поддерживается годовой Инталев ОПИУ: период, иерархия статей, исходный ЦФО, preview и OPIU Light export.
+Поддерживаются три structural families:
+
+- подготовленные budget ranges расходов и доходов;
+- полный БДР как один RUN с KPI, доходами, расходами и exact saved values;
+- годовой и одногомесячный Инталев ОПИУ.
+
+Для расходов indicator определяется только по exact цепочке `группа раскрытия → статья → supported formula/source predicates → показатель`. KPI не требует expense article. Legacy classifier допускается только как exact fallback при отсутствии formula/source authority. Global name-only, fuzzy, contains, typo/case correction запрещены.
+
+Пользовательский XLSX содержит `OPIU Light`, `ОПИУ` и `Показатели`; отсутствие indicator не удаляет row-level сумму и не создаёт guessed aggregate.
 
 Excel-ошибка конкретного месяца остаётся видимой в основном preview и экспорте
 как `Пропущено`: сумма пуста, причина и точный адрес ячейки находятся в Реестре

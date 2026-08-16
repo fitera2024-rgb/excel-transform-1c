@@ -4,12 +4,17 @@ import re
 import tempfile
 import zipfile
 from contextlib import contextmanager
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from io import BytesIO
 from pathlib import Path
+from posixpath import normpath
 from typing import Iterator
+from xml.etree import ElementTree
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles.numbers import BUILTIN_FORMATS
+from openpyxl.utils import get_column_letter
 
 from excel_transform_1c.adapters.workbook_repair import prepare_workbook
 from excel_transform_1c.core.detection import detect_candidate_ranges, read_source_rows
@@ -17,27 +22,34 @@ from excel_transform_1c.core.indicator_matching import (
     IndicatorExportRow,
     aggregate_indicator_rows,
 )
-from excel_transform_1c.core.models import CandidateRange, PreviewRecord
+from excel_transform_1c.core.models import CandidateRange, IndicatorType, PreviewRecord
 
 
-# Legacy sheet: retained without schema changes for backward compatibility.
+# Business export sheet. Reference names and codes intentionally use separate
+# columns; a display path with a parenthesized code must never leak here.
 EXPORT_HEADERS = (
     "Единица отчёта",
     "Организация",
+    "Код организации",
     "Сценарий",
     "Год",
     "Месяц",
     "Период",
     "Департамент",
     "Вид организации",
-    "Отдел / ЦФО",
+    "Отдел",
+    "ЦФО",
+    "Код ЦФО",
+    "Тип показателя",
+    "Канал сбыта",
+    "Показатель",
     "Тип расходов",
     "Группа расходов",
     "Исходное название статьи",
     "ERP-код статьи",
     "Официальное название статьи ERP",
     "Налогообложение",
-    "Сумма",
+    "Значение",
     "Статус",
     "Комментарий",
     "Номер исходной строки",
@@ -48,14 +60,18 @@ EXPORT_HEADERS = (
 # dropped because a code is not available yet.
 ADO_OPIU_HEADERS = (
     "Организация",
+    "Код организации",
     "Сценарий",
     "Год",
     "Месяц",
     "Период",
-    "Организационные единицы",
-    "Код Организационных единиц",
+    "Департамент",
+    "Отдел",
     "ЦФО",
     "Код ЦФО",
+    "Тип показателя",
+    "Канал сбыта",
+    "Показатель",
     "Тип расходов",
     "Код статьи",
     "Название статьи",
@@ -63,19 +79,57 @@ ADO_OPIU_HEADERS = (
     "Код номенклатуры",
     "Регион продаж",
     "Код региона продаж",
-    "Сумма",
+    "Значение",
 )
 
 ADO_INDICATOR_HEADERS = (
     "Организация",
+    "Код организации",
+    "Департамент",
+    "Отдел",
+    "ЦФО",
+    "Код ЦФО",
     "Сценарий",
     "Год",
     "Месяц",
     "Период",
+    "Тип показателя",
     "Канал сбыта",
-    "Тип расходов",
-    "Сумма",
+    "Показатель",
+    "Значение",
 )
+
+
+def _separate_organization_reference(value: str) -> tuple[str, str]:
+    """Split the exact RunContext display contract into export name and code."""
+
+    text = value.strip()
+    match = re.fullmatch(r"(?P<path>.+) \((?P<code>[^()]*)\)", text)
+    if match is None:
+        path = text
+        code = ""
+    else:
+        path = match.group("path").strip()
+        code = match.group("code").strip()
+    name = path.rsplit(" → ", 1)[-1].strip()
+    return name, code
+
+
+def _record_organization_reference(record: PreviewRecord) -> tuple[str, str]:
+    """Return the exact organization selected for this processing run."""
+
+    return _separate_organization_reference(record.organization)
+
+
+def _indicator_organization_references(
+    records: list[PreviewRecord],
+) -> dict[str, tuple[str, str]]:
+    """Keep selected organization names and codes separate after aggregation."""
+
+    return {
+        record.organization: _separate_organization_reference(record.organization)
+        for record in records
+    }
 
 
 @contextmanager
@@ -158,8 +212,290 @@ def read_path(path: str | Path, candidate: CandidateRange, source_file: str):
     # bounded workflow in normal mode because ReadOnlyWorksheet deliberately
     # omits row_dimensions; prepared-budget workbooks stay streaming/read-only.
     read_only = candidate.source_kind != "intalev_opiu"
+    cached_formula_values = (
+        _bdr_cached_formula_values(path, candidate)
+        if candidate.source_kind == "bdr_full"
+        else {}
+    )
     with load_cached_workbook(path, read_only=read_only) as workbook:
-        return read_source_rows(workbook, candidate, source_file)
+        return read_source_rows(
+            workbook,
+            candidate,
+            source_file,
+            cached_formula_values,
+        )
+
+
+def _bdr_cached_formula_values(
+    path: str | Path,
+    candidate: CandidateRange,
+) -> dict[str, object]:
+    """Read only saved formula results for exact KPI month coordinates.
+
+    ``openpyxl(data_only=True)`` remains the primary value reader. This small
+    OOXML fallback covers formula variants where the cached ``<v>`` exists but
+    is not surfaced by the library. Formula text is never returned.
+    """
+
+    source_path = Path(path)
+    if not source_path.exists():
+        return {}
+    kpi_rows = {
+        row_number
+        for indicator_type, first_row, last_row in candidate.indicator_blocks
+        if indicator_type == IndicatorType.KPI
+        for row_number in range(first_row, last_row + 1)
+    }
+    target_cells = {
+        f"{get_column_letter(candidate.columns[f'month_{month}'])}{row_number}"
+        for row_number in kpi_rows
+        for month in range(1, 13)
+    }
+    result: dict[str, object] = {}
+    try:
+        prepared_path = prepare_workbook(source_path).working_path
+        with zipfile.ZipFile(prepared_path) as archive:
+            result.update(
+                _ooxml_cached_cell_values(
+                    archive,
+                    candidate.sheet,
+                    target_cells,
+                    formulas_only=True,
+                )
+            )
+
+            if (
+                candidate.bdr_value_sheet
+                and candidate.bdr_value_columns
+                and candidate.bdr_value_rows
+            ):
+                source_to_target: dict[str, str] = {}
+                for target_row, source_row in candidate.bdr_value_rows:
+                    for month in range(1, 13):
+                        target_coordinate = (
+                            f"{get_column_letter(candidate.columns[f'month_{month}'])}"
+                            f"{target_row}"
+                        )
+                        source_coordinate = (
+                            f"{get_column_letter(candidate.bdr_value_columns[f'month_{month}'])}"
+                            f"{source_row}"
+                        )
+                        source_to_target[source_coordinate] = target_coordinate
+                source_values = _ooxml_cached_cell_values(
+                    archive,
+                    candidate.bdr_value_sheet,
+                    set(source_to_target),
+                    formulas_only=False,
+                    use_display_precision=True,
+                )
+                result.update(
+                    {
+                        source_to_target[source_coordinate]: value
+                        for source_coordinate, value in source_values.items()
+                    }
+                )
+
+            for component in candidate.bdr_components:
+                component_cells = {
+                    f"{get_column_letter(component.columns[f'month_{month}'])}"
+                    f"{row_number}"
+                    for row_number in range(
+                        component.first_data_row,
+                        component.last_data_row + 1,
+                    )
+                    for month in range(1, 13)
+                }
+                component_values = _ooxml_cached_cell_values(
+                    archive,
+                    component.sheet,
+                    component_cells,
+                    formulas_only=False,
+                    use_display_precision=True,
+                )
+                result.update(
+                    {
+                        f"{component.sheet}!{coordinate}": value
+                        for coordinate, value in component_values.items()
+                    }
+                )
+    except (OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError):
+        return {}
+    return result
+
+
+def _ooxml_cached_cell_values(
+    archive: zipfile.ZipFile,
+    sheet_name: str,
+    coordinates: set[str],
+    *,
+    formulas_only: bool,
+    use_display_precision: bool = False,
+) -> dict[str, object]:
+    """Read saved OOXML scalars from one relationship-resolved worksheet."""
+
+    sheet_part = _worksheet_part(archive, sheet_name)
+    if not sheet_part:
+        return {}
+    result: dict[str, object] = {}
+    number_formats = (
+        _number_formats_by_style(archive) if use_display_precision else {}
+    )
+    with archive.open(sheet_part) as sheet_xml:
+        for _, cell in ElementTree.iterparse(sheet_xml, events=("end",)):
+            element_name = _local_name(cell.tag)
+            if element_name != "c":
+                if element_name == "row":
+                    cell.clear()
+                continue
+            coordinate = cell.attrib.get("r", "")
+            if coordinate in coordinates:
+                has_formula = any(
+                    _local_name(child.tag) == "f" for child in cell
+                )
+                cached = next(
+                    (
+                        child
+                        for child in cell
+                        if _local_name(child.tag) == "v"
+                    ),
+                    None,
+                )
+                if (
+                    cached is not None
+                    and cached.text is not None
+                    and (has_formula or not formulas_only)
+                ):
+                    value = _cached_formula_scalar(
+                        cell.attrib.get("t", "n"),
+                        cached.text,
+                    )
+                    if number_formats and isinstance(value, Decimal):
+                        try:
+                            style_id = int(cell.attrib.get("s", "0"))
+                        except ValueError:
+                            style_id = 0
+                        value = _apply_display_precision(
+                            value,
+                            number_formats.get(style_id, ""),
+                        )
+                    result[coordinate] = value
+            cell.clear()
+    return result
+
+
+def _number_formats_by_style(archive: zipfile.ZipFile) -> dict[int, str]:
+    """Resolve worksheet style indexes to Excel number-format codes."""
+
+    try:
+        root = ElementTree.fromstring(archive.read("xl/styles.xml"))
+    except (KeyError, ElementTree.ParseError):
+        return {}
+    custom_formats: dict[int, str] = {}
+    cell_xfs = None
+    for element in root.iter():
+        name = _local_name(element.tag)
+        if name == "numFmt":
+            try:
+                custom_formats[int(element.attrib["numFmtId"])] = element.attrib.get(
+                    "formatCode",
+                    "",
+                )
+            except (KeyError, ValueError):
+                continue
+        elif name == "cellXfs":
+            cell_xfs = element
+    if cell_xfs is None:
+        return {}
+    result: dict[int, str] = {}
+    for style_id, style in enumerate(cell_xfs):
+        try:
+            number_format_id = int(style.attrib.get("numFmtId", "0"))
+        except ValueError:
+            continue
+        result[style_id] = custom_formats.get(
+            number_format_id,
+            BUILTIN_FORMATS.get(number_format_id, ""),
+        )
+    return result
+
+
+def _apply_display_precision(
+    value: Decimal,
+    number_format: str,
+) -> Decimal:
+    """Apply plain-number display precision without converting dates/percentages."""
+
+    positive_section = number_format.split(";", 1)[0]
+    simplified = re.sub(r'"[^"]*"|\\.', "", positive_section)
+    if not simplified or re.search(r"[dmyhs]", simplified, re.I):
+        return value
+    placeholders = re.sub(r"\[[^]]*]", "", simplified)
+    if not re.search(r"[0#]", placeholders):
+        return value
+    decimal_part = placeholders.split(".", 1)[1] if "." in placeholders else ""
+    decimal_places = len(re.match(r"[0#]*", decimal_part).group(0))
+    # A percentage format displays the stored fraction after multiplying by
+    # 100. Thus ``0%`` proves two decimal places in the stored value and
+    # ``0.0%`` proves three. Keep the fraction while applying Excel precision.
+    stored_decimal_places = decimal_places + (2 if "%" in simplified else 0)
+    quantum = Decimal(1).scaleb(-stored_decimal_places)
+    return value.quantize(quantum, rounding=ROUND_HALF_UP)
+
+
+def _worksheet_part(archive: zipfile.ZipFile, sheet_name: str) -> str:
+    workbook_root = ElementTree.fromstring(archive.read("xl/workbook.xml"))
+    relation_id = ""
+    for element in workbook_root.iter():
+        if _local_name(element.tag) != "sheet" or element.attrib.get("name") != sheet_name:
+            continue
+        relation_id = next(
+            (
+                value
+                for name, value in element.attrib.items()
+                if _local_name(name) == "id"
+            ),
+            "",
+        )
+        break
+    if not relation_id:
+        return ""
+
+    relations_root = ElementTree.fromstring(
+        archive.read("xl/_rels/workbook.xml.rels")
+    )
+    target = next(
+        (
+            element.attrib.get("Target", "")
+            for element in relations_root.iter()
+            if _local_name(element.tag) == "Relationship"
+            and element.attrib.get("Id") == relation_id
+        ),
+        "",
+    )
+    if not target:
+        return ""
+    if target.startswith("/"):
+        return target.lstrip("/")
+    if target.startswith("xl/"):
+        return target
+    return normpath(f"xl/{target}")
+
+
+def _cached_formula_scalar(cell_type: str, value: str) -> object:
+    if cell_type == "e":
+        return value
+    if cell_type == "b":
+        return value == "1"
+    if cell_type in {"", "n"}:
+        try:
+            return Decimal(value)
+        except InvalidOperation:
+            return value
+    return value
+
+
+def _local_name(name: str) -> str:
+    return name.rsplit("}", 1)[-1]
 
 
 def _style_header(sheet, headers: tuple[str, ...], last_column: str) -> None:
@@ -176,19 +512,28 @@ def _style_header(sheet, headers: tuple[str, ...], last_column: str) -> None:
 
 def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
     sheet.title = "OPIU Light"
-    _style_header(sheet, EXPORT_HEADERS, "S")
+    _style_header(sheet, EXPORT_HEADERS, "Y")
     for record in records:
+        organization, organization_code = _record_organization_reference(record)
+        department = record.department or None
+        cfo = record.erp_department or record.cfo or None
         sheet.append(
             (
                 record.reporting_unit,
-                record.organization,
+                organization or None,
+                organization_code or None,
                 record.scenario,
                 record.year,
                 record.month,
                 f"{record.month:02d}.{record.year}",
-                record.department,
+                department,
                 record.organization_type,
-                record.cfo,
+                cfo,
+                cfo,
+                record.cfo_code or None,
+                record.indicator_type_label,
+                record.sales_channel or None,
+                record.indicator or record.source_article,
                 record.expense_type,
                 record.expense_group,
                 record.source_article,
@@ -198,112 +543,151 @@ def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
                 float(record.amount) if record.amount is not None else None,
                 record.status,
                 record.comment,
-                record.source_row,
+                record.source_excel_row,
             )
         )
-    sheet.auto_filter.ref = f"A1:S{max(len(records) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:Y{max(len(records) + 1, 1)}"
     sheet.column_dimensions["A"].width = 18
     sheet.column_dimensions["B"].width = 28
     sheet.column_dimensions["C"].width = 18
-    sheet.column_dimensions["F"].width = 12
-    for column in ("G", "H", "I", "J", "K", "L", "N", "O", "Q", "R"):
+    sheet.column_dimensions["D"].width = 18
+    sheet.column_dimensions["G"].width = 12
+    for column in (
+        "H", "I", "J", "K", "M", "N", "O", "P", "Q", "R", "T", "U", "W", "X"
+    ):
         sheet.column_dimensions[column].width = 22
-    sheet.column_dimensions["M"].width = 18
-    sheet.column_dimensions["P"].width = 16
+    sheet.column_dimensions["L"].width = 16
     sheet.column_dimensions["S"].width = 18
-    sheet["P1"].alignment = Alignment(horizontal="center", vertical="center")
-    for cell in sheet["P"][1:]:
+    sheet.column_dimensions["V"].width = 16
+    sheet.column_dimensions["Y"].width = 18
+    for column in ("C", "L", "S"):
+        for cell in sheet[column]:
+            cell.number_format = "@"
+    sheet["V1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["V"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
 def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
     sheet.title = "ОПИУ"
-    _style_header(sheet, ADO_OPIU_HEADERS, "Q")
+    _style_header(sheet, ADO_OPIU_HEADERS, "U")
     for record in records:
+        organization, organization_code = _record_organization_reference(record)
+        department = record.department or None
+        cfo = record.erp_department or record.cfo or None
         sheet.append(
             (
-                record.organization,
+                organization or None,
+                organization_code or None,
                 record.scenario,
                 record.year,
                 record.month,
                 f"{record.month:02d}.{record.year}",
-                record.department or None,
-                None,  # Код организационной единицы будет дополнен справочником.
-                record.cfo or None,
-                None,  # Код ЦФО будет дополнен справочником.
+                department,
+                cfo,
+                cfo,
+                record.cfo_code or None,
+                record.indicator_type_label,
+                record.sales_channel or None,
+                record.indicator or record.source_article,
                 record.expense_type,
                 record.erp_code or None,
                 record.erp_article_name or record.source_article,
-                None,  # Инт Номенклатура.
+                record.nomenclature or None,
                 None,  # Код номенклатуры.
-                None,  # Регион продаж.
+                record.sales_region or record.region or None,
                 None,  # Код региона продаж.
                 float(record.amount) if record.amount is not None else None,
             )
         )
-    sheet.auto_filter.ref = f"A1:Q{max(len(records) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:U{max(len(records) + 1, 1)}"
     widths = {
         "A": 28,
-        "B": 18,
-        "C": 10,
+        "B": 20,
+        "C": 18,
         "D": 10,
-        "E": 12,
-        "F": 28,
-        "G": 20,
+        "E": 10,
+        "F": 12,
+        "G": 28,
         "H": 28,
-        "I": 16,
-        "J": 24,
+        "I": 28,
+        "J": 16,
         "K": 18,
-        "L": 30,
-        "M": 24,
-        "N": 18,
-        "O": 20,
-        "P": 18,
-        "Q": 16,
+        "L": 26,
+        "M": 30,
+        "N": 24,
+        "O": 18,
+        "P": 30,
+        "Q": 24,
+        "R": 18,
+        "S": 20,
+        "T": 18,
+        "U": 16,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
-    for column in ("G", "I", "K", "N", "P"):
+    for column in ("B", "J", "O", "R", "T"):
         for cell in sheet[column]:
             cell.number_format = "@"
-    for cell in sheet["Q"][1:]:
+    for cell in sheet["U"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
 def _write_ado_indicators_sheet(
     sheet,
     rows: list[IndicatorExportRow],
+    records: list[PreviewRecord],
 ) -> None:
     sheet.title = "Показатели"
-    _style_header(sheet, ADO_INDICATOR_HEADERS, "H")
+    _style_header(sheet, ADO_INDICATOR_HEADERS, "N")
+    organization_references = _indicator_organization_references(records)
     for row in rows:
+        organization, organization_code = organization_references.get(
+            row.organization,
+            _separate_organization_reference(row.organization),
+        )
         sheet.append(
             (
-                row.organization,
+                organization or None,
+                organization_code or None,
+                row.department or None,
+                row.cfo or None,
+                row.cfo or None,
+                row.cfo_code or None,
                 row.scenario,
                 row.year,
                 row.month,
                 row.period,
+                row.indicator_type,
                 row.sales_channel,
                 row.indicator,
                 float(row.amount),
             )
         )
-    sheet.auto_filter.ref = f"A1:H{max(len(rows) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:N{max(len(rows) + 1, 1)}"
     widths = {
         "A": 28,
-        "B": 18,
-        "C": 10,
-        "D": 10,
-        "E": 12,
-        "F": 26,
-        "G": 24,
-        "H": 16,
+        "B": 20,
+        "C": 28,
+        "D": 28,
+        "E": 28,
+        "F": 16,
+        "G": 18,
+        "H": 10,
+        "I": 10,
+        "J": 12,
+        "K": 18,
+        "L": 26,
+        "M": 24,
+        "N": 16,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
-    sheet["H1"].alignment = Alignment(horizontal="center", vertical="center")
-    for cell in sheet["H"][1:]:
+    for column in ("B", "F"):
+        for cell in sheet[column]:
+            cell.number_format = "@"
+    sheet["N1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["N"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
@@ -318,6 +702,7 @@ def export_opiu_light(records: list[PreviewRecord]) -> bytes:
         _write_ado_indicators_sheet(
             workbook.create_sheet(),
             aggregate_indicator_rows(records),
+            records,
         )
 
         output = BytesIO()

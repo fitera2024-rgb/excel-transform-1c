@@ -17,7 +17,12 @@ from excel_transform_1c.core.models import Scenario
 
 BASELINE_CATALOG_SOURCE = "baseline"
 USER_CATALOG_SOURCE = "user"
-REFERENCE_KINDS = ("erp_articles", "organizations", "intalev_cfos")
+REFERENCE_KINDS = (
+    "erp_articles",
+    "organizations",
+    "intalev_cfos",
+    "article_indicators",
+)
 SCENARIO_KIND = "scenarios"
 
 
@@ -365,6 +370,16 @@ class LocalStore:
                 "SELECT payload FROM reference_catalogs WHERE kind = ?", (kind,)
             ).fetchone()
         return json.loads(row["payload"]) if row else []
+
+    def save_opiu_rules(self, payload: list[dict[str, Any]]) -> None:
+        """Persist rules built and validated by the OPIU Business Core."""
+
+        if not all(isinstance(item, dict) and item.get("rule_id") for item in payload):
+            raise ValueError("Каталог OPIU_RULES содержит некорректную запись")
+        self._write_reference("opiu_rules", payload)
+
+    def load_opiu_rules(self) -> list[dict[str, Any]]:
+        return self.load_reference("opiu_rules")
 
 
     def catalog_source(self, kind: str) -> str | None:

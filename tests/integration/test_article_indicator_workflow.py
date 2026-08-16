@@ -57,6 +57,16 @@ def test_classifier_parser_and_persistence_use_direct_exact_keys(tmp_path):
         "article_name": "Интернет",
         "indicator": "Услуги связи",
         "sales_channel": "Основной канал",
+        "indicator_type": "EXPENSE",
+        "revenue_group": "",
+        "formula_condition": "",
+        "analytics": "",
+        "nomenclature": "",
+        "unit": "",
+        "counterparty": "",
+        "input_sales_channel": "",
+        "sales_network": "",
+        "sales_region": "",
     }
 
     first = WorkflowService(tmp_path / "runtime")
@@ -64,7 +74,11 @@ def test_classifier_parser_and_persistence_use_direct_exact_keys(tmp_path):
     second = WorkflowService(tmp_path / "runtime")
 
     assert second.article_indicator_rules() == first.article_indicator_rules()
-    assert len(second.article_indicator_rules()) == 2
+    assert len(second.article_indicator_rules()) == 217
+    assert {rule.erp_code for rule in second.article_indicator_rules()} >= {
+        "ERP-001",
+        "ERP-002",
+    }
 
 
 def test_classifier_supplement_repeats_search_in_current_run_without_reading_excel(
@@ -78,7 +92,7 @@ def test_classifier_supplement_repeats_search_in_current_run_without_reading_exc
         "attention": 2,
         "not_found": 2,
     }
-    assert run.indicator_classifier_loaded is False
+    assert run.indicator_classifier_loaded is True
 
     def unexpected_read(*_args, **_kwargs):
         raise AssertionError("Исходный Excel не должен читаться повторно")
@@ -123,14 +137,15 @@ def test_ambiguous_and_missing_classifier_results_remain_unapplied(tmp_path):
     assert service.indicator_counts(run.run_id) == {
         "automatic": 0,
         "attention": 2,
-        "not_found": 1,
+        # Name-only rows have no disclosure group and are both fail-closed.
+        "not_found": 2,
     }
     internet = next(record for record in run.records if record.source_article == "Интернет")
     assert internet.indicator == ""
     assert internet.sales_channel == ""
 
 
-def test_indicator_export_populates_third_sheet_without_changing_first_two(tmp_path):
+def test_indicator_export_populates_all_result_sheets_without_changing_financial_values(tmp_path):
     service = configured_service(tmp_path)
     run = process_run(service)
     before = service.export_run(run.run_id)
@@ -138,8 +153,20 @@ def test_indicator_export_populates_third_sheet_without_changing_first_two(tmp_p
     service.upload_indicator_classifier(indicator_classifier_bytes(), run.run_id)
     after = service.export_run(run.run_id)
 
-    assert workbook_rows(after, "OPIU Light") == workbook_rows(before, "OPIU Light")
-    assert workbook_rows(after, "ОПИУ") == workbook_rows(before, "ОПИУ")
+    for sheet_name in ("OPIU Light", "ОПИУ"):
+        before_rows = workbook_rows(before, sheet_name)
+        after_rows = workbook_rows(after, sheet_name)
+        changed_columns = {
+            before_rows[0].index("Показатель"),
+            before_rows[0].index("Канал сбыта"),
+        }
+        assert [
+            tuple(value for index, value in enumerate(row) if index not in changed_columns)
+            for row in after_rows
+        ] == [
+            tuple(value for index, value in enumerate(row) if index not in changed_columns)
+            for row in before_rows
+        ]
 
     workbook = load_workbook(BytesIO(after), data_only=True)
     try:
@@ -147,10 +174,20 @@ def test_indicator_export_populates_third_sheet_without_changing_first_two(tmp_p
         indicators = workbook["Показатели"]
         assert tuple(cell.value for cell in indicators[1]) == ADO_INDICATOR_HEADERS
         assert indicators.max_row == 25
-        assert {cell.value for cell in indicators["G"][1:]} == {
+        assert {cell.value for cell in indicators["M"][1:]} == {
             "Услуги связи",
             "Маркетинговые расходы",
         }
-        assert any(cell.value == 0 for cell in indicators["H"][1:])
+        assert any(cell.value == 0 for cell in indicators["N"][1:])
     finally:
         workbook.close()
+
+def test_opiu_not_found_rows_are_visible_in_business_unresolved_list(tmp_path):
+    service = configured_service(tmp_path)
+    run = process_run(service)
+
+    rows = service.indicator_unresolved_rows(run.run_id)
+
+    assert len(rows) == 2
+    assert {row["status"] for row in rows} == {"Не найдено"}
+    assert all(row["action"] == "Загрузить / дополнить классификатор" for row in rows)
