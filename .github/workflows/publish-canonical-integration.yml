@@ -26,33 +26,48 @@ jobs:
         run: |
           set -euo pipefail
 
+          parts=(
+            automation/canonical-payload/fixed00a.b64
+            automation/canonical-payload/fixed00b.b64
+            automation/canonical-payload/part01.b64
+            automation/canonical-payload/fixed02a.b64
+            automation/canonical-payload/fixed02b.b64
+            automation/canonical-payload/part03.b64
+            automation/canonical-payload/part04.b64
+            automation/canonical-payload/part05.b64
+          )
           expected_parts=(
-            09fd714ddb4e2211b64318047c4b45aeab5721ba3472eb909e8f19aa8897c9ab
+            96f630863eb4424be01fb576b692cc6308c4d3ce7f9a29af26cf3a2cd4a4210f
+            1b96eb9d84a678a6299460b2609f8e4d9b13d57fc56b3fcec6699dd26dda6a8c
             3a60ab1866be2c15210b7a6ac6d7ee8800363a330786755633d5122ff9478700
-            4efc522e5509258b9625eed2e05482699bbbfd00927a6f15b8e75549322d6c10
+            b1c6e6758e067e056d67a25b1d368da1e4c7a54fffe0d9bcf60bd83723135b3c
+            f8a587e9a91f3837a79d06d8f864a25fdf95b6ad58567426235a2aaf9eef9c67
             460172bea51f8310e8fa71526ba16c4b63b615427c23ad4f9c3a4901be0a8b6f
             1d6632195ac0d9908328d18a6aa7d557cbcf71e6d5d5ae737a5ee194a77f294a
             15766f6e50047887c88309e014c16279286841f0d374963e525c7de189f688f8
           )
 
-          mapfile -t parts < <(find automation/canonical-payload -maxdepth 1 -type f -name 'part*.b64' | sort)
-          test "${#parts[@]}" -eq 6
+          test "${#parts[@]}" -eq "${#expected_parts[@]}"
           for index in "${!parts[@]}"; do
             actual=$(sha256sum "${parts[$index]}" | awk '{print $1}')
+            echo "part[$index]=${parts[$index]} sha256=$actual"
             test "$actual" = "${expected_parts[$index]}"
           done
 
           cat "${parts[@]}" | tr -d '\r\n' > /tmp/canonical-payload.b64
-          test "$(sha256sum /tmp/canonical-payload.b64 | awk '{print $1}')" = \
-            e0dca2476aae8b2170fc878e8b34823f7fc0ff9d4e893cf2379d6e805740f785
+          payload_sha=$(sha256sum /tmp/canonical-payload.b64 | awk '{print $1}')
+          echo "payload_sha256=$payload_sha"
+          test "$payload_sha" = e0dca2476aae8b2170fc878e8b34823f7fc0ff9d4e893cf2379d6e805740f785
 
           base64 --decode /tmp/canonical-payload.b64 | gzip --decompress > /tmp/canonical-merge.patch
-          test "$(sha256sum /tmp/canonical-merge.patch | awk '{print $1}')" = \
-            ab4d7919cee0ff2b840c10959dbade852ad94aa1e58f8037ad202b53e055ac42
+          patch_sha=$(sha256sum /tmp/canonical-merge.patch | awk '{print $1}')
+          echo "patch_sha256=$patch_sha"
+          test "$patch_sha" = ab4d7919cee0ff2b840c10959dbade852ad94aa1e58f8037ad202b53e055ac42
 
           git fetch origin \
             refs/heads/integration/canonical-preview-export-v1:refs/remotes/origin/integration/canonical-preview-export-v1
           remote_head=$(git rev-parse refs/remotes/origin/integration/canonical-preview-export-v1)
+          echo "canonical_remote_head=$remote_head"
           test "$remote_head" = ab4513ed6923f56a8e8ee6dd36cfbf0e8ff04465
 
           git fetch origin 77645317b673b2e57dea803410126a61cdaf6d83
@@ -61,6 +76,7 @@ jobs:
           git diff --cached --check
 
           tree=$(git write-tree)
+          echo "tree=$tree"
           test "$tree" = 167abac81bbc9a4bcb6a7962b3f3a367b6efc561
 
           export GIT_AUTHOR_NAME='ChatGPT Coordinator'
@@ -75,6 +91,7 @@ jobs:
               -p ab4513ed6923f56a8e8ee6dd36cfbf0e8ff04465 \
               -p 77645317b673b2e57dea803410126a61cdaf6d83)
 
+          echo "commit=$commit"
           test "$commit" = b449fdf1533131560bfe7e1f7917b14b2d3de61c
           test "$(git show -s --format='%P' "$commit")" = \
             'ab4513ed6923f56a8e8ee6dd36cfbf0e8ff04465 77645317b673b2e57dea803410126a61cdaf6d83'
@@ -87,7 +104,8 @@ jobs:
             echo "commit=$commit"
             echo "tree=$tree"
             echo "parents=$(git show -s --format='%P' "$commit")"
-            echo "patch_sha256=$(sha256sum /tmp/canonical-merge.patch | awk '{print $1}')"
+            echo "payload_sha256=$payload_sha"
+            echo "patch_sha256=$patch_sha"
           } | tee publish-result.txt
 
       - uses: actions/upload-artifact@v4
