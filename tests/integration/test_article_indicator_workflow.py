@@ -144,7 +144,7 @@ def test_ambiguous_and_missing_classifier_results_remain_unapplied(tmp_path):
     assert internet.sales_channel == ""
 
 
-def test_indicator_export_populates_third_sheet_without_changing_first_two(tmp_path):
+def test_indicator_export_populates_all_result_sheets_without_changing_financial_values(tmp_path):
     service = configured_service(tmp_path)
     run = process_run(service)
     before = service.export_run(run.run_id)
@@ -152,8 +152,17 @@ def test_indicator_export_populates_third_sheet_without_changing_first_two(tmp_p
     service.upload_indicator_classifier(indicator_classifier_bytes(), run.run_id)
     after = service.export_run(run.run_id)
 
-    assert workbook_rows(after, "OPIU Light") == workbook_rows(before, "OPIU Light")
-    assert workbook_rows(after, "ОПИУ") == workbook_rows(before, "ОПИУ")
+    for sheet_name in ("OPIU Light", "ОПИУ"):
+        before_rows = workbook_rows(before, sheet_name)
+        after_rows = workbook_rows(after, sheet_name)
+        indicator_column = before_rows[0].index("Показатель")
+        assert [
+            row[:indicator_column] + row[indicator_column + 1 :]
+            for row in after_rows
+        ] == [
+            row[:indicator_column] + row[indicator_column + 1 :]
+            for row in before_rows
+        ]
 
     workbook = load_workbook(BytesIO(after), data_only=True)
     try:
@@ -161,10 +170,10 @@ def test_indicator_export_populates_third_sheet_without_changing_first_two(tmp_p
         indicators = workbook["Показатели"]
         assert tuple(cell.value for cell in indicators[1]) == ADO_INDICATOR_HEADERS
         assert indicators.max_row == 25
-        assert {cell.value for cell in indicators["H"][1:]} == {
+        assert {cell.value for cell in indicators["I"][1:]} == {
             "Услуги связи",
             "Маркетинговые расходы",
         }
-        assert any(cell.value == 0 for cell in indicators["I"][1:])
+        assert any(cell.value == 0 for cell in indicators["J"][1:])
     finally:
         workbook.close()

@@ -30,6 +30,7 @@ _EXPLICIT_TYPES = {
     "Доход": IndicatorType.REVENUE,
     "QUANTITY": IndicatorType.QUANTITY,
     "Количество": IndicatorType.QUANTITY,
+    "KPI": IndicatorType.KPI,
 }
 
 
@@ -447,6 +448,11 @@ class IndicatorResolverEngine:
                 nomenclature=record.nomenclature,
                 unit=record.unit,
                 quantity=record.amount,
+            )
+        if record.indicator_type == IndicatorType.KPI:
+            return IndicatorMatch(
+                status=INDICATOR_MISSING,
+                reason="Показатель KPI не относится к расходному resolver",
             )
         direct = self.expense.resolve(
             erp_code=record.erp_code,

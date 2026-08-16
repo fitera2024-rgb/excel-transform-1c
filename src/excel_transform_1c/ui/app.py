@@ -263,6 +263,7 @@ def create_app(runtime_dir: str | Path | None = None) -> FastAPI:
             intalev_cfo_options=[{"source_key": item.source_key, "label": item.label} for item in service.intalev_cfos()],
             indicator_counts=service.indicator_counts(run_id),
             indicator_unresolved_rows=service.indicator_unresolved_rows(run_id),
+            bdr_diagnostics=service.bdr_diagnostics(run_id),
             message=message,
             error=error,
         )

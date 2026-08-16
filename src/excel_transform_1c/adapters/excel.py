@@ -35,13 +35,15 @@ EXPORT_HEADERS = (
     "Отдел",
     "ЦФО",
     "Код ЦФО",
+    "Тип показателя",
+    "Показатель",
     "Тип расходов",
     "Группа расходов",
     "Исходное название статьи",
     "ERP-код статьи",
     "Официальное название статьи ERP",
     "Налогообложение",
-    "Сумма",
+    "Значение",
     "Статус",
     "Комментарий",
     "Номер исходной строки",
@@ -61,6 +63,8 @@ ADO_OPIU_HEADERS = (
     "Отдел",
     "ЦФО",
     "Код ЦФО",
+    "Тип показателя",
+    "Показатель",
     "Тип расходов",
     "Код статьи",
     "Название статьи",
@@ -68,7 +72,7 @@ ADO_OPIU_HEADERS = (
     "Код номенклатуры",
     "Регион продаж",
     "Код региона продаж",
-    "Сумма",
+    "Значение",
 )
 
 ADO_INDICATOR_HEADERS = (
@@ -78,9 +82,10 @@ ADO_INDICATOR_HEADERS = (
     "Год",
     "Месяц",
     "Период",
+    "Тип показателя",
     "Канал сбыта",
-    "Тип расходов",
-    "Сумма",
+    "Показатель",
+    "Значение",
 )
 
 
@@ -231,7 +236,7 @@ def _style_header(sheet, headers: tuple[str, ...], last_column: str) -> None:
 
 def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
     sheet.title = "OPIU Light"
-    _style_header(sheet, EXPORT_HEADERS, "V")
+    _style_header(sheet, EXPORT_HEADERS, "X")
     for record in records:
         organization, organization_code = _record_organization_reference(record)
         department = record.department or None
@@ -250,6 +255,8 @@ def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
                 cfo,
                 cfo,
                 record.cfo_code or None,
+                record.indicator_type_label,
+                record.indicator or record.source_article,
                 record.expense_type,
                 record.expense_group,
                 record.source_article,
@@ -262,29 +269,31 @@ def _write_legacy_sheet(sheet, records: list[PreviewRecord]) -> None:
                 record.source_row,
             )
         )
-    sheet.auto_filter.ref = f"A1:V{max(len(records) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:X{max(len(records) + 1, 1)}"
     sheet.column_dimensions["A"].width = 18
     sheet.column_dimensions["B"].width = 28
     sheet.column_dimensions["C"].width = 18
     sheet.column_dimensions["D"].width = 18
     sheet.column_dimensions["G"].width = 12
-    for column in ("H", "I", "J", "K", "M", "N", "O", "Q", "R", "T", "U"):
+    for column in (
+        "H", "I", "J", "K", "M", "N", "O", "P", "Q", "S", "T", "V", "W"
+    ):
         sheet.column_dimensions[column].width = 22
     sheet.column_dimensions["L"].width = 16
-    sheet.column_dimensions["P"].width = 18
-    sheet.column_dimensions["S"].width = 16
-    sheet.column_dimensions["V"].width = 18
-    for column in ("C", "L", "P"):
+    sheet.column_dimensions["R"].width = 18
+    sheet.column_dimensions["U"].width = 16
+    sheet.column_dimensions["X"].width = 18
+    for column in ("C", "L", "R"):
         for cell in sheet[column]:
             cell.number_format = "@"
-    sheet["S1"].alignment = Alignment(horizontal="center", vertical="center")
-    for cell in sheet["S"][1:]:
+    sheet["U1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["U"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
 def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
     sheet.title = "ОПИУ"
-    _style_header(sheet, ADO_OPIU_HEADERS, "R")
+    _style_header(sheet, ADO_OPIU_HEADERS, "T")
     for record in records:
         organization, organization_code = _record_organization_reference(record)
         department = record.department or None
@@ -301,6 +310,8 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
                 cfo,
                 cfo,
                 record.cfo_code or None,
+                record.indicator_type_label,
+                record.indicator or record.source_article,
                 record.expense_type,
                 record.erp_code or None,
                 record.erp_article_name or record.source_article,
@@ -311,7 +322,7 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
                 float(record.amount) if record.amount is not None else None,
             )
         )
-    sheet.auto_filter.ref = f"A1:R{max(len(records) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:T{max(len(records) + 1, 1)}"
     widths = {
         "A": 28,
         "B": 20,
@@ -323,21 +334,23 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
         "H": 28,
         "I": 28,
         "J": 16,
-        "K": 24,
-        "L": 18,
-        "M": 30,
-        "N": 24,
-        "O": 18,
-        "P": 20,
+        "K": 18,
+        "L": 30,
+        "M": 24,
+        "N": 18,
+        "O": 30,
+        "P": 24,
         "Q": 18,
-        "R": 16,
+        "R": 20,
+        "S": 18,
+        "T": 16,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
-    for column in ("B", "J", "L", "O", "Q"):
+    for column in ("B", "J", "N", "Q", "S"):
         for cell in sheet[column]:
             cell.number_format = "@"
-    for cell in sheet["R"][1:]:
+    for cell in sheet["T"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 
@@ -347,7 +360,7 @@ def _write_ado_indicators_sheet(
     records: list[PreviewRecord],
 ) -> None:
     sheet.title = "Показатели"
-    _style_header(sheet, ADO_INDICATOR_HEADERS, "I")
+    _style_header(sheet, ADO_INDICATOR_HEADERS, "J")
     organization_references = _indicator_organization_references(records)
     for row in rows:
         organization, organization_code = organization_references.get(
@@ -362,12 +375,13 @@ def _write_ado_indicators_sheet(
                 row.year,
                 row.month,
                 row.period,
+                row.indicator_type,
                 row.sales_channel,
                 row.indicator,
                 float(row.amount),
             )
         )
-    sheet.auto_filter.ref = f"A1:I{max(len(rows) + 1, 1)}"
+    sheet.auto_filter.ref = f"A1:J{max(len(rows) + 1, 1)}"
     widths = {
         "A": 28,
         "B": 20,
@@ -375,16 +389,17 @@ def _write_ado_indicators_sheet(
         "D": 10,
         "E": 10,
         "F": 12,
-        "G": 26,
-        "H": 24,
-        "I": 16,
+        "G": 18,
+        "H": 26,
+        "I": 24,
+        "J": 16,
     }
     for column, width in widths.items():
         sheet.column_dimensions[column].width = width
     for cell in sheet["B"]:
         cell.number_format = "@"
-    sheet["I1"].alignment = Alignment(horizontal="center", vertical="center")
-    for cell in sheet["I"][1:]:
+    sheet["J1"].alignment = Alignment(horizontal="center", vertical="center")
+    for cell in sheet["J"][1:]:
         cell.number_format = '#,##0.00;[Red](#,##0.00);-'
 
 

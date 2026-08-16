@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -33,6 +34,73 @@ HEADERS = [
     "Ноябрь",
     "Декабрь",
 ]
+
+
+BDR_FULL_INDICATORS = (
+    (10, "Оборот в кг"),
+    (11, "Выручка за 1 кг"),
+    (12, "Себестоимость 1 кг"),
+    (13, "Валовая прибыль на 1 кг"),
+    (20, "Выручка ИТОГО"),
+    (21, "Прочие доходы по основной деятельности"),
+    (22, "Валовая прибыль"),
+    (30, "Расходы по основной деятельности ИТОГО"),
+    (31, "Административные расходы"),
+    (32, "Коммерческие расходы"),
+    (33, "Расходы на транспортную логистику"),
+    (34, "Расходы на складскую логистику"),
+    (40, "EBITDA"),
+    (41, "Операционная прибыль"),
+)
+
+
+def bdr_full_workbook_bytes(
+    *,
+    reporting_unit: str = "АЮ Административный Отдел",
+    with_internal_prepared_range: bool = True,
+    error_indicator: str = "",
+) -> bytes:
+    """Synthetic whole-BDR business document with all three required blocks."""
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Произвольный сводный лист"
+    sheet.cell(2, 1, reporting_unit)
+    for month in range(1, 13):
+        column = 22 + month
+        sheet.cell(2, column, datetime(2026, month, 1))
+        sheet.cell(3, column, "план")
+    for row_number, indicator in BDR_FULL_INDICATORS:
+        sheet.cell(row_number, 7, indicator)
+        for month in range(1, 13):
+            sheet.cell(
+                row_number,
+                22 + month,
+                "#N/A" if indicator == error_indicator else row_number * month,
+            )
+
+    if with_internal_prepared_range:
+        internal = workbook.create_sheet("загрузка ERP расходы")
+        internal.append(HEADERS)
+        internal.append(
+            [
+                reporting_unit,
+                "Административные расходы",
+                "Административный департамент",
+                "ТК",
+                reporting_unit,
+                "БЕЗ НДС",
+                "Связь",
+                "Интернет",
+                1,
+                *([0] * 11),
+            ]
+        )
+
+    output = BytesIO()
+    workbook.save(output)
+    workbook.close()
+    return output.getvalue()
 
 
 def workbook_bytes(

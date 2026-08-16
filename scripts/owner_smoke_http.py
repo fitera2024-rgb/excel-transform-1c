@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import re
 import uuid
+from datetime import datetime
 from html.parser import HTMLParser
 from io import BytesIO
 from urllib.parse import urljoin, urlparse
@@ -13,14 +14,17 @@ from openpyxl import Workbook, load_workbook
 
 ADO_OPIU_HEADERS = (
     "Организация",
+    "Код организации",
     "Сценарий",
     "Год",
     "Месяц",
     "Период",
-    "Организационные единицы",
-    "Код Организационных единиц",
+    "Департамент",
+    "Отдел",
     "ЦФО",
     "Код ЦФО",
+    "Тип показателя",
+    "Показатель",
     "Тип расходов",
     "Код статьи",
     "Название статьи",
@@ -28,18 +32,20 @@ ADO_OPIU_HEADERS = (
     "Код номенклатуры",
     "Регион продаж",
     "Код региона продаж",
-    "Сумма",
+    "Значение",
 )
 
 ADO_INDICATOR_HEADERS = (
     "Организация",
+    "Код организации",
     "Сценарий",
     "Год",
     "Месяц",
     "Период",
+    "Тип показателя",
     "Канал сбыта",
-    "Тип расходов",
-    "Сумма",
+    "Показатель",
+    "Значение",
 )
 
 
@@ -133,8 +139,18 @@ def home_context(opener, base_url: str) -> tuple[str, str]:
 
     parser = SelectOptionsParser()
     parser.feed(html)
+    organization_options = [
+        (value, label)
+        for value, label in parser.options.get("organization_node_id", [])
+        if value
+    ]
     organization = next(
-        value for value, _ in parser.options.get("organization_node_id", []) if value
+        (
+            value
+            for value, _ in organization_options
+            if value == "000000001"
+        ),
+        organization_options[0][0],
     )
     scenario = next(
         value
@@ -145,51 +161,79 @@ def home_context(opener, base_url: str) -> tuple[str, str]:
 
 
 def budget_bytes() -> bytes:
-    headers = [
-        "ПОДРАЗДЕЛЕНИЕ (ЦФО 1)",
-        "ТИП РАСХОДОВ",
-        "ДЕПАРТАМЕНТ (ЦФО 2)",
-        "Вид организации",
-        "ОТДЕЛ",
-        "НАЛОГООБЛОЖЕНИЕ",
-        "ГРУППА РАСХОДОВ",
-        "СТАТЬЯ",
-        "Январь",
-        "Февраль",
-        "Март",
-        "Апрель",
-        "Май",
-        "Июнь",
-        "Июль",
-        "Август",
-        "Сентябрь",
-        "Октябрь",
-        "Ноябрь",
-        "Декабрь",
-    ]
     workbook = Workbook()
     sheet = workbook.active
-    sheet.title = "Тест"
-    sheet.append(["synthetic HTTP owner smoke"])
-    sheet.append(headers)
-    sheet.append(
-        [
-            "ТЕСТ",
-            "Административные",
-            "Департамент",
-            "ТК",
-            "ЦФО",
-            "БЕЗ НДС",
-            "Связь",
-            "Интернет",
-            100,
-            *([0] * 11),
-        ]
+    sheet.title = "Синтетический бизнес-свод"
+    sheet.cell(2, 1, "АЮ Административный Отдел")
+    for month in range(1, 13):
+        sheet.cell(2, 22 + month, datetime(2026, month, 1))
+        sheet.cell(3, 22 + month, "план")
+    indicators = (
+        (10, "Оборот в кг"),
+        (11, "Выручка за 1 кг"),
+        (12, "Себестоимость 1 кг"),
+        (13, "Валовая прибыль на 1 кг"),
+        (20, "Выручка ИТОГО"),
+        (21, "Прочие доходы по основной деятельности"),
+        (22, "Валовая прибыль"),
+        (30, "Расходы по основной деятельности ИТОГО"),
+        (31, "Административные расходы"),
+        (32, "Коммерческие расходы"),
+        (33, "Расходы на транспортную логистику"),
+        (34, "Расходы на складскую логистику"),
+        (40, "EBITDA"),
+        (41, "Операционная прибыль"),
     )
+    for row_number, indicator in indicators:
+        sheet.cell(row_number, 7, indicator)
+        for month in range(1, 13):
+            sheet.cell(row_number, 22 + month, row_number * month)
     payload = BytesIO()
     workbook.save(payload)
     workbook.close()
     return payload.getvalue()
+
+
+def organization_reference_bytes() -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Лист_1"
+    organization_name = 'ООО "Айс Юнион"'
+    cfo_name = "АЮ Административный Отдел"
+    sheet.cell(7, 1, "Организация")
+    sheet.cell(8, 7, "Головная организация")
+    sheet.cell(8, 32, "Верхний уровень иерархии")
+    sheet.cell(8, 39, "Код")
+    sheet.cell(9, 1, organization_name)
+    sheet.cell(10, 1, cfo_name)
+    sheet.cell(11, 1, "Административный департамент")
+    sheet.cell(11, 7, cfo_name)
+    sheet.cell(11, 32, organization_name)
+    sheet.cell(11, 39, "000000173")
+    sheet.cell(12, 1, organization_name)
+    sheet.cell(13, 7, organization_name)
+    sheet.cell(13, 32, "4 Владивосток")
+    sheet.cell(13, 39, "000000001")
+    payload = BytesIO()
+    workbook.save(payload)
+    workbook.close()
+    return payload.getvalue()
+
+
+def upload_organization_reference(opener, base_url: str) -> None:
+    final_url, _ = post_multipart(
+        opener,
+        urljoin(base_url, "/references"),
+        {"kind": "organizations"},
+        {
+            "reference_file": (
+                "ОрганизациииерархияЕРП.xlsx",
+                organization_reference_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert urlparse(final_url).path == "/"
 
 
 def classifier_bytes() -> bytes:
@@ -215,7 +259,7 @@ def upload_budget(opener, base_url: str, organization: str, scenario: str) -> tu
         opener,
         urljoin(base_url, "/uploads"),
         {
-            "reporting_unit": "ТЕСТ",
+            "reporting_unit": "АЮ Административный Отдел",
             "organization_node_id": organization,
             "scenario_id": scenario,
             "year": "2026",
@@ -273,75 +317,57 @@ def assert_export(payload: bytes) -> None:
         assert workbook.sheetnames == ["OPIU Light", "ОПИУ", "Показатели"]
         assert tuple(cell.value for cell in workbook["ОПИУ"][1]) == ADO_OPIU_HEADERS
         assert tuple(cell.value for cell in workbook["Показатели"][1]) == ADO_INDICATOR_HEADERS
-        assert workbook["ОПИУ"].max_column == 17
-        assert workbook["Показатели"].max_column == 8
-        assert workbook["Показатели"]["G2"].value == "Услуги связи"
-        assert workbook["Показатели"]["H2"].value == 100
+        assert workbook["ОПИУ"].max_column == 20
+        assert workbook["Показатели"].max_column == 10
+        assert workbook["Показатели"].max_row == 14 * 12 + 1
+        rows = list(
+            workbook["Показатели"].iter_rows(min_row=2, values_only=True)
+        )
+        assert {row[6] for row in rows} == {
+            "Доход",
+            "Расход",
+            "KPI",
+        }
+        assert "Оборот в кг" in {row[8] for row in rows}
     finally:
         workbook.close()
 
 
 def initial_owner_smoke(opener, base_url: str) -> None:
+    upload_organization_reference(opener, base_url)
     organization, scenario = home_context(opener, base_url)
     run_id, initial_html = upload_budget(opener, base_url, organization, scenario)
-    assert indicator_counts(initial_html) == {
-        "automatic": 0,
-        "attention": 1,
-        "not_found": 1,
-    }
-    assert 'data-testid="indicator-unresolved-list"' in initial_html
-    assert "Требуются решения" in initial_html
-    assert "Дополнить точные соответствия — необязательно" in initial_html
+    assert 'data-testid="bdr-diagnostics"' in initial_html
+    for marker in (
+        "Прочитано строк БДР:",
+        "Доходные показатели:",
+        "Расходные показатели:",
+        "KPI показатели:",
+        "Количество показателей:",
+        "Сопоставлено:",
+        "Экспортировано:",
+    ):
+        assert marker in initial_html
+    assert re.search(r"Прочитано строк БДР:</dt><dd>14</dd>", initial_html)
+    assert re.search(r"Доходные показатели:</dt><dd>3</dd>", initial_html)
+    assert re.search(r"Расходные показатели:</dt><dd>5</dd>", initial_html)
+    assert re.search(r"KPI показатели:</dt><dd>6</dd>", initial_html)
+    assert re.search(r"Сопоставлено:</dt><dd>14</dd>", initial_html)
+    assert 'data-testid="indicator-classifier-summary"' not in initial_html
+    assert "Проверка завершена" in initial_html
     lowered = initial_html.lower()
     assert "sql id" not in lowered
     assert "internal key" not in lowered
-
-    before = export_payload(opener, base_url, run_id)
-
-    final_url, payload = post_multipart(
-        opener,
-        urljoin(base_url, f"/runs/{run_id}/indicator-classifier"),
-        {},
-        {
-            "classifier_file": (
-                "owner-smoke-classifier.xlsx",
-                classifier_bytes(),
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            )
-        },
-    )
-    assert urlparse(final_url).path == f"/runs/{run_id}", "Classifier rematch left current RUN"
-    rematched_html = payload.decode("utf-8")
-    assert indicator_counts(rematched_html) == {
-        "automatic": 1,
-        "attention": 0,
-        "not_found": 0,
-    }
-    assert 'data-testid="indicator-unresolved-list"' not in rematched_html
-    assert re.search(
-        r"<span>Полных перезапусков</span>\s*<strong>0</strong>",
-        rematched_html,
-    ), "Classifier rematch performed a full rerun"
-
-    after = export_payload(opener, base_url, run_id)
-    assert sheet_snapshot(before, "OPIU Light") == sheet_snapshot(after, "OPIU Light")
-    assert sheet_snapshot(before, "ОПИУ") == sheet_snapshot(after, "ОПИУ")
-    assert_export(after)
+    assert_export(export_payload(opener, base_url, run_id))
     print("OWNER_SMOKE_HTTP_INITIAL_PASS")
 
 
 def post_restart_owner_smoke(opener, base_url: str) -> None:
     organization, scenario = home_context(opener, base_url)
-    _, html = upload_budget(opener, base_url, organization, scenario)
-    assert indicator_counts(html) == {
-        "automatic": 1,
-        "attention": 0,
-        "not_found": 0,
-    }, "Persisted classifier was not applied after service restart"
-    run_match = re.search(r"/runs/([^/?#]+)", html)
-    # The RUN id is not required from page markup; upload_budget already proved the redirect.
-    # Validate the business-visible result directly on the returned preview.
-    assert "Услуги связи" in html or "Найдено автоматически" in html
+    run_id, html = upload_budget(opener, base_url, organization, scenario)
+    assert 'data-testid="bdr-diagnostics"' in html
+    assert re.search(r"Количество показателей:</dt><dd>14</dd>", html)
+    assert_export(export_payload(opener, base_url, run_id))
     print("OWNER_SMOKE_HTTP_POST_RESTART_PASS")
 
 

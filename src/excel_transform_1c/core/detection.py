@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from dataclasses import replace
 from datetime import date, datetime
 from typing import Any
 
 from openpyxl.utils import get_column_letter
 
-from .models import CandidateRange, MONTH_NAMES, SourceRow
+from .models import CandidateRange, IndicatorType, MONTH_NAMES, SourceRow
 
 
 BUSINESS_ALIASES: dict[str, set[str]] = {
@@ -75,6 +76,33 @@ BDR_REVENUE_ARTICLES = (
     "Дискаунтеры ДВ",
     "Дискаунтеры Федеральные",
 )
+BDR_INCOME_START = "Выручка ИТОГО"
+BDR_EXPENSE_START = "Расходы по основной деятельности ИТОГО"
+BDR_KPI_TAIL_START = "EBITDA"
+BDR_INCOME_ANCHORS = frozenset(
+    {
+        BDR_INCOME_START,
+        "Прочие доходы по основной деятельности",
+        "Валовая прибыль",
+    }
+)
+BDR_EXPENSE_ANCHORS = frozenset(
+    {
+        "Административные расходы",
+        "Коммерческие расходы",
+        "Расходы на транспортную логистику",
+        "Расходы на складскую логистику",
+    }
+)
+BDR_KPI_HEAD_ANCHORS = frozenset(
+    {
+        "Оборот в кг",
+        "Выручка за 1 кг",
+        "Себестоимость 1 кг",
+        "Валовая прибыль на 1 кг",
+    }
+)
+BDR_KPI_TAIL_ANCHORS = frozenset({BDR_KPI_TAIL_START, "Операционная прибыль"})
 
 
 def normalize_header(value: Any) -> str:
@@ -150,12 +178,174 @@ def _income_column_schema(values: Iterable[Any]) -> dict[str, int] | None:
     return columns
 
 
+def _bdr_plan_month_schemas(
+    rows: list[tuple[Any, ...]],
+) -> list[tuple[dict[str, int], int, int]]:
+    """Return exact January–December plan headers from the scanned sheet head."""
+
+    result: list[tuple[dict[str, int], int, int]] = []
+    for row_index, row in enumerate(rows[:-1]):
+        next_row = rows[row_index + 1]
+        for start in range(0, max(len(row) - 11, 0)):
+            periods = [_date_month(row[start + offset]) for offset in range(12)]
+            if any(period is None for period in periods):
+                continue
+            years = {period[0] for period in periods if period is not None}
+            months = [period[1] for period in periods if period is not None]
+            if len(years) != 1 or months != list(range(1, 13)):
+                continue
+            if not all(
+                normalize_header(next_row[start + offset]) == "план"
+                for offset in range(12)
+            ):
+                continue
+            result.append(
+                (
+                    {f"month_{month}": start + month for month in range(1, 13)},
+                    next(iter(years)),
+                    row_index + 1,
+                )
+            )
+    return result
+
+
+def _bdr_row_label(
+    row: tuple[Any, ...], label_columns: tuple[int, ...]
+) -> tuple[str, int] | None:
+    labels = [
+        (str(row[column - 1]).strip(), column)
+        for column in label_columns
+        if column <= len(row)
+        and isinstance(row[column - 1], str)
+        and str(row[column - 1]).strip()
+    ]
+    return labels[-1] if labels else None
+
+
+def _has_bdr_month_value(row: tuple[Any, ...], columns: dict[str, int]) -> bool:
+    return any(
+        column <= len(row) and row[column - 1] not in (None, "")
+        for field, column in columns.items()
+        if field.startswith("month_")
+    )
+
+
+def _one_exact_row(
+    labelled_rows: list[tuple[int, str]], label: str
+) -> int | None:
+    matches = [row_number for row_number, value in labelled_rows if value == label]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _bdr_full_candidate(
+    sheet: Any,
+    scanned_rows: list[tuple[Any, ...]],
+    max_scan_rows: int = 2000,
+) -> CandidateRange | None:
+    """Detect one complete BDR by its ordered business blocks and plan periods."""
+
+    matches: list[CandidateRange] = []
+    for month_columns, source_year, month_header_row in _bdr_plan_month_schemas(
+        scanned_rows
+    ):
+        first_month_column = min(month_columns.values())
+        label_columns = tuple(range(1, first_month_column))
+        if not label_columns:
+            continue
+        last_scan_row = min(sheet.max_row or max_scan_rows, max_scan_rows)
+        body = list(
+            sheet.iter_rows(
+                min_row=month_header_row + 2,
+                max_row=last_scan_row,
+                min_col=1,
+                max_col=max(month_columns.values()),
+                values_only=True,
+            )
+        )
+        labelled_rows: list[tuple[int, str]] = []
+        business_rows: list[int] = []
+        for row_number, row in enumerate(body, start=month_header_row + 2):
+            labelled = _bdr_row_label(row, label_columns)
+            if labelled is None:
+                continue
+            label, _ = labelled
+            labelled_rows.append((row_number, label))
+            if _has_bdr_month_value(row, month_columns):
+                business_rows.append(row_number)
+
+        income_start = _one_exact_row(labelled_rows, BDR_INCOME_START)
+        expense_start = _one_exact_row(labelled_rows, BDR_EXPENSE_START)
+        kpi_tail_start = _one_exact_row(labelled_rows, BDR_KPI_TAIL_START)
+        if (
+            income_start is None
+            or expense_start is None
+            or kpi_tail_start is None
+            or not (income_start < expense_start < kpi_tail_start)
+            or not business_rows
+        ):
+            continue
+
+        exact_labels = {label for _, label in labelled_rows}
+        if not (
+            BDR_INCOME_ANCHORS.issubset(exact_labels)
+            and BDR_EXPENSE_ANCHORS.issubset(exact_labels)
+            and len(BDR_KPI_HEAD_ANCHORS.intersection(exact_labels)) >= 3
+            and BDR_KPI_TAIL_ANCHORS.issubset(exact_labels)
+        ):
+            continue
+
+        first_data_row = min(business_rows)
+        last_data_row = max(business_rows)
+        if not (first_data_row < income_start and kpi_tail_start <= last_data_row):
+            continue
+
+        header = scanned_rows[month_header_row - 1]
+        reporting_values = [
+            (str(header[column - 1]).strip(), column)
+            for column in label_columns
+            if column <= len(header)
+            and isinstance(header[column - 1], str)
+            and str(header[column - 1]).strip()
+        ]
+        source_cfo = reporting_values[0][0] if len(reporting_values) == 1 else ""
+        reporting_unit_cell = (
+            f"{get_column_letter(reporting_values[0][1])}{month_header_row}"
+            if len(reporting_values) == 1
+            else ""
+        )
+        matches.append(
+            CandidateRange(
+                candidate_id="",
+                sheet=sheet.title,
+                header_row=month_header_row,
+                first_data_row=first_data_row,
+                last_data_row=last_data_row,
+                columns=month_columns,
+                source_kind="bdr_full",
+                source_cfo=source_cfo,
+                source_year=source_year,
+                indicator_blocks=(
+                    (IndicatorType.KPI, first_data_row, income_start - 1),
+                    (IndicatorType.REVENUE, income_start, expense_start - 1),
+                    (IndicatorType.EXPENSE, expense_start, kpi_tail_start - 1),
+                    (IndicatorType.KPI, kpi_tail_start, last_data_row),
+                ),
+                label_columns=label_columns,
+                reporting_unit_cell=reporting_unit_cell,
+            )
+        )
+
+    # Multiple full schemas are an ambiguity, not an invitation to take the first.
+    return matches[0] if len(matches) == 1 else None
+
+
 def detect_candidate_ranges(
     workbook: Any,
     scan_rows: int = 100,
     scan_columns: int = 100,
 ) -> list[CandidateRange]:
     raw: list[tuple[Any, int, dict[str, int], str, str, int | None]] = []
+    full_bdr_candidates: list[CandidateRange] = []
     for sheet in workbook.worksheets:
         max_row = min(sheet.max_row or scan_rows, scan_rows)
         max_column = min(sheet.max_column or scan_columns, scan_columns)
@@ -168,6 +358,9 @@ def detect_candidate_ranges(
                 values_only=True,
             )
         )
+        full_bdr = _bdr_full_candidate(sheet, scanned_rows)
+        if full_bdr is not None:
+            full_bdr_candidates.append(full_bdr)
         for row_number, values in enumerate(scanned_rows, start=1):
             schema = _column_schema(values)
             if schema:
@@ -212,6 +405,12 @@ def detect_candidate_ranges(
                     source_year,
                 )
             )
+
+    if full_bdr_candidates:
+        return [
+            replace(candidate, candidate_id=f"candidate-{index}")
+            for index, candidate in enumerate(full_bdr_candidates, start=1)
+        ]
 
     candidates: list[CandidateRange] = []
     for index, (sheet, header_row, columns, source_kind, source_cfo, source_year) in enumerate(raw):
@@ -565,6 +764,8 @@ def _last_data_row(
 
 
 def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str) -> list[SourceRow]:
+    if candidate.source_kind == "bdr_full":
+        return _read_bdr_full_rows(workbook, candidate, source_file)
     if candidate.source_kind == "intalev_opiu":
         return _read_intalev_source_rows(workbook, candidate, source_file)
     if candidate.source_kind == "prepared_income_budget":
@@ -618,6 +819,77 @@ def read_source_rows(workbook: Any, candidate: CandidateRange, source_file: str)
                 cells=cells,
                 **shared_values,
                 **indicator_values,
+            )
+        )
+    return result
+
+
+def _bdr_indicator_type(candidate: CandidateRange, row_number: int) -> IndicatorType:
+    matches = [
+        indicator_type
+        for indicator_type, first_row, last_row in candidate.indicator_blocks
+        if first_row <= row_number <= last_row
+    ]
+    if len(matches) != 1:
+        raise ValueError("Строка БДР не относится к одному определённому блоку")
+    return matches[0]
+
+
+def _read_bdr_full_rows(
+    workbook: Any,
+    candidate: CandidateRange,
+    source_file: str,
+) -> list[SourceRow]:
+    sheet = workbook[candidate.sheet]
+    max_column = max((*candidate.columns.values(), *candidate.label_columns))
+    rows = sheet.iter_rows(
+        min_row=candidate.first_data_row,
+        max_row=candidate.last_data_row,
+        min_col=1,
+        max_col=max_column,
+        values_only=True,
+    )
+    result: list[SourceRow] = []
+    for row_number, row in enumerate(rows, start=candidate.first_data_row):
+        labelled = _bdr_row_label(row, candidate.label_columns)
+        if labelled is None or not _has_bdr_month_value(row, candidate.columns):
+            continue
+        indicator, indicator_column = labelled
+        indicator_type = _bdr_indicator_type(candidate, row_number)
+        month_values = tuple(
+            row[candidate.columns[f"month_{month}"] - 1]
+            for month in range(1, 13)
+        )
+        article_cell = f"{get_column_letter(indicator_column)}{row_number}"
+        cells = {
+            "article": article_cell,
+            "indicator_type": article_cell,
+            "cfo": candidate.reporting_unit_cell or article_cell,
+            "reporting_unit": candidate.reporting_unit_cell or article_cell,
+            **{
+                f"month_{month}": (
+                    f"{get_column_letter(candidate.columns[f'month_{month}'])}{row_number}"
+                )
+                for month in range(1, 13)
+            },
+        }
+        result.append(
+            SourceRow(
+                source_file=source_file,
+                sheet=candidate.sheet,
+                row_number=row_number,
+                reporting_unit=candidate.source_cfo,
+                expense_type="",
+                department="",
+                organization_type="",
+                cfo=candidate.source_cfo,
+                tax=None,
+                expense_group="",
+                article=indicator,
+                months=month_values,
+                cells=cells,
+                indicator_type=indicator_type.value,
+                source_kind="bdr_full",
             )
         )
     return result

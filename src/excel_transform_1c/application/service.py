@@ -63,6 +63,9 @@ INLINE_EDITABLE_ISSUE_KINDS = frozenset({"erp-mapping", "tax", "cfo-mapping"})
 INLINE_EDITABLE_SHARED_FIELDS = frozenset(
     {"department", "cfo", "expense_group", "source_article"}
 )
+BDR_ORGANIZATION_NOT_RESOLVED = (
+    "Сокращённое имя БДР не найдено однозначно в выбранной ERP-иерархии"
+)
 
 
 @dataclass
@@ -320,7 +323,9 @@ class WorkflowService:
             records=records,
             issues=issues,
             created_at=datetime.now(UTC).isoformat(),
-            cfo_mapping_enabled=bool(self.intalev_cfos()),
+            cfo_mapping_enabled=(
+                bool(self.intalev_cfos()) and candidate.source_kind != "bdr_full"
+            ),
             indicator_classifier_loaded=bool(self.article_indicator_rules()),
         )
         if run.cfo_mapping_enabled:
@@ -349,6 +354,23 @@ class WorkflowService:
         run: ProcessedRun,
         source_rows: set[int] | None = None,
     ) -> None:
+        if run.candidate.source_kind == "bdr_full":
+            for record in run.records:
+                if source_rows is not None and record.source_row not in source_rows:
+                    continue
+                previous_reason = record.indicator_match_reason
+                if previous_reason:
+                    record.reasons = [
+                        reason for reason in record.reasons if reason != previous_reason
+                    ]
+                record.indicator = record.source_article
+                record.sales_channel = ""
+                record.indicator_match_status = INDICATOR_MATCHED
+                record.indicator_match_reason = ""
+                if record.status != STATUS_SKIPPED:
+                    record.status = STATUS_ATTENTION if record.reasons else STATUS_OK
+            return
+
         rules = self.article_indicator_rules()
         engine = IndicatorResolverEngine(rules)
         run.indicator_classifier_loaded = bool(rules)
@@ -431,6 +453,82 @@ class WorkflowService:
                 ),
             })
         return result
+
+    def bdr_diagnostics(self, run_id: str) -> dict[str, Any] | None:
+        run = self.get_run(run_id)
+        if run.candidate.source_kind != "bdr_full":
+            return None
+        by_row: dict[int, list[PreviewRecord]] = {}
+        for record in run.records:
+            by_row.setdefault(record.source_row, []).append(record)
+
+        source_types = {
+            source_row: records[0].indicator_type
+            for source_row, records in by_row.items()
+        }
+        matched = {
+            source_row
+            for source_row, records in by_row.items()
+            if any(
+                record.organization_unit
+                and record.organization_unit_code
+                and record.department
+                and record.erp_department
+                and record.cfo_code
+                for record in records
+            )
+        }
+        exported = {
+            source_row
+            for source_row, records in by_row.items()
+            if any(
+                record.amount is not None
+                and record.indicator_match_status == INDICATOR_MATCHED
+                for record in records
+            )
+        }
+        exclusions: list[dict[str, Any]] = []
+        for source_row, records in sorted(by_row.items()):
+            if source_row in exported:
+                continue
+            reasons = list(
+                dict.fromkeys(
+                    reason
+                    for record in records
+                    for reason in (
+                        *record.reasons,
+                        record.indicator_match_reason,
+                    )
+                    if reason
+                )
+            )
+            exclusions.append(
+                {
+                    "source_row": source_row,
+                    "indicator": records[0].source_article,
+                    "reason": "; ".join(reasons)
+                    or "Нет числовых значений ни за один период",
+                }
+            )
+        return {
+            "rows_read": len(by_row),
+            "income": sum(
+                value == IndicatorType.REVENUE for value in source_types.values()
+            ),
+            "expense": sum(
+                value == IndicatorType.EXPENSE for value in source_types.values()
+            ),
+            "kpi": sum(value == IndicatorType.KPI for value in source_types.values()),
+            "indicators": len(by_row),
+            "matched": len(matched),
+            "exported": len(exported),
+            "exported_period_rows": sum(
+                record.amount is not None
+                and record.indicator_match_status == INDICATOR_MATCHED
+                for record in run.visible_records()
+            ),
+            "exclusions": exclusions,
+        }
 
     @staticmethod
     def _issue_is_inline_editable(issue: Issue) -> bool:
@@ -1031,23 +1129,44 @@ class WorkflowService:
                     issue.resolved = True
 
             base = row_records[0]
-            resolution = resolver.resolve(
-                run.context.organization_node_id,
-                base.department,
-                base.source_cfo or base.cfo,
+            is_bdr = run.candidate.source_kind == "bdr_full"
+            if is_bdr:
+                resolution = resolver.resolve_exact_department(
+                    run.context.organization_node_id,
+                    base.source_cfo or base.source_reporting_unit,
+                )
+            else:
+                resolution = resolver.resolve(
+                    run.context.organization_node_id,
+                    base.department,
+                    base.source_cfo or base.cfo,
+                )
+            reason = (
+                resolution.reason
+                if resolution
+                else (BDR_ORGANIZATION_NOT_RESOLVED if is_bdr else None)
             )
-            reason = resolution.reason if resolution else None
             for record in row_records:
                 record.organization_unit = resolution.organization_unit if resolution else ""
                 record.organization_unit_code = (
                     resolution.organization_unit_code if resolution else ""
                 )
-                record.erp_department = resolution.department if resolution else ""
+                if is_bdr and resolution:
+                    record.department = resolution.department
+                record.erp_department = (
+                    resolution.cfo
+                    if is_bdr and resolution
+                    else (resolution.department if resolution else "")
+                )
                 record.cfo_code = resolution.cfo_code if resolution else ""
                 record.reasons = [
                     item
                     for item in record.reasons
-                    if item != MISSING_ERP_ELEMENT_CODE_REASON
+                    if item
+                    not in {
+                        MISSING_ERP_ELEMENT_CODE_REASON,
+                        BDR_ORGANIZATION_NOT_RESOLVED,
+                    }
                 ]
                 if reason:
                     record.reasons.append(reason)

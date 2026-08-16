@@ -59,8 +59,8 @@ def test_export_keeps_legacy_sheet_and_adds_two_ado_sheets():
         legacy = workbook["OPIU Light"]
         assert tuple(cell.value for cell in legacy[1]) == EXPORT_HEADERS
         assert legacy.max_row == 2
-        assert legacy["P2"].value == "00-000169"
-        assert legacy["S2"].value == 123.45
+        assert legacy["R2"].value == "00-000169"
+        assert legacy["U2"].value == 123.45
 
         ado = workbook["ОПИУ"]
         assert tuple(cell.value for cell in ado[1]) == ADO_OPIU_HEADERS
@@ -76,6 +76,8 @@ def test_export_keeps_legacy_sheet_and_adds_two_ado_sheets():
             "АЮ Отдел обеспечения",
             "АЮ Отдел обеспечения",
             "000000175",
+            "Расход",
+            "Перчатки",
             "Административные расходы",
             "00-000169",
             "Перчатки",
@@ -85,9 +87,9 @@ def test_export_keeps_legacy_sheet_and_adds_two_ado_sheets():
             None,
             123.45,
         )
-        assert ado["L2"].data_type == "s"
-        assert ado["L2"].number_format == "@"
-        assert isinstance(ado["R2"].value, (int, float))
+        assert ado["N2"].data_type == "s"
+        assert ado["N2"].number_format == "@"
+        assert isinstance(ado["T2"].value, (int, float))
 
         indicators = workbook["Показатели"]
         assert tuple(cell.value for cell in indicators[1]) == ADO_INDICATOR_HEADERS
@@ -107,9 +109,9 @@ def test_ado_opiu_keeps_rows_when_reference_codes_are_missing():
         ado = workbook["ОПИУ"]
         assert ado.max_row == 2
         assert ado["J2"].value == "000000175"
-        assert ado["L2"].value is None
-        assert ado["M2"].value == "Перчатки"
-        assert ado["R2"].value == 123.45
+        assert ado["N2"].value is None
+        assert ado["O2"].value == "Перчатки"
+        assert ado["T2"].value == 123.45
     finally:
         workbook.close()
 

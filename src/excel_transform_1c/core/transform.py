@@ -220,9 +220,11 @@ def transform_rows(
         }
 
         required_shared_fields = set(SHARED_FIELDS)
-        if indicator_type == IndicatorType.REVENUE:
+        if row.source_kind == "bdr_full":
             required_shared_fields = {"article"}
-        elif indicator_type == IndicatorType.QUANTITY:
+        elif indicator_type == IndicatorType.REVENUE:
+            required_shared_fields = {"article"}
+        elif indicator_type in {IndicatorType.QUANTITY, IndicatorType.KPI}:
             required_shared_fields = set()
 
         for field, value in shared.items():
@@ -253,7 +255,7 @@ def transform_rows(
 
         tax, tax_reason = (
             ("", None)
-            if indicator_type != IndicatorType.EXPENSE
+            if indicator_type != IndicatorType.EXPENSE or row.source_kind == "bdr_full"
             else normalize_tax(row.tax, allowed_tax_values)
         )
         if tax_reason:
@@ -262,7 +264,7 @@ def transform_rows(
 
         mapped: ERPArticle | None = None
         mapping_reason: str | None = None
-        if indicator_type == IndicatorType.EXPENSE:
+        if indicator_type == IndicatorType.EXPENSE and row.source_kind != "bdr_full":
             mapped, mapping_reason = mapper.resolve(
                 shared["expense_type"], shared["expense_group"], shared["article"]
             )
@@ -325,6 +327,7 @@ def transform_rows(
                             f"{skip_reason} ({pointers['amount'].sheet}!{pointers['amount'].cell})",
                         ],
                         pointers=pointers,
+                        source_kind=row.source_kind,
                         **indicator_fields,
                     )
                 )
@@ -368,6 +371,7 @@ def transform_rows(
                     status=STATUS_ATTENTION if reasons else STATUS_OK,
                     reasons=reasons,
                     pointers=pointers,
+                    source_kind=row.source_kind,
                     **indicator_fields,
                 )
             )

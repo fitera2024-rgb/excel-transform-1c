@@ -44,12 +44,12 @@ def test_intalev_preview_and_valid_export_preserve_business_values(tmp_path):
         assert tuple(cell.value for cell in sheet[1]) == EXPORT_HEADERS
         assert sheet.max_row == 37
         values = [tuple(cell.value for cell in row) for row in sheet.iter_rows(min_row=2)]
-        assert sum(row[18] == 0 for row in values) == 34
-        assert any(row[18] == -10 for row in values)
-        skipped = next(row for row in values if row[21] == 10 and row[5] == 5)
-        assert skipped[18] is None
-        assert skipped[19] == "Пропущено"
-        assert "I10" in skipped[20]
+        assert sum(row[20] == 0 for row in values) == 34
+        assert any(row[20] == -10 for row in values)
+        skipped = next(row for row in values if row[23] == 10 and row[5] == 5)
+        assert skipped[20] is None
+        assert skipped[21] == "Пропущено"
+        assert "I10" in skipped[22]
         assert all(row[10] == "ЦД/ЦЗ Фонд развития" for row in values)
         assert sheet.freeze_panes == "A2"
     finally:
@@ -85,21 +85,13 @@ def test_existing_ayu_and_pv_prepared_budget_inputs_do_not_regress(tmp_path):
 
 def test_real_intalev_file_when_available(tmp_path):
     configured = os.environ.get("EXCEL_INTAKE_REAL_OPIU_FILE")
-    candidates = [Path(configured)] if configured else []
-    if not candidates:
-        candidates = [
-            path
-            for root in tmp_path.parents
-            for path in root.glob(
-                "**/intalev-owner-evidence/*_Отчет_ОПИУ_ЗаПериод_20250101_20251231.xlsx"
-            )
-        ]
-    candidates = [path for path in candidates if path.is_file()]
-    if not candidates:
-        pytest.skip("Реальный файл Инталев недоступен в рабочем окружении")
+    if not configured:
+        pytest.skip("Exact real-file handoff EXCEL_INTAKE_REAL_OPIU_FILE не задан")
+    source = Path(configured)
+    if not source.is_file():
+        pytest.skip("Exact real-file handoff недоступен")
 
     service = _service(tmp_path)
-    source = candidates[0]
     pending = service.prepare_upload(source.name, source.read_bytes(), _context(service))
     assert pending.candidates
     candidate = pending.candidates[0]

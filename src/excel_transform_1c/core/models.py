@@ -19,12 +19,14 @@ class IndicatorType(StrEnum):
     EXPENSE = "EXPENSE"
     REVENUE = "REVENUE"
     QUANTITY = "QUANTITY"
+    KPI = "KPI"
 
 
 INDICATOR_TYPE_LABELS = {
     IndicatorType.EXPENSE: "Расход",
     IndicatorType.REVENUE: "Доход",
     IndicatorType.QUANTITY: "Количество",
+    IndicatorType.KPI: "KPI",
 }
 
 MONTH_NAMES = (
@@ -64,9 +66,14 @@ class CandidateRange:
     source_kind: str = "prepared_budget"
     source_cfo: str = ""
     source_year: int | None = None
+    indicator_blocks: tuple[tuple[IndicatorType, int, int], ...] = ()
+    label_columns: tuple[int, ...] = ()
+    reporting_unit_cell: str = ""
 
     @property
     def label(self) -> str:
+        if self.source_kind == "bdr_full":
+            return "БДР 2026 ИТОГ"
         return f"{self.sheet}: строки {self.first_data_row}–{self.last_data_row}"
 
 
@@ -95,6 +102,7 @@ class SourceRow:
     input_sales_channel: Any = ""
     sales_network: Any = ""
     sales_region: Any = ""
+    source_kind: str = "prepared_budget"
 
 
 @dataclass(frozen=True)
@@ -240,6 +248,7 @@ class PreviewRecord:
     input_sales_channel: str = ""
     sales_network: str = ""
     sales_region: str = ""
+    source_kind: str = "prepared_budget"
 
     @property
     def comment(self) -> str:

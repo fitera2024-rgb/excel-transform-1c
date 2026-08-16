@@ -433,7 +433,7 @@ def test_add_scenario_shows_erp_unconfirmed_marker(client):
 def test_blocked_no_range_state_has_reset_action(client):
     response = upload(client, workbook_bytes(no_range=True))
     assert response.status_code == 200
-    assert "Подготовленный диапазон не найден" in response.text
+    assert "Бизнес-источник не распознан" in response.text
     assert "Сбросить и выбрать другой файл" in response.text
     upload_id = next(iter(client.app.state.workflow.pending))
     reset = client.post(f"/uploads/{upload_id}/reset", follow_redirects=True)
@@ -442,7 +442,7 @@ def test_blocked_no_range_state_has_reset_action(client):
 
 def test_multiple_ranges_are_not_selected_silently(client):
     response = upload(client, workbook_bytes(two_candidates=True))
-    assert "Выберите подготовленный диапазон" in response.text
+    assert "Выберите бизнес-источник" in response.text
     assert response.text.count('name="candidate_id"') == 2
     assert "Файл загружается и анализируется; не закрывайте страницу" in response.text
     assert 'data-candidate-processing-form' in response.text

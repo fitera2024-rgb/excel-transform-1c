@@ -24,6 +24,30 @@
   <div><span>Полных перезапусков</span><strong>{{ run.rerun_count }}</strong><small>после правок</small></div>
 </section>
 
+{% if bdr_diagnostics %}
+<section class="card reference-card" data-testid="bdr-diagnostics">
+  <div class="section-heading">
+    <div><p class="eyebrow ink">БДР 2026 ИТОГ</p><h2>Диагностика перед экспортом</h2></div>
+    <p>Доходы, расходы и KPI обработаны одним потоком. Непопавшие показатели перечислены с причиной.</p>
+  </div>
+  <dl class="catalog-stats">
+    <div><dt>Прочитано строк БДР:</dt><dd>{{ bdr_diagnostics.rows_read }}</dd></div>
+    <div><dt>Доходные показатели:</dt><dd>{{ bdr_diagnostics.income }}</dd></div>
+    <div><dt>Расходные показатели:</dt><dd>{{ bdr_diagnostics.expense }}</dd></div>
+    <div><dt>KPI показатели:</dt><dd>{{ bdr_diagnostics.kpi }}</dd></div>
+    <div><dt>Количество показателей:</dt><dd>{{ bdr_diagnostics.indicators }}</dd></div>
+    <div><dt>Сопоставлено:</dt><dd>{{ bdr_diagnostics.matched }}</dd></div>
+    <div><dt>Экспортировано:</dt><dd>{{ bdr_diagnostics.exported }} <small>показателей / {{ bdr_diagnostics.exported_period_rows }} строк по периодам</small></dd></div>
+  </dl>
+  {% if bdr_diagnostics.exclusions %}
+  <div class="indicator-unresolved-list" data-testid="bdr-exclusions">
+    {% for item in bdr_diagnostics.exclusions %}<article class="indicator-unresolved-row"><strong>Строка {{ item.source_row }} · {{ item.indicator }}</strong><span>{{ item.reason }}</span></article>{% endfor %}
+  </div>
+  {% else %}<p class="hint">Все прочитанные показатели имеют экспортируемые значения.</p>{% endif %}
+</section>
+{% endif %}
+
+{% if run.candidate.source_kind != "bdr_full" %}
 <section class="card reference-card" data-testid="indicator-classifier-summary">
   <div class="section-heading">
     <div>
@@ -48,6 +72,7 @@
   </form>
   {% if indicator_unresolved_rows %}<div class="indicator-unresolved-list" data-testid="indicator-unresolved-list">{% for item in indicator_unresolved_rows %}<article class="indicator-unresolved-row" data-testid="indicator-unresolved-row"><strong>{{ item.source_line }}</strong><span>{{ item.expense_type }} → {{ item.expense_group }} → {{ item.source_article }}</span><span>Тип: {{ item.indicator_type }}</span>{% if item.erp_code %}<span>ERP-код: {{ item.erp_code }}</span>{% endif %}{% if item.indicator %}<span>Показатель: <b>{{ item.indicator }}</b></span>{% endif %}<span><b>{{ item.status }}</b> — {{ item.reason }}</span><span>{{ item.action }}</span></article>{% endfor %}</div>{% endif %}
 </section>
+{% endif %}
 
 {% if run.cfo_mapping_enabled %}
 <section class="card cfo-mapping-section" data-testid="cfo-mapping-section"><div class="section-heading"><div><p class="eyebrow ink">ЦФО</p><h2>Исходный ЦФО → ЦФО Инталев → узел 1С</h2></div></div><form method="post" action="/runs/{{ run.run_id }}/confirm-filled-cfo" class="bulk-confirm-card cfo-bulk-card" data-cfo-bulk-form data-testid="cfo-bulk-form"><input type="hidden" name="selections" value="[]" data-cfo-bulk-selections><label><input type="checkbox" name="confirmed" value="1" data-cfo-bulk-confirm disabled>Подтверждаю все заполненные сопоставления ЦФО</label><p data-cfo-bulk-count>Будет применено: 0 ЦФО</p><p data-cfo-bulk-empty>Сначала заполните хотя бы одно новое соответствие.</p><button type="submit" data-cfo-bulk-submit disabled>Нет заполненных соответствий</button></form><div class="cfo-mapping-list">{% for entry in cfo_mapping_entries %}<article class="cfo-mapping-row{% if entry.confirmed %} is-confirmed{% endif %}" data-cfo-entry data-entry-key="{{ entry.entry_key }}" data-source-reporting-unit="{{ entry.source_reporting_unit }}" data-source-cfo="{{ entry.source_cfo }}" data-confirmed="{{ 'true' if entry.confirmed else 'false' }}" data-eligible="true"><div class="cfo-source-card"><strong>{{ entry.source_label }}</strong><span>{{ entry.row_count }} исходных строк</span>{% if entry.intalev_confirmed %}<small>ЦФО Инталев: {{ entry.intalev_label }}</small>{% endif %}</div>{% if entry.confirmed %}<div class="business-status cfo-confirmed-status"><strong>Сопоставление ЦФО подтверждено</strong><span>{{ entry.intalev_label }} → {{ entry.target_label }}</span></div>{% else %}<form method="post" action="/runs/{{ run.run_id }}/map-cfo" class="cfo-mapping-form" data-cfo-form><input type="hidden" name="source_reporting_unit" value="{{ entry.source_reporting_unit }}"><input type="hidden" name="source_cfo" value="{{ entry.source_cfo }}"><label>ЦФО Инталев<select name="intalev_source_key" data-cfo-intalev><option value="">Выберите точный ЦФО Инталев</option>{% for option in intalev_cfo_options %}<option value="{{ option.source_key }}"{% if option.source_key == entry.intalev_source_key %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label><label>ЦФО / подразделение / узел 1С<select name="target_node_id" data-cfo-target><option value="">Выберите точный узел 1С</option>{% for option in organization_options %}<option value="{{ option.node_id }}"{% if option.node_id == entry.target_node_id %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select></label><label><input type="checkbox" name="confirmed" value="1" data-cfo-confirm disabled>Подтверждаю оба соответствия ЦФО</label><button type="submit" data-cfo-submit disabled>Сначала выберите оба значения и поставьте галку</button><small>{{ entry.status }}</small></form>{% endif %}</article>{% else %}<p class="hint">В текущем файле не найдены ЦФО для сопоставления.</p>{% endfor %}</div></section>

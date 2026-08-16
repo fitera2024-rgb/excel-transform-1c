@@ -315,3 +315,38 @@ class ExactOrganizationHierarchyResolver:
             cfo_code=reference.cfo_code,
             reason=MISSING_ERP_ELEMENT_CODE_REASON if missing_code else None,
         )
+
+    def resolve_exact_department(
+        self,
+        organization_node_id: str,
+        abbreviated_name: str,
+    ) -> OrganizationHierarchyResolution | None:
+        """Resolve the one exact BDR department and walk to its ERP root.
+
+        The BDR summary provides one abbreviated organizational name rather
+        than a prepared pair of parent department and CFO.  Resolution remains
+        restricted to the explicitly selected organization branch and refuses
+        zero or multiple exact candidates.
+        """
+
+        if organization_node_id not in self.by_id or not abbreviated_name:
+            return None
+        hierarchy = ERPOrganizationHierarchyReader(self.nodes, organization_node_id)
+        candidates = hierarchy.exact_department_candidates(name=abbreviated_name)
+        if len(candidates) != 1:
+            return None
+        node = candidates[0]
+        parents = hierarchy.parent_traversal(node)
+        root = hierarchy.root_organization(node)
+        if root is None or not parents:
+            return None
+        department = parents[0]
+        missing_code = not root.code or not node.code
+        return OrganizationHierarchyResolution(
+            organization_unit=root.name,
+            organization_unit_code=root.code,
+            department=department.name,
+            cfo=node.name,
+            cfo_code=node.code,
+            reason=MISSING_ERP_ELEMENT_CODE_REASON if missing_code else None,
+        )

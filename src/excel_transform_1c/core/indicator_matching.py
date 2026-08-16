@@ -35,6 +35,7 @@ class IndicatorExportRow:
     year: int
     month: int
     period: str
+    indicator_type: str
     sales_channel: str
     indicator: str
     amount: Decimal
@@ -119,9 +120,11 @@ def apply_indicator_match(record: PreviewRecord, match: IndicatorMatch) -> None:
 
 
 def aggregate_indicator_rows(records: list[PreviewRecord]) -> list[IndicatorExportRow]:
-    """Aggregate only complete direct matches by the exact eight-column key."""
+    """Aggregate only complete direct matches by the exact business key."""
 
-    amounts: dict[tuple[str, str, int, int, str, str, str], Decimal] = defaultdict(Decimal)
+    amounts: dict[
+        tuple[str, str, int, int, str, str, str, str], Decimal
+    ] = defaultdict(Decimal)
     for record in records:
         if (
             record.indicator_match_status != INDICATOR_MATCHED
@@ -136,6 +139,7 @@ def aggregate_indicator_rows(records: list[PreviewRecord]) -> list[IndicatorExpo
             record.year,
             record.month,
             period,
+            record.indicator_type_label,
             record.sales_channel,
             record.indicator,
         )
