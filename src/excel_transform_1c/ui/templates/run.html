@@ -59,7 +59,7 @@
 <section class="card reference-card" data-testid="indicator-classifier-summary">
   <div class="section-heading">
     <div>
-      <p class="eyebrow ink">Показатели ОПИУ</p>
+      <p class="eyebrow ink">Группа раскрытия → статья → показатель ОПИУ</p>
       <h2>Автоматические соответствия</h2>
     </div>
     <p>Сервис применяет только один точный кандидат. Остальные строки не угадываются.</p>
@@ -70,6 +70,12 @@
     <div><dt>Не найдено:</dt><dd>{{ indicator_counts.not_found }}</dd></div>
     <div><dt>Классификатор:</dt><dd>{{ 'встроен и применён' if run.indicator_classifier_loaded else 'не загружен' }}</dd></div>
   </dl>
+  {% if indicator_attention_reasons %}
+  <div class="issue-summary" data-testid="indicator-attention-reasons">
+    <h3>Причина</h3>
+    <ul>{% for reason in indicator_attention_reasons %}<li>{{ reason }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
   <form method="post" action="/runs/{{ run.run_id }}/indicator-classifier" enctype="multipart/form-data" class="reference-form" data-testid="indicator-classifier-form">
     <label>
       Дополнить точные соответствия — необязательно

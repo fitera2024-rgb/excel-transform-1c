@@ -349,3 +349,68 @@ STATUS: `ACCEPTED`
 - `FITERA_SERVICE_UI_STARTER_V2` используется как visual/UX reference, без переноса чужой backend-логики.
 - Сохраняются business forms, input names, endpoints, test hooks и отдельные explicit actions ERP/tax/CFO.
 - Normal UI использует фирменную бело-зелёную оболочку, понятные шаги и бизнес-статусы; SHA, paths и technical blocker codes не становятся обязательными полями.
+
+## DEC-ACCESS-004 — Local V1 uses one open organization tree
+
+STATUS: `ACCEPTED`
+
+Supersedes for local V1: `DEC-ACCESS-001`, `DEC-ACCESS-002`, `DEC-ACCESS-003`.
+
+Refines: `DEC-PRODUCT-013`, `DEC-PRODUCT-018`.
+
+- Владелец удалил отдельный экран делегирования и effective-access filtering во время Owner UX Smoke.
+- Всем пользователям локального сервиса доступно всё загруженное дерево организаций и узлов.
+- Пользователь выбирает верхнюю ветку, затем сам верхний узел либо любой дочерний узел её поддерева.
+- Исторические решения о делегированных поддеревьях не удаляются из журнала, но не являются текущим runtime contract V1.
+- Это решение не вводит enterprise RBAC и не разрешает внешнюю публикацию сервиса.
+
+## DEC-PRODUCT-022 — Full BDR and three-sheet preview/export scope
+
+STATUS: `ACCEPTED`
+
+Refines: `DEC-BOOT-002`, `DEC-PRODUCT-004`, `DEC-PRODUCT-005`, `DEC-PRODUCT-008`, `DEC-PRODUCT-021`, `DEC-INPUT-006`.
+
+- Канонический preview/export scope поддерживает три доказанные structural families:
+  1. подготовленные бюджетные диапазоны расходов и доходов;
+  2. годовой и одногомесячный Инталев ОПИУ;
+  3. полный БДР как один business source с KPI, доходами, расходами и доказанными prepared-компонентами.
+- Полный БДР обрабатывается одним RUN. Его внутренние листы/диапазоны не выбираются как независимые случайные источники.
+- KPI не зависит от статьи расходов и сохраняет точный исходный показатель.
+- Для формул допускается exact saved-value sheet только по доказанной связи `лист + строка + показатель + месяц`; текст формулы не является числовым результатом.
+- Видимая Excel-строка остаётся source pointer, а RUN-local identity может быть отдельной для composite source.
+- Канонический XLSX содержит три листа: `OPIU Light`, `ОПИУ`, `Показатели`.
+- `OPIU Light` и `ОПИУ` сохраняют максимально полный row-level result; отсутствие показателя не удаляет корректную сумму/значение.
+- Это решение не разрешает ADO, ODBC, SQL/1C write или live write.
+
+## DEC-OPIU-001 — Exact disclosure-group and formula/source indicator authority
+
+STATUS: `ACCEPTED`
+
+Refines: `DEC-PRODUCT-006`, `DEC-PRODUCT-012`, `DEC-PRODUCT-022`.
+
+- Для расходных строк показатель ОПИУ определяется по цепочке:
+  `группа раскрытия → статья внутри группы → поддержанные exact-условия формулы/источника → показатель`.
+- При наличии принятого formula/source catalog этот catalog является authority для расходов. Конфликтующий legacy classifier не перекрывает его молча.
+- Legacy classifier допускается только как exact fallback `группа → статья`, когда formula/source authority отсутствует.
+- Deepest exact disclosure group имеет приоритет над более общей группой в принятой иерархии.
+- Exact ERP-код может уточнять выбор; конфликт кода не игнорируется.
+- Неподдержанное условие, отсутствующий source identity или неоднозначность fail closed только для indicator resolution: row-level preview остаётся доступным, а aggregate `Показатели` не заполняется догадкой.
+- KPI полного БДР сохраняет exact source indicator; доходы и количества используют свои exact structural resolvers.
+- Запрещены global article-name-only authority, fuzzy, contains, typo correction, case-only correction и выбор первого кандидата.
+- `core/opiu_rules` является узким доменным resolver для принятых источников, а не универсальным Rules Engine, plugin framework или normal-user technical editor.
+
+## DEC-DELIVERY-001 — Canonical semantic integration of PR #24 and PR #25
+
+STATUS: `ACCEPTED`
+
+Refines: `DEC-BOOT-002`, `DEC-PRODUCT-021`, `DEC-PRODUCT-022`, `DEC-OPIU-001`.
+
+- Владелец `2026-08-17` явно решил, что PR #25 не supersedes PR #24: обе линии обязательны для следующего canonical preview/export release candidate.
+- Canonical branch: `integration/canonical-preview-export-v1`.
+- Mandatory ancestors:
+  - PR #25 code/package head `c713cee112e4b935b3a5b2c319d23fc6cbf180cb`;
+  - PR #24 head `77645317b673b2e57dea803410126a61cdaf6d83`.
+- Integration должна сохранять обе Git histories обычным semantic two-parent merge. Squash, rebase, wholesale unexplained `ours/theirs` и удаление одной capability запрещены.
+- Canonical Draft PR остаётся unmerged до independent coordinator QA, exact-head CI/package, source reconciliation review и Owner UX Smoke.
+- Исходные PR #24 и PR #25 не merge-ятся отдельно.
+- Merge/release и любой будущий live write остаются отдельными owner gates.

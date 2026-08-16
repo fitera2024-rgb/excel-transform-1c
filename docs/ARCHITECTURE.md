@@ -1,6 +1,6 @@
 # Architecture Light
 
-STATUS: `V1_BOUNDARIES_ACCEPTED / IMPLEMENTATION_ALLOWED / NO_LIVE_WRITE`
+STATUS: `CANONICAL_PREVIEW_EXPORT_BOUNDARIES_ACCEPTED / L_INTEGRATION / NO_LIVE_WRITE`
 
 ```text
 Local UI
@@ -11,9 +11,10 @@ Business Core
   ↓
 Adapters
   ├─ Excel input/output
-  ├─ ERP reference files
+  ├─ OPIU formula / analytics / MXL sources
+  ├─ ERP and business reference files
   ├─ Local persistence
-  └─ ADO / 1C — later, not in V1
+  └─ ADO / 1C — later, not in preview/export scope
   ↓
 Runs / Logs / Support
 ```
@@ -24,10 +25,11 @@ Runs / Logs / Support
 
 - выбор организационного контекста, сценария, года/месяцев и Excel;
 - добавление локального сценария;
-- максимально полный preview;
-- Реестр ошибок/внимания;
+- загрузка/дополнение принятых business reference и OPIU source files;
+- максимально полный preview полного БДР, подготовленных бюджетов и Инталев ОПИУ;
+- Реестр ошибок/внимания и unresolved formula/source rows;
 - явные пользовательские исправления;
-- экспорт результата.
+- экспорт `OPIU Light / ОПИУ / Показатели`.
 
 UI использует бизнес-понятия. SHA, internal paths, proof JSON, SQL IDs и технические blocker codes не являются обязательными пользовательскими элементами.
 
@@ -35,7 +37,7 @@ UI использует бизнес-понятия. SHA, internal paths, proof 
 
 Оркестрирует один пользовательский процесс:
 
-`select context → select Excel → detect source → read → validate → map → normalize → preview → correct → export`
+`select context → select Excel → detect source family → read exact values → validate → resolve ERP/tax/CFO/indicator → normalize → preview → correct → three-sheet export`
 
 Один business action не создаёт дублирующий RUN. Перевыбор и reset не выполняют write.
 
@@ -43,15 +45,18 @@ UI использует бизнес-понятия. SHA, internal paths, proof 
 
 Содержит детерминированные правила:
 
-- структурное обнаружение подготовленного диапазона;
+- структурное обнаружение подготовленных бюджетов, полного БДР и annual/monthly Intalev OPIU;
 - чтение сохранённых значений формул без пересчёта Excel;
-- разворот каждой исходной строки во все 12 месяцев;
+- exact saved-value resolution для полного БДР;
+- отдельную семантику KPI, доходов и расходов;
+- разворот годовых строк во все 12 месяцев и сохранение доказанного месяца для monthly source;
 - локализацию ошибок до минимальной единицы;
-- exact ERP mapping;
-- reusable mapping key;
+- exact ERP mapping и reusable mapping key;
+- exact CFO/organization/channel context;
+- exact indicator resolution с принятой precedence;
 - статусы `ОК`, `Требует внимания`, `Пропущено`;
 - правила налогообложения и отрицательных сумм;
-- формирование business-safe result DTO.
+- формирование business-safe row DTO и aggregate DTO.
 
 Business Core не зависит от UI, ADO connection objects и абсолютных filesystem paths.
 
@@ -61,11 +66,38 @@ Business Core не зависит от UI, ADO connection objects и абсол�
 - сохраняет immutable original snapshot и подготавливает отдельную working copy;
 - локально расшифровывает поддерживаемый encrypted OOXML, конвертирует legacy BIFF/SpreadsheetML и консервативно ремонтирует однозначный OOXML;
 - определяет business source по структуре/schema, не по имени листа;
-- поддерживает подготовленный budget range и отдельный structural parser годового Инталев ОПИУ;
-- читает formula cells по сохранённым calculated values;
+- поддерживает подготовленные expense/revenue ranges, полный БДР и отдельный structural parser annual/monthly Intalev OPIU;
+- сохраняет точную связь между видимой Excel-строкой и отдельной RUN-local identity;
+- читает formula cells по сохранённым calculated values и exact saved-value sheet;
 - не является Excel Calculation Engine и не требует Excel COM;
 - сохраняет точные source pointers: файл, лист, строка, ячейка, поле/месяц;
-- экспортирует OPIU Light результат.
+- экспортирует три листа `OPIU Light / ОПИУ / Показатели` с каноническими business headers.
+
+
+### OPIU sources adapter
+
+Структурно читает принятый комплект бизнес-источников для показателей ОПИУ:
+
+- формулы;
+- аналитики;
+- справочник показателей ERP;
+- MXL/source definitions;
+- регионы;
+- сети/каналы.
+
+Adapter не выбирает показатель сам. Он формирует нормализованные exact source DTO для Business Core, сохраняет source identity и отклоняет неподдержанную/неоднозначную структуру без guessing.
+
+### Indicator resolution inside Business Core
+
+Применяется явная precedence:
+
+1. KPI полного БДР сохраняет точный source indicator и не требует статьи расходов.
+2. Доходы и количества используют принятые exact structural resolvers.
+3. Для расходов при наличии formula/source catalog authority действует цепочка `группа раскрытия → статья → supported exact predicates → показатель`.
+4. Legacy classifier допускается только как exact `группа → статья` fallback, когда formula/source authority отсутствует.
+5. Неподдержанное или неоднозначное условие fail closed только для indicator resolution: row-level preview/export сохраняется, aggregate `Показатели` не заполняется догадкой.
+
+`core/opiu_rules` — узкий доменный модуль для принятых источников. Он не является универсальным Rules Engine, plugin framework или normal-user rules editor.
 
 ### Reference adapter
 
@@ -74,7 +106,8 @@ Business Core не зависит от UI, ADO connection objects и абсол�
 - ERP-статьи;
 - организационное дерево;
 - сценарии;
-- другие принятые справочники.
+- ЦФО Инталев;
+- показатели, регионы, сети и другие принятые справочники.
 
 Не придумывает активность, тип узла или связи, которых нет в данных/контракте.
 Тесты используют только вымышленные книги, повторяющие структуру этих выгрузок.
@@ -86,8 +119,11 @@ Business Core не зависит от UI, ADO connection objects и абсол�
 - пользовательские сценарии и стабильные local IDs;
 - ERP-код как необязательный атрибут сценария;
 - подтверждённые ручные ERP mappings по принятому reusable key;
-- делегации узлов дерева;
+- exact source-CFO mappings;
+- нормализованные OPIU formula/source rules и их source identity;
 - необходимые user overrides текущего результата.
+
+Отдельная делегация пользователей удалена из локального V1 по owner decision; всё загруженное дерево доступно normal user.
 
 Это локальное хранилище одного внутреннего сервиса, не multi-tenant platform database.
 
@@ -112,11 +148,12 @@ V1 не содержит ADO, live write, TEST/PROD write или прямого 
 
 ## Delivery stages
 
-1. **V1:** Excel → validation → exact mapping/manual correction → 12-month normalization → preview → export.
-2. Validation/error UX stabilization and Owner UX Smoke.
-3. ADO read-only / DRY RUN — отдельный контракт.
-4. TEST write — только после отдельного owner gate.
-5. Production write — отдельный owner gate.
+1. **Canonical preview/export candidate:** prepared budgets + full BDR + annual/monthly Intalev → exact business resolution → maximum preview → three-sheet export.
+2. Independent coordinator QA, source reconciliation and Owner UX Smoke on one exact package.
+3. Merge/release — отдельный явный gate после smoke.
+4. ADO read-only / DRY RUN — отдельный будущий контракт.
+5. TEST write — только после отдельного owner gate.
+6. Production write — отдельный owner gate.
 
 ## Implementation freedom
 
@@ -134,11 +171,11 @@ V1 не содержит ADO, live write, TEST/PROD write или прямого 
 
 - Python 3.11+;
 - FastAPI + server-rendered Jinja templates;
-- SQLite для локальных сценариев, справочников, делегаций, ручных mappings и overrides;
+- SQLite для локальных сценариев, справочников, exact mappings, OPIU rules и overrides;
 - openpyxl для structural detection, чтения cached formula values и OPIU Light export;
 - pytest/TestClient для unit, integration и UI smoke.
 
-Это один локальный процесс без SPA, очередей, multi-tenant слоя, ADO connection
+Это один локальный процесс без SPA, очередей, multi-tenant слоя, универсального Rules Engine, ADO connection
 objects или write adapters. Загруженный файл копируется в immutable RUN-local
 snapshot до чтения; один и тот же exact input/context/candidate в текущем
 процессе возвращает существующий RUN вместо создания дубликата.

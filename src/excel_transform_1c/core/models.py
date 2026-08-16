@@ -247,6 +247,8 @@ class PreviewRecord:
     erp_article_name: str
     tax: str
     amount: Decimal | None
+    region: str = ""
+    network: str = ""
     status: str = STATUS_OK
     reasons: list[str] = field(default_factory=list)
     pointers: dict[str, SourcePointer] = field(default_factory=dict)
@@ -259,6 +261,7 @@ class PreviewRecord:
     sales_channel: str = ""
     indicator_match_status: str = ""
     indicator_match_reason: str = ""
+    indicator_match_source: str = ""
     organization_unit: str = ""
     organization_unit_code: str = ""
     erp_department: str = ""

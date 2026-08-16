@@ -1,6 +1,6 @@
 # Feature Baseline
 
-STATUS: `PRODUCT_BASELINE_ACCEPTED / USER_FLOW_OWNER_REFINED / IMPLEMENTATION_ALLOWED / NO_RELEASE_APPROVAL`
+STATUS: `CANONICAL_PREVIEW_EXPORT_BASELINE_ACCEPTED / L_INTEGRATION / NO_RELEASE_APPROVAL / NO_LIVE_WRITE`
 
 Каждый принятый функциональный инвариант получает стабильный ID. Потеря функции без явного разрешения = regression.
 
@@ -15,7 +15,9 @@ STATUS: `PRODUCT_BASELINE_ACCEPTED / USER_FLOW_OWNER_REFINED / IMPLEMENTATION_AL
 | INPUT-004 | Excel | Формулы в загрузочном диапазоне разрешены; сервис читает рассчитанные/сохранённые значения, Paste Values не требуется |
 | INPUT-005 | Excel | При нескольких структурно подходящих диапазонах сервис предлагает пользовательский выбор и не угадывает источник молча |
 | INPUT-006 | Excel | Фактический формат определяется по содержимому; original snapshot неизменяем, decrypt/legacy conversion/repair выполняется только в отдельной working copy |
-| INPUT-007 | Excel | V1 структурно поддерживает годовой Инталев ОПИУ наряду с подготовленным бюджетным диапазоном и формирует OPIU Light export |
+| INPUT-007 | Excel | V1 структурно поддерживает годовой и одногомесячный Инталев ОПИУ наряду с подготовленными бюджетными диапазонами |
+| INPUT-008 | Excel | Полный БДР определяется структурно и обрабатывается как один business source с KPI, доходами, расходами и доказанными prepared-компонентами |
+| INPUT-009 | Excel | Для полного БДР saved-value sheet используется только по exact связи `лист + строка + показатель + месяц`; текст формулы не становится числовым значением |
 | VAL-001 | Validation | Проблемы данных показываются пользователю понятным бизнес-языком |
 | ERR-001 | Validation | Локальная ошибка не блокирует весь файл; пропускается только минимально необходимый результат |
 | ERR-002 | Validation | Ошибка общего поля не исключает автоматически все 12 месяцев исходной строки |
@@ -59,9 +61,20 @@ STATUS: `PRODUCT_BASELINE_ACCEPTED / USER_FLOW_OWNER_REFINED / IMPLEMENTATION_AL
 | MAP-003 | ERP mapping | Подтверждённый mapping можно повторно применять только в доказанно том же контексте; одно название статьи не является reusable global key |
 | MAP-004 | ERP mapping | Конфликт иерархии не разрешается самостоятельным игнорированием hierarchy; требуется явный пользовательский выбор |
 | MAP-005 | ERP mapping | Базовый reusable key ручного mapping: вид отчёта + полный путь `тип расходов → группа расходов → исходная статья`; организация/департамент/ЦФО в него не входят |
+| OPIU-RULE-001 | Indicator | Для расходов indicator authority: exact `группа раскрытия → статья → supported formula/source predicates → показатель` |
+| OPIU-RULE-002 | Indicator | При наличии formula/source catalog конфликтующий legacy classifier не перекрывает его; legacy разрешён только как exact `группа → статья` fallback при отсутствии authority |
+| OPIU-RULE-003 | Indicator | Deepest exact disclosure group имеет приоритет; ERP-code conflict не игнорируется |
+| OPIU-RULE-004 | Indicator | Unsupported/missing/ambiguous condition fail closed только для indicator resolution: row-level preview сохраняется, `Показатели` не заполняется догадкой |
+| OPIU-RULE-005 | Indicator | KPI полного БДР сохраняет exact source indicator; доходы и количества используют принятые exact structural resolvers |
+| OPIU-RULE-006 | Indicator | Global article-name-only, fuzzy, contains, typo/case correction и first-candidate selection запрещены; `core/opiu_rules` не является universal Rules Engine |
 | TRANS-001 | Core | Трансформация отделена от UI и ADO |
 | TRANS-002 | Core | Каждая исходная загрузочная строка нормализуется во все 12 месяцев, включая нулевые значения |
 | TRANS-003 | Core | Excel-ошибка конкретного месяца не удаляет остальные корректные месяцы той же исходной строки |
+| BDR-001 | Core | Полный БДР формирует один RUN и отдельную RUN-local identity при сохранении видимого Excel source row/cell |
+| BDR-002 | Core | KPI не требует expense article и не может быть потерян из-за расходной классификации |
+| BDR-003 | Core | Revenue и expense components входят в тот же полный результат и сохраняют organization/CFO/channel/source context |
+| BDR-004 | Core | Формулы не экспортируются текстом в numeric value; source errors и reference gaps остаются видимыми отдельно от service defects |
+| BDR-005 | Core | Подтверждения composite-БДР обновляют связанные месяцы без смешения видимой строки и RUN-local identity |
 | PREVIEW-001 | UI | Результат можно проверить до live write |
 | PREVIEW-002 | UI | Неполные записи остаются в основном preview со статусом `Требует внимания`; скрытый карантин не создаётся |
 | PREVIEW-003 | UI | Пользователь может разрешить неоднозначность выбором/исправлением, не теряя уже построенный preview и не перезапуская весь процесс |
@@ -74,6 +87,8 @@ STATUS: `PRODUCT_BASELINE_ACCEPTED / USER_FLOW_OWNER_REFINED / IMPLEMENTATION_AL
 | TRACE-001 | Audit | Для явного user override допускается внутренне сохранять исходное и выбранное значение без обязательного proof-UX |
 | RESULT-001 | Output | Пользовательский result — упрощённый business format; технический 34-column sample не является обязательным target format |
 | RESULT-002 | Output | Пользовательский result содержит отдельные поля единицы отчёта, организации, сценария, периода сценария/года, месяца, организационных реквизитов, статьи/ERP-кода, налогообложения, суммы, статуса, комментария и source row |
+| RESULT-003 | Output | Канонический XLSX содержит `OPIU Light / ОПИУ / Показатели`; первые два сохраняют row-level completeness, третий содержит только exact indicator aggregation |
+| RESULT-004 | Output | Отсутствующий/неоднозначный indicator не удаляет row-level сумму и не создаёт guessed aggregate |
 | RUN-001 | Audit | Каждый processing run имеет RUN-ID |
 | RUN-002 | Audit | RUN использует immutable snapshot exact input |
 | RUN-003 | Audit | Один бизнес-запуск single-flight/idempotent |
@@ -84,7 +99,10 @@ STATUS: `PRODUCT_BASELINE_ACCEPTED / USER_FLOW_OWNER_REFINED / IMPLEMENTATION_AL
 | REL-001 | Release | Release source соответствует текущему принятому product head |
 | GOV-001 | Governance | Codex не merge-ит PR самостоятельно |
 | GOV-002 | Governance | Реализацию первой vertical slice нельзя было начинать до принятия владельцем User Flow |
-| GOV-003 | Governance | User Flow V1 принят владельцем и уточнён во время Owner UX Smoke; ADO/live write по-прежнему запрещены |
+| GOV-003 | Governance | User Flow принят владельцем, уточнён Owner UX Smoke и расширен canonical preview/export owner gate; ADO/live write запрещены |
+| GOV-004 | Governance | Canonical integration обязана сохранять в ancestry exact PR #25 head `c713cee…` и PR #24 head `77645317…`; squash/rebase/wholesale unexplained ours/theirs запрещены |
+| GOV-005 | Governance | PR #24 и PR #25 не merge-ятся отдельно; canonical Draft PR требует independent coordinator QA и Owner UX Smoke на одном exact package |
+| GOV-006 | Governance | Merge/release остаётся отдельным явным owner gate после exact-head CI, package smoke и reconciliation review |
 
 ## Result values
 
