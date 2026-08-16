@@ -1,5 +1,5 @@
 {
-  "version": "baseline-catalogs-v2-20260816-001",
+  "version": "baseline-catalogs-v3-20260816-001",
   "catalogs": {
     "erp_articles": {
       "file": "erp_articles.json",
@@ -19,7 +19,7 @@
     },
     "article_indicators": {
       "file": "article_indicators.json",
-      "count": 208
+      "count": 215
     },
     "opiu_formulas": {
       "file": "opiu_formulas.json",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import replace
 from decimal import Decimal
 from typing import Any
 
@@ -40,6 +41,10 @@ def detect_indicator_type(
     analytics: Any = "",
     nomenclature: Any = "",
     unit: Any = "",
+    counterparty: Any = "",
+    input_sales_channel: Any = "",
+    sales_network: Any = "",
+    sales_region: Any = "",
 ) -> IndicatorType:
     """Classify by explicit value or structural fields, never by display name."""
 
@@ -52,15 +57,22 @@ def detect_indicator_type(
 
     has_revenue_structure = any(
         str(value or "").strip()
-        for value in (revenue_group, formula_condition, analytics)
+        for value in (
+            revenue_group,
+            formula_condition,
+            analytics,
+            counterparty,
+            input_sales_channel,
+            sales_network,
+            sales_region,
+        )
     )
     has_quantity_structure = any(
         str(value or "").strip() for value in (nomenclature, unit)
     )
-    if has_revenue_structure and has_quantity_structure:
-        raise ValueError(
-            "Тип показателя неоднозначен: одновременно заполнены поля дохода и количества"
-        )
+    # Nomenclature is also a valid optional revenue analytic. Revenue-specific
+    # structure therefore takes precedence; quantity is inferred only when no
+    # revenue field is present.
     if has_revenue_structure:
         return IndicatorType.REVENUE
     if has_quantity_structure:
@@ -77,6 +89,10 @@ def _rule_type(rule: ArticleIndicatorRule) -> IndicatorType:
         analytics=rule.analytics,
         nomenclature=rule.nomenclature,
         unit=rule.unit,
+        counterparty=rule.counterparty,
+        input_sales_channel=rule.input_sales_channel,
+        sales_network=rule.sales_network,
+        sales_region=rule.sales_region,
     )
 
 
@@ -93,24 +109,43 @@ def _resolved_candidate(
             reason=ambiguous_reason,
         )
     rule = candidates[0]
-    if not rule.indicator.strip() or not rule.sales_channel.strip():
-        if rule.indicator.strip() and not rule.sales_channel.strip():
-            reason = "В точной связи не заполнен канал сбыта"
-        elif rule.sales_channel.strip() and not rule.indicator.strip():
-            reason = "В точной связи не заполнен показатель"
-        else:
-            reason = "В точной связи не заполнены показатель и канал сбыта"
+    indicator_missing = not rule.indicator.strip()
+    if indicator_missing:
         return IndicatorMatch(
             status=INDICATOR_INCOMPLETE,
             rule=rule,
             matched_by=matched_by,
-            reason=reason,
+            reason="В точной связи не заполнен показатель",
         )
     return IndicatorMatch(
         status=INDICATOR_MATCHED,
         rule=rule,
         matched_by=matched_by,
     )
+
+
+def _expense_channel_optional(match: IndicatorMatch) -> IndicatorMatch:
+    """Accept an exact expense rule when its only absent field is sales channel.
+
+    The legacy exact matcher deliberately keeps its original completeness
+    contract.  The type-aware routing layer owns the newer rule that a sales
+    channel is a revenue analytic and is not required for an expense result.
+    """
+
+    rule = match.rule
+    if (
+        match.status == INDICATOR_INCOMPLETE
+        and rule is not None
+        and _rule_type(rule) == IndicatorType.EXPENSE
+        and rule.indicator.strip()
+        and not rule.sales_channel.strip()
+    ):
+        return IndicatorMatch(
+            status=INDICATOR_MATCHED,
+            rule=rule,
+            matched_by=match.matched_by,
+        )
+    return match
 
 
 class SelectionExpenseResolver:
@@ -161,60 +196,164 @@ class SelectionExpenseResolver:
 
 
 class RevenueResolver:
-    """Exact chain: revenue group → article → formula → analytics → indicator."""
+    """Resolve an exact revenue base plus only rule-declared analytics."""
+
+    CONCRETE_FIELDS = (
+        ("counterparty", "контрагент"),
+        ("input_sales_channel", "ИНТ канал сбыта"),
+        ("sales_network", "сеть"),
+        ("sales_region", "регион продаж"),
+        ("nomenclature", "номенклатура"),
+    )
+    REQUIRED_ANALYTICS = {
+        "Контрагент": ("counterparty", "контрагент"),
+        "ИНТ канал сбыта": ("input_sales_channel", "ИНТ канал сбыта"),
+        "Канал сбыта": ("input_sales_channel", "ИНТ канал сбыта"),
+        "Сеть": ("sales_network", "сеть"),
+        "Регион продаж": ("sales_region", "регион продаж"),
+        "Номенклатура": ("nomenclature", "номенклатура"),
+        "ИНТ номенклатура": ("nomenclature", "номенклатура"),
+    }
+    CONTEXT_ANALYTICS = {
+        "Организационные единицы",
+        "ЦФО",
+        "ЦФО (казначейство)",
+    }
 
     def __init__(self, rules: list[ArticleIndicatorRule]):
-        self.by_key: dict[tuple[str, str, str, str], list[ArticleIndicatorRule]] = (
-            defaultdict(list)
-        )
+        self.by_article: dict[str, list[ArticleIndicatorRule]] = defaultdict(list)
         for rule in dict.fromkeys(rules):
             if _rule_type(rule) != IndicatorType.REVENUE:
                 continue
-            key = (
-                rule.revenue_group.strip(),
-                rule.article_name.strip(),
-                rule.formula_condition.strip(),
-                rule.analytics.strip(),
-            )
-            self.by_key[key].append(rule)
+            if article := rule.article_name.strip():
+                self.by_article[article].append(rule)
 
     def resolve(
         self,
         *,
         revenue_group: str,
         article_name: str,
-        formula_condition: str,
-        analytics: str,
+        formula_condition: str = "",
+        analytics: str = "",
+        counterparty: str = "",
+        input_sales_channel: str = "",
+        sales_network: str = "",
+        sales_region: str = "",
+        nomenclature: str = "",
+        revenue_type: str = "",
+        hierarchy_group: str = "",
     ) -> IndicatorMatch:
-        key = tuple(
-            value.strip()
-            for value in (
-                revenue_group,
-                article_name,
-                formula_condition,
-                analytics,
-            )
-        )
-        if not all(key):
+        article = article_name.strip()
+        group = revenue_group.strip() or hierarchy_group.strip()
+        if not article or not group:
             return IndicatorMatch(
                 status=INDICATOR_INCOMPLETE,
                 reason=(
-                    "Для дохода не заполнена точная цепочка: группа, статья, "
-                    "условия формулы и аналитики"
+                    "Для дохода не заполнена точная основа: группа и статья"
                 ),
             )
-        candidates = self.by_key.get(key, [])
+        base_candidates = self.by_article.get(article, [])
+        if not base_candidates:
+            return IndicatorMatch(
+                status=INDICATOR_MISSING,
+                reason="Точное соответствие дохода показателю не найдено",
+            )
+        revenue_type = revenue_type.strip()
+        actual_path = full_article_path(revenue_type, group, article)
+        input_formula = formula_condition.strip()
+        actual = {
+            "analytics": analytics.strip(),
+            "counterparty": counterparty.strip(),
+            "input_sales_channel": input_sales_channel.strip(),
+            "sales_network": sales_network.strip(),
+            "sales_region": sales_region.strip(),
+            "nomenclature": nomenclature.strip(),
+        }
+        candidates: list[ArticleIndicatorRule] = []
+        missing_labels: set[str] = set()
+        for rule in base_candidates:
+            missing_for_rule: list[str] = []
+            mismatched = False
+            expected_group = rule.revenue_group.strip()
+            if expected_group and group != expected_group:
+                mismatched = True
+            expected_path = rule.article_path.strip()
+            if expected_path:
+                if not revenue_type:
+                    missing_for_rule.append("тип доходов")
+                elif actual_path != expected_path:
+                    mismatched = True
+            expected_formula = rule.formula_condition.strip()
+            if expected_formula and input_formula and input_formula != expected_formula:
+                mismatched = True
+            for field, label in self.CONCRETE_FIELDS:
+                expected = getattr(rule, field).strip()
+                if not expected:
+                    continue
+                value = actual[field]
+                if not value:
+                    missing_for_rule.append(label)
+                elif value != expected:
+                    mismatched = True
+            expected_analytics = rule.analytics.strip()
+            if expected_analytics:
+                tokens = tuple(expected_analytics.split(" | "))
+                known_tokens = self.CONTEXT_ANALYTICS | set(
+                    self.REQUIRED_ANALYTICS
+                )
+                if all(token in known_tokens for token in tokens):
+                    for token in tokens:
+                        required = self.REQUIRED_ANALYTICS.get(token)
+                        if required is None:
+                            continue
+                        field, label = required
+                        if not actual[field]:
+                            missing_for_rule.append(label)
+                else:
+                    # Backward-compatible uploaded rules may still provide one
+                    # exact opaque analytics key. It is compared literally and
+                    # is never tokenized, normalized or partially matched.
+                    if not actual["analytics"]:
+                        missing_for_rule.append("аналитики")
+                    elif actual["analytics"] != expected_analytics:
+                        mismatched = True
+            if mismatched:
+                continue
+            if missing_for_rule:
+                missing_labels.update(missing_for_rule)
+                continue
+            candidates.append(rule)
+
+        if not candidates and missing_labels:
+            return IndicatorMatch(
+                status=INDICATOR_INCOMPLETE,
+                reason=(
+                    "Для дохода не заполнены поля точного правила: "
+                    + ", ".join(sorted(missing_labels))
+                ),
+            )
         if not candidates:
             return IndicatorMatch(
                 status=INDICATOR_MISSING,
                 reason="Точное соответствие дохода показателю не найдено",
             )
+        if (
+            len(candidates) == 1
+            and not candidates[0].sales_channel.strip()
+            and candidates[0].input_sales_channel.strip()
+        ):
+            candidates = [
+                replace(
+                    candidates[0],
+                    sales_channel=actual["input_sales_channel"],
+                )
+            ]
         return _resolved_candidate(
             candidates,
             matched_by="revenue_chain",
             ambiguous_reason=(
-                "Найдено несколько точных соответствий по группе дохода, статье, "
-                "условиям формулы и аналитикам"
+                "Найдено несколько точных соответствий по иерархии дохода, "
+                "статье и объявленным условиям аналитики"
             ),
         )
 
@@ -227,7 +366,10 @@ class QuantityResolver:
         for rule in dict.fromkeys(rules):
             if _rule_type(rule) != IndicatorType.QUANTITY:
                 continue
-            self.by_key[(rule.nomenclature.strip(), rule.unit.strip())].append(rule)
+            nomenclature = rule.nomenclature.strip()
+            unit = rule.unit.strip()
+            if nomenclature and unit:
+                self.by_key[(nomenclature, unit)].append(rule)
 
     def resolve(
         self,
@@ -292,6 +434,13 @@ class IndicatorResolverEngine:
                 article_name=record.source_article,
                 formula_condition=record.formula_condition,
                 analytics=record.analytics,
+                counterparty=record.counterparty,
+                input_sales_channel=record.input_sales_channel,
+                sales_network=record.sales_network,
+                sales_region=record.sales_region,
+                nomenclature=record.nomenclature,
+                revenue_type=record.expense_type,
+                hierarchy_group=record.expense_group,
             )
         if record.indicator_type == IndicatorType.QUANTITY:
             return self.quantity.resolve(
@@ -306,7 +455,7 @@ class IndicatorResolverEngine:
             article_name=record.source_article,
         )
         if direct.status != INDICATOR_MISSING:
-            return direct
+            return _expense_channel_optional(direct)
         return self.selection_expense.resolve(
             expense_type=record.expense_type,
             expense_group=record.expense_group,

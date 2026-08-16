@@ -63,6 +63,10 @@ def test_classifier_parser_and_persistence_use_direct_exact_keys(tmp_path):
         "analytics": "",
         "nomenclature": "",
         "unit": "",
+        "counterparty": "",
+        "input_sales_channel": "",
+        "sales_network": "",
+        "sales_region": "",
     }
 
     first = WorkflowService(tmp_path / "runtime")
@@ -70,7 +74,7 @@ def test_classifier_parser_and_persistence_use_direct_exact_keys(tmp_path):
     second = WorkflowService(tmp_path / "runtime")
 
     assert second.article_indicator_rules() == first.article_indicator_rules()
-    assert len(second.article_indicator_rules()) == 210
+    assert len(second.article_indicator_rules()) == 217
     assert {rule.erp_code for rule in second.article_indicator_rules()} >= {
         "ERP-001",
         "ERP-002",

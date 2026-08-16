@@ -160,7 +160,7 @@ def test_new_store_starts_with_packaged_baselines_and_keeps_them_on_restart(tmp_
         "organizations": 357,
         "scenarios": 12,
         "intalev_cfos": 16,
-        "article_indicators": 208,
+        "article_indicators": 215,
         "opiu_formulas": 517,
         "opiu_analytics": 517,
         "regions": 22,

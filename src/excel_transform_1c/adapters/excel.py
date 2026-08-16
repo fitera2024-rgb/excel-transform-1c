@@ -234,9 +234,9 @@ def _write_ado_opiu_sheet(sheet, records: list[PreviewRecord]) -> None:
                 record.expense_type,
                 record.erp_code or None,
                 record.erp_article_name or record.source_article,
-                None,  # Инт Номенклатура.
+                record.nomenclature or None,
                 None,  # Код номенклатуры.
-                None,  # Регион продаж.
+                record.sales_region or None,
                 None,  # Код региона продаж.
                 float(record.amount) if record.amount is not None else None,
             )

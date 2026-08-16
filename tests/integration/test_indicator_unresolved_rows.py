@@ -8,6 +8,7 @@ from excel_transform_1c.core.indicator_matching import (
 )
 from excel_transform_1c.core.models import (
     CandidateRange,
+    IndicatorType,
     PreviewRecord,
     ProcessedRun,
     RunContext,
@@ -86,6 +87,25 @@ def test_ambiguous_is_visible_as_business_row(tmp_path):
 
 def test_incomplete_is_visible_as_business_row(tmp_path):
     assert_business_row(tmp_path, INDICATOR_INCOMPLETE, "Правило заполнено не полностью")
+
+
+def test_missing_rule_declared_revenue_analytics_has_input_action(tmp_path):
+    service, run = make_run(
+        tmp_path,
+        INDICATOR_INCOMPLETE,
+        "Для дохода не заполнены поля точного правила: ИНТ канал сбыта",
+    )
+    run.records[0].indicator = "Выручка"
+    run.records[0].indicator_type = IndicatorType.REVENUE
+
+    revenue_row = service.indicator_unresolved_rows("run-1")[0]
+    assert revenue_row["action"] == (
+        "Проверить обязательные поля дохода во входном бюджете"
+    )
+
+    run.records[0].indicator_type = IndicatorType.EXPENSE
+    expense_row = service.indicator_unresolved_rows("run-1")[0]
+    assert expense_row["action"] == "Загрузить / дополнить классификатор"
 
 
 def test_row_disappears_after_same_run_exact_rematch_without_read_path(tmp_path, monkeypatch):

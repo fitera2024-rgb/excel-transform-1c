@@ -77,11 +77,16 @@ ARTICLE_INDICATOR_HEADERS = {
     "indicator": {"показатель", "тип расходов / показатель"},
     "sales_channel": {"канал сбыта"},
     "indicator_type": {"тип показателя"},
+    "revenue_type": {"тип доходов источника", "тип доходов"},
     "revenue_group": {"группа дохода", "группа доходов", "группа раскрытия"},
     "formula_condition": {"условие формулы", "условия формулы"},
     "analytics": {"аналитика", "аналитики"},
     "nomenclature": {"номенклатура", "инт номенклатура"},
     "unit": {"единица измерения", "ед. изм.", "единица"},
+    "counterparty": {"контрагент"},
+    "input_sales_channel": {"инт канал сбыта", "входной канал сбыта"},
+    "sales_network": {"сеть", "сеть продаж"},
+    "sales_region": {"регион продаж"},
 }
 
 REAL_EXPORT_HEADERS = {
@@ -152,7 +157,7 @@ def _parse_reference_workbook_object(workbook: Any, kind: str) -> list[dict[str,
         if not result:
             raise ValueError(
                 "Не найден классификатор показателей. Нужны колонки «Показатель», "
-                "«Канал сбыта» и точные ключи расхода, дохода или количества."
+                "и точные ключи расхода, дохода или количества."
             )
         return validate_reference_payload(kind, result)
 
@@ -245,31 +250,44 @@ def reference_exact_key(kind: str, item: dict[str, Any]) -> str:
             analytics=_clean_scalar(item.get("analytics")),
             nomenclature=_clean_scalar(item.get("nomenclature")),
             unit=_clean_scalar(item.get("unit")),
+            counterparty=_clean_scalar(item.get("counterparty")),
+            input_sales_channel=_clean_scalar(item.get("input_sales_channel")),
+            sales_network=_clean_scalar(item.get("sales_network")),
+            sales_region=_clean_scalar(item.get("sales_region")),
         )
         if indicator_type == IndicatorType.REVENUE:
-            key = tuple(
+            article = _clean_scalar(item.get("article_name"))
+            path = _clean_scalar(item.get("article_path"))
+            group = _clean_scalar(item.get("revenue_group"))
+            formula = _clean_scalar(item.get("formula_condition"))
+            if not article or not (path or group):
+                raise ValueError(
+                    "Доход не имеет точного ключа: нужны статья и группа дохода "
+                    "либо полный путь типа/группы/статьи"
+                )
+            analytics = tuple(
                 _clean_scalar(item.get(field))
                 for field in (
-                    "revenue_group",
-                    "article_name",
-                    "formula_condition",
                     "analytics",
+                    "counterparty",
+                    "input_sales_channel",
+                    "sales_network",
+                    "sales_region",
+                    "nomenclature",
                 )
             )
-            if not all(key):
-                raise ValueError(
-                    "Доход не имеет точного ключа: нужны группа дохода, статья, "
-                    "условия формулы и аналитики"
-                )
+            key = (path, group, article, formula, *analytics)
             return "article_indicator:revenue:" + repr(key)
         if indicator_type == IndicatorType.QUANTITY:
-            key = tuple(
-                _clean_scalar(item.get(field)) for field in ("nomenclature", "unit")
-            )
-            if not all(key):
+            nomenclature = _clean_scalar(item.get("nomenclature"))
+            unit = _clean_scalar(item.get("unit"))
+            indicator = _clean_scalar(item.get("indicator"))
+            if not nomenclature or not unit or not indicator:
                 raise ValueError(
-                    "Количество не имеет точного ключа: нужны номенклатура и единица измерения"
+                    "Количество не имеет точного ключа: нужны конкретная "
+                    "номенклатура, единица измерения и показатель"
                 )
+            key = (nomenclature, unit, indicator)
             return "article_indicator:quantity:" + repr(key)
 
         code = _clean_scalar(item.get("erp_code"))
@@ -358,6 +376,10 @@ def validate_reference_payload(
                 analytics=_clean_scalar(item.get("analytics")),
                 nomenclature=_clean_scalar(item.get("nomenclature")),
                 unit=_clean_scalar(item.get("unit")),
+                counterparty=_clean_scalar(item.get("counterparty")),
+                input_sales_channel=_clean_scalar(item.get("input_sales_channel")),
+                sales_network=_clean_scalar(item.get("sales_network")),
+                sales_region=_clean_scalar(item.get("sales_region")),
             ).value
             for field in (
                 "revenue_group",
@@ -365,6 +387,10 @@ def validate_reference_payload(
                 "analytics",
                 "nomenclature",
                 "unit",
+                "counterparty",
+                "input_sales_channel",
+                "sales_network",
+                "sales_region",
             ):
                 normalized_item[field] = _clean_scalar(item.get(field))
             item = normalized_item
@@ -420,6 +446,14 @@ def _parse_article_indicators(workbook: Any) -> list[dict[str, Any]]:
                 _clean_scalar(values["expense_group"].value),
                 article_name,
             )
+        if not article_path and all(
+            field in values for field in ("revenue_type", "revenue_group", "article_name")
+        ):
+            article_path = full_article_path(
+                _clean_scalar(values["revenue_type"].value),
+                _clean_scalar(values["revenue_group"].value),
+                article_name,
+            )
 
         item = {
             field: _clean_scalar(values[field].value) if field in values else ""
@@ -430,6 +464,10 @@ def _parse_article_indicators(workbook: Any) -> list[dict[str, Any]]:
                 "analytics",
                 "nomenclature",
                 "unit",
+                "counterparty",
+                "input_sales_channel",
+                "sales_network",
+                "sales_region",
             )
         }
         item.update(
@@ -438,7 +476,11 @@ def _parse_article_indicators(workbook: Any) -> list[dict[str, Any]]:
                 "article_path": article_path,
                 "article_name": article_name,
                 "indicator": _clean_scalar(values["indicator"].value),
-                "sales_channel": _clean_scalar(values["sales_channel"].value),
+                "sales_channel": (
+                    _clean_scalar(values["sales_channel"].value)
+                    if "sales_channel" in values
+                    else ""
+                ),
             }
         )
         try:
@@ -465,14 +507,12 @@ def _match_article_indicator_headers(values: list[Any]) -> dict[str, int] | None
         if matches:
             columns[field] = matches[0]
 
-    if not {"indicator", "sales_channel"}.issubset(columns):
+    if "indicator" not in columns:
         return None
     expense_keys = {"erp_code", "article_path", "article_name"}.intersection(columns)
     revenue_keys = {
         "revenue_group",
         "article_name",
-        "formula_condition",
-        "analytics",
     }.issubset(columns)
     quantity_keys = {"nomenclature", "unit"}.issubset(columns)
     if not (expense_keys or revenue_keys or quantity_keys):

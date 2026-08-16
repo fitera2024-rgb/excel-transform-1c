@@ -421,8 +421,12 @@ class WorkflowService:
                 "status": labels[status],
                 "reason": record.indicator_match_reason,
                 "action": (
-                    "Дополнить точную связь значением канала сбыта"
-                    if record.indicator and not record.sales_channel
+                    "Проверить обязательные поля дохода во входном бюджете"
+                    if (
+                        record.indicator_type == IndicatorType.REVENUE
+                        and record.indicator_match_status == INDICATOR_INCOMPLETE
+                        and "поля точного правила" in record.indicator_match_reason
+                    )
                     else "Загрузить / дополнить классификатор"
                 ),
             })

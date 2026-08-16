@@ -91,6 +91,10 @@ class SourceRow:
     analytics: Any = ""
     nomenclature: Any = ""
     unit: Any = ""
+    counterparty: Any = ""
+    input_sales_channel: Any = ""
+    sales_network: Any = ""
+    sales_region: Any = ""
 
 
 @dataclass(frozen=True)
@@ -146,6 +150,10 @@ class ArticleIndicatorRule:
     analytics: str = ""
     nomenclature: str = ""
     unit: str = ""
+    counterparty: str = ""
+    input_sales_channel: str = ""
+    sales_network: str = ""
+    sales_region: str = ""
 
 
 @dataclass(frozen=True)
@@ -216,6 +224,10 @@ class PreviewRecord:
     analytics: str = ""
     nomenclature: str = ""
     unit: str = ""
+    counterparty: str = ""
+    input_sales_channel: str = ""
+    sales_network: str = ""
+    sales_region: str = ""
 
     @property
     def comment(self) -> str:

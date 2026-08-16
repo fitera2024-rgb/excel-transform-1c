@@ -9,7 +9,7 @@ from excel_transform_1c.baselines import (
     load_manifest,
 )
 from excel_transform_1c.core.indicator_matching import (
-    INDICATOR_INCOMPLETE,
+    INDICATOR_MATCHED,
     INDICATOR_MISSING,
 )
 from excel_transform_1c.core.indicator_resolvers import SelectionExpenseResolver
@@ -17,7 +17,7 @@ from excel_transform_1c.core.indicator_resolvers import SelectionExpenseResolver
 
 def test_all_owner_opiu_sources_are_packaged_with_exact_counts():
     expected = {
-        "article_indicators": 208,
+        "article_indicators": 215,
         "opiu_formulas": 517,
         "opiu_analytics": 517,
         "regions": 22,
@@ -47,7 +47,7 @@ def test_packaged_expense_link_uses_group_and_mxl_hierarchy_filters():
         article_name="Проживание",
     )
 
-    assert match.status == INDICATOR_INCOMPLETE
+    assert match.status == INDICATOR_MATCHED
     assert match.matched_by == "expense_group_formula"
     assert match.rule is not None
     assert match.rule.indicator == "Административные расходы"
@@ -55,7 +55,7 @@ def test_packaged_expense_link_uses_group_and_mxl_hierarchy_filters():
         match.rule.formula_condition
     )
     assert match.rule.sales_channel == ""
-    assert match.reason == "В точной связи не заполнен канал сбыта"
+    assert match.reason == ""
 
     wrong_group = resolver.resolve(
         expense_type="Административные расходы",

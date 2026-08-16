@@ -149,6 +149,10 @@ def _record_pointers(row: SourceRow, month: int) -> dict[str, SourcePointer]:
         "analytics",
         "nomenclature",
         "unit",
+        "counterparty",
+        "input_sales_channel",
+        "sales_network",
+        "sales_region",
     ):
         if field in row.cells:
             pointers[field] = _pointer(row, field)
@@ -183,6 +187,10 @@ def transform_rows(
                 analytics=row.analytics,
                 nomenclature=row.nomenclature,
                 unit=row.unit,
+                counterparty=row.counterparty,
+                input_sales_channel=row.input_sales_channel,
+                sales_network=row.sales_network,
+                sales_region=row.sales_region,
             )
         except ValueError as exc:
             indicator_type = IndicatorType.EXPENSE
@@ -205,9 +213,21 @@ def transform_rows(
             "analytics": as_text(row.analytics),
             "nomenclature": as_text(row.nomenclature),
             "unit": as_text(row.unit),
+            "counterparty": as_text(row.counterparty),
+            "input_sales_channel": as_text(row.input_sales_channel),
+            "sales_network": as_text(row.sales_network),
+            "sales_region": as_text(row.sales_region),
         }
 
+        required_shared_fields = set(SHARED_FIELDS)
+        if indicator_type == IndicatorType.REVENUE:
+            required_shared_fields = {"article"}
+        elif indicator_type == IndicatorType.QUANTITY:
+            required_shared_fields = set()
+
         for field, value in shared.items():
+            if field not in required_shared_fields:
+                continue
             if value == "":
                 reason = f"Не заполнено поле: {SHARED_FIELDS[field]}"
                 shared_reasons.append(reason)
@@ -231,14 +251,21 @@ def transform_rows(
                 )
             )
 
-        tax, tax_reason = normalize_tax(row.tax, allowed_tax_values)
+        tax, tax_reason = (
+            ("", None)
+            if indicator_type != IndicatorType.EXPENSE
+            else normalize_tax(row.tax, allowed_tax_values)
+        )
         if tax_reason:
             shared_reasons.append(tax_reason)
             issues.append(_issue(row, "tax", tax_reason, "tax", row.tax))
 
-        mapped, mapping_reason = mapper.resolve(
-            shared["expense_type"], shared["expense_group"], shared["article"]
-        )
+        mapped: ERPArticle | None = None
+        mapping_reason: str | None = None
+        if indicator_type == IndicatorType.EXPENSE:
+            mapped, mapping_reason = mapper.resolve(
+                shared["expense_type"], shared["expense_group"], shared["article"]
+            )
         if mapping_reason:
             shared_reasons.append(mapping_reason)
             issues.append(

@@ -126,7 +126,6 @@ def aggregate_indicator_rows(records: list[PreviewRecord]) -> list[IndicatorExpo
         if (
             record.indicator_match_status != INDICATOR_MATCHED
             or not record.indicator
-            or not record.sales_channel
             or record.amount is None
         ):
             continue
