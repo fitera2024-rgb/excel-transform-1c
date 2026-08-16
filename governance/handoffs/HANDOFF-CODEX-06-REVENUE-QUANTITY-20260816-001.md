@@ -8,6 +8,7 @@
 - Branch: `feat/final-owner-smoke-fitera-v2`
 - Base SHA: `61c30fd2ed4a13c6bdb392bf2e614a7c40b60677`
 - Final implementation SHA: `73cae073366900007eed473acaaa821b33f1507c`
+- Supplemental revenue analytics smoke SHA: `011c838a0f2b1917a10719c09ee4106c06d8a432`
 - The handoff is committed separately so it can contain the immutable implementation SHA. The delivery HEAD is reported with the owner handoff.
 - No merge, PR, release, push, ADO, ODBC, 1C write or live write was performed.
 
@@ -62,6 +63,7 @@ The password-protected `source-original.xlsx` was not changed. Smoke used the ap
 - `node --check src/excel_transform_1c/ui/static/run.js` — PASS.
 - `git diff --check` — PASS; only configured LF/CRLF conversion warnings were emitted.
 - Integration flow `START_SERVICE → Upload Excel → Load OPIU rules → Resolve expense/revenue/quantity → Preview → Confirm → Export XLSX → STOP_SERVICE` — PASS in the integration suite.
+- The revenue integration smoke verifies one exact row end to end with `Контрагент`, `ИНТ канал сбыта`, `Сеть`, `Регион продаж` and the resolved income indicator — PASS.
 - Correctly marked offline package launcher smoke — PASS: health/home, initial HTTP owner workflow, export, stop, restart, persisted classifier, final stop.
 - Service stop was verified after smoke.
 
